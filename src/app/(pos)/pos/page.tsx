@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, Chip,
@@ -25,6 +25,7 @@ interface Booking {
   queueNumber: number;
   status: string;
   notes?: string;
+  barberName?: string;
   date: string;
 }
 
@@ -34,6 +35,12 @@ interface Payment {
   amount: number;
   status: string;
   paidAt: string;
+}
+
+interface ReceiptData {
+  booking: Booking;
+  payment: Payment;
+  shopName: string;
 }
 
 const statusColor: Record<string, 'warning' | 'info' | 'success' | 'error'> = {
@@ -50,18 +57,88 @@ const statusLabel: Record<string, string> = {
   cancelled: 'Batal',
 };
 
+// ESC/POS helpers
+const ESC = '\x1B';
+const GS = '\x1D';
+const RESET = ESC + '@';
+const CENTER = ESC + 'a\x01';
+const LEFT = ESC + 'a\x00';
+const BOLD_ON = ESC + 'E\x01';
+const BOLD_OFF = ESC + 'E\x00';
+const DOUBLE_HEIGHT = GS + '!\x01';
+const NORMAL_SIZE = GS + '!\x00';
+const CUT = GS + 'V\x41\x00';
+const LINE_FEED = '\n';
+
+function buildReceipt(data: ReceiptData): string {
+  const { booking, payment, shopName } = data;
+  const date = new Date(payment.paidAt).toLocaleString('id-ID', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+  const divider = '--------------------------------\n';
+  const dashes = '- - - - - - - - - - - - - - - -\n';
+
+  const lines = [
+    RESET,
+    CENTER,
+    BOLD_ON,
+    DOUBLE_HEIGHT,
+    shopName + LINE_FEED,
+    NORMAL_SIZE,
+    BOLD_OFF,
+    '✂ BARBERSHOP ✂\n',
+    dashes,
+    LEFT,
+    `Tgl : ${date}\n`,
+    `No  : #${booking.queueNumber.toString().padStart(4, '0')}\n`,
+    divider,
+    CENTER,
+    BOLD_ON,
+    booking.serviceName + LINE_FEED,
+    BOLD_OFF,
+    LEFT,
+    `Pelanggan : ${booking.customerName}\n`,
+    booking.barberName ? `Barber    : ${booking.barberName}\n` : '',
+    booking.notes ? `Catatan   : ${booking.notes}\n` : '',
+    divider,
+    CENTER,
+    BOLD_ON,
+    `TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}\n`,
+    BOLD_OFF,
+    LEFT,
+    `Metode    : ${payment.method === 'cash' ? 'Tunai' : 'QRIS'}\n`,
+    divider,
+    CENTER,
+    'Terima kasih sudah berkunjung!\n',
+    'Sampai jumpa lagi 😊\n',
+    LINE_FEED,
+    LINE_FEED,
+    LINE_FEED,
+    CUT,
+  ];
+
+  return lines.join('');
+}
+
 export default function PosPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();
   const router = useRouter();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+  const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({
+    open: false, booking: null,
+  });
   const [paying, setPaying] = useState(false);
-  const [paidInfo, setPaidInfo] = useState<Payment | null>(null);
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
 
+  // Keep latest booking ref so receipt still has data after dialog closes
+  const lastBookingRef = useRef<Booking | null>(null);
+
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
@@ -91,31 +168,43 @@ export default function PosPage() {
     }
   };
 
+  const handleOpenPayDialog = (b: Booking) => {
+    lastBookingRef.current = b;
+    setPayDialog({ open: true, booking: b });
+  };
+
   const handlePayment = async (method: 'cash' | 'qris') => {
-    if (!payDialog.booking) return;
+    const booking = lastBookingRef.current;
+    if (!booking) return;
     setPaying(true);
     try {
-      const res = await api.post('/payments', {
-        bookingId: payDialog.booking._id,
-        method,
-      });
-      setPaidInfo(res.data);
+      const res = await api.post('/payments', { bookingId: booking._id, method });
+      const payment: Payment = res.data;
+
+      // Fetch tenant name for receipt
+      let shopName = 'Barbershop';
+      try {
+        const tenantRes = await api.get(`/tenants/${user!.tenantId}`);
+        shopName = tenantRes.data?.name || shopName;
+      } catch { /* use default */ }
+
+      setReceiptData({ booking, payment, shopName });
       toast.success('Pembayaran berhasil!');
       setPayDialog({ open: false, booking: null });
       setReceiptDialog(true);
       loadBookings();
     } catch (err: unknown) {
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal memproses pembayaran');
+      toast.error(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Gagal memproses pembayaran'
+      );
     } finally {
       setPaying(false);
     }
   };
 
-  const printReceipt = async () => {
-    if (!paidInfo || !payDialog.booking) {
-      toast.error('Data nota tidak tersedia');
-      return;
-    }
+  const printReceiptBluetooth = async () => {
+    if (!receiptData) { toast.error('Data nota tidak tersedia'); return; }
 
     if (!('bluetooth' in navigator)) {
       toast.error('Browser tidak mendukung Bluetooth. Gunakan Chrome di Android/Desktop.');
@@ -124,11 +213,22 @@ export default function PosPage() {
 
     try {
       toast.loading('Mencari printer...');
-      const device = await (navigator as Navigator & {
-        bluetooth: {
-          requestDevice: (options: object) => Promise<{ gatt?: { connect: () => Promise<{ getPrimaryService: (uuid: string) => Promise<{ getCharacteristic: (uuid: string) => Promise<{ writeValue: (data: BufferSource) => Promise<void> }> }> }> } }>;
+      type BtDevice = {
+        gatt?: {
+          connect: () => Promise<{
+            getPrimaryService: (uuid: string) => Promise<{
+              getCharacteristic: (uuid: string) => Promise<{
+                writeValue: (data: BufferSource) => Promise<void>;
+              }>;
+            }>;
+          }>;
         };
-      }).bluetooth.requestDevice({
+      };
+      const bt = (navigator as Navigator & {
+        bluetooth: { requestDevice: (opts: object) => Promise<BtDevice> };
+      }).bluetooth;
+
+      const device = await bt.requestDevice({
         filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
         optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'],
       });
@@ -137,23 +237,16 @@ export default function PosPage() {
       const service = await server?.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
       const characteristic = await service?.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
 
+      const text = buildReceipt(receiptData);
       const encoder = new TextEncoder();
-      const lines = [
-        '\x1B\x40',
-        '\x1B\x61\x01',
-        '--- BARBERSHOP ---\n',
-        `${new Date(paidInfo.paidAt).toLocaleString('id-ID')}\n`,
-        '-------------------\n',
-        `${payDialog.booking.serviceName}\n`,
-        `Pelanggan: ${payDialog.booking.customerName}\n`,
-        `Metode: ${paidInfo.method === 'cash' ? 'Tunai' : 'QRIS'}\n`,
-        '-------------------\n',
-        `TOTAL: Rp ${paidInfo.amount.toLocaleString('id-ID')}\n`,
-        '-------------------\n',
-        'Terima kasih!\n\n\n',
-      ].join('');
+      const data = encoder.encode(text);
 
-      await characteristic?.writeValue(encoder.encode(lines));
+      // Send in chunks (BT limitation ~512 bytes per write)
+      const CHUNK = 100;
+      for (let i = 0; i < data.length; i += CHUNK) {
+        await characteristic?.writeValue(data.slice(i, i + CHUNK));
+      }
+
       toast.dismiss();
       toast.success('Nota berhasil dicetak!');
     } catch (err) {
@@ -164,6 +257,71 @@ export default function PosPage() {
       } else {
         toast.error('Gagal cetak: ' + msg);
       }
+    }
+  };
+
+  const printReceiptBrowser = () => {
+    if (!receiptData) return;
+    const { booking, payment, shopName } = receiptData;
+    const date = new Date(payment.paidAt).toLocaleString('id-ID', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            width: 80mm;
+            margin: 0 auto;
+            padding: 4mm;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .large { font-size: 16px; }
+          .divider { border-top: 1px dashed #000; margin: 4px 0; }
+          .row { display: flex; justify-content: space-between; }
+          .spacer { margin: 4px 0; }
+          @media print {
+            @page { margin: 0; size: 80mm auto; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center bold large spacer">${shopName}</div>
+        <div class="center spacer">✂ BARBERSHOP ✂</div>
+        <div class="divider"></div>
+        <div>Tgl : ${date}</div>
+        <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
+        <div class="divider"></div>
+        <div class="center bold spacer">${booking.serviceName}</div>
+        <div>Pelanggan : ${booking.customerName}</div>
+        ${booking.barberName ? `<div>Barber    : ${booking.barberName}</div>` : ''}
+        ${booking.notes ? `<div>Catatan   : ${booking.notes}</div>` : ''}
+        <div class="divider"></div>
+        <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
+        <div>Metode    : ${payment.method === 'cash' ? 'Tunai' : 'QRIS'}</div>
+        <div class="divider"></div>
+        <div class="center spacer">Terima kasih sudah berkunjung!</div>
+        <div class="center">Sampai jumpa lagi 😊</div>
+        <div class="spacer"></div>
+        <div class="spacer"></div>
+      </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank', 'width=400,height=600');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(() => { w.print(); }, 300);
     }
   };
 
@@ -206,13 +364,27 @@ export default function PosPage() {
                       <Typography variant="h6" fontWeight={800}>#{b.queueNumber}</Typography>
                       <Typography fontWeight={600}>{b.customerName}</Typography>
                       <Typography variant="body2" color="text.secondary">{b.serviceName}</Typography>
-                      {b.notes && <Typography variant="body2" className="italic text-gray-400">"{b.notes}"</Typography>}
+                      {b.barberName && (
+                        <Typography variant="body2" color="text.secondary">
+                          Barber: {b.barberName}
+                        </Typography>
+                      )}
+                      {b.notes && (
+                        <Typography variant="body2" className="italic text-gray-400">
+                          &quot;{b.notes}&quot;
+                        </Typography>
+                      )}
                     </Box>
                     <Box className="text-right">
                       <Typography fontWeight={800} color="primary">
                         Rp {b.servicePrice.toLocaleString('id-ID')}
                       </Typography>
-                      <Chip label={statusLabel[b.status]} color={statusColor[b.status]} size="small" className="mt-1" />
+                      <Chip
+                        label={statusLabel[b.status]}
+                        color={statusColor[b.status]}
+                        size="small"
+                        className="mt-1"
+                      />
                     </Box>
                   </Box>
 
@@ -232,7 +404,7 @@ export default function PosPage() {
                       variant="contained"
                       size="small"
                       startIcon={<PaymentsIcon />}
-                      onClick={() => setPayDialog({ open: true, booking: b })}
+                      onClick={() => handleOpenPayDialog(b)}
                     >
                       Bayar
                     </Button>
@@ -261,7 +433,10 @@ export default function PosPage() {
                     <CardContent className="py-3 flex justify-between items-center">
                       <Box>
                         <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
-                        <Typography variant="body2" color="text.secondary">{b.serviceName}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {b.serviceName}
+                          {b.barberName && ` · ${b.barberName}`}
+                        </Typography>
                       </Box>
                       <Box className="text-right">
                         <CheckCircleIcon color="success" />
@@ -279,7 +454,12 @@ export default function PosPage() {
       )}
 
       {/* Payment Dialog */}
-      <Dialog open={payDialog.open} onClose={() => setPayDialog({ open: false, booking: null })} fullWidth maxWidth="xs">
+      <Dialog
+        open={payDialog.open}
+        onClose={() => setPayDialog({ open: false, booking: null })}
+        fullWidth
+        maxWidth="xs"
+      >
         <DialogTitle fontWeight={700}>Pilih Metode Bayar</DialogTitle>
         <DialogContent>
           {payDialog.booking && (
@@ -287,7 +467,14 @@ export default function PosPage() {
               <Typography variant="h5" fontWeight={800} color="primary">
                 Rp {payDialog.booking.servicePrice.toLocaleString('id-ID')}
               </Typography>
-              <Typography color="text.secondary">{payDialog.booking.customerName} — {payDialog.booking.serviceName}</Typography>
+              <Typography color="text.secondary">
+                {payDialog.booking.customerName} — {payDialog.booking.serviceName}
+              </Typography>
+              {payDialog.booking.barberName && (
+                <Typography variant="body2" color="text.secondary">
+                  Barber: {payDialog.booking.barberName}
+                </Typography>
+              )}
             </Box>
           )}
           <Box className="flex gap-3">
@@ -295,7 +482,6 @@ export default function PosPage() {
               fullWidth
               variant="outlined"
               size="large"
-              startIcon={<PaymentsIcon />}
               onClick={() => handlePayment('cash')}
               disabled={paying}
               sx={{ py: 3, flexDirection: 'column', gap: 1 }}
@@ -323,33 +509,106 @@ export default function PosPage() {
       </Dialog>
 
       {/* Receipt Dialog */}
-      <Dialog open={receiptDialog} onClose={() => setReceiptDialog(false)} fullWidth maxWidth="xs">
+      <Dialog
+        open={receiptDialog}
+        onClose={() => setReceiptDialog(false)}
+        fullWidth
+        maxWidth="xs"
+      >
         <DialogTitle fontWeight={700} className="text-center">
           <CheckCircleIcon color="success" sx={{ fontSize: 48 }} />
           <br />Pembayaran Berhasil!
         </DialogTitle>
-        <DialogContent className="text-center">
-          {paidInfo && (
-            <Box className="bg-gray-50 rounded-xl p-4 text-left">
-              <Typography variant="body2" color="text.secondary">Total Bayar</Typography>
-              <Typography variant="h5" fontWeight={800} color="primary">
-                Rp {paidInfo.amount.toLocaleString('id-ID')}
-              </Typography>
-              <Typography variant="body2" className="mt-1">
-                Metode: <strong>{paidInfo.method === 'cash' ? 'Tunai' : 'QRIS'}</strong>
-              </Typography>
+        <DialogContent>
+          {receiptData && (
+            <Box className="bg-gray-50 rounded-xl p-4">
+              {/* Mini receipt preview */}
+              <Box
+                className="font-mono text-xs bg-white border rounded-lg p-3 mb-4"
+                sx={{ fontFamily: 'Courier New, monospace', lineHeight: 1.6 }}
+              >
+                <Typography
+                  variant="body2"
+                  className="text-center font-bold"
+                  sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: 13 }}
+                >
+                  {receiptData.shopName}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  className="text-center block"
+                  sx={{ fontFamily: 'inherit' }}
+                >
+                  ✂ BARBERSHOP ✂
+                </Typography>
+                <Divider className="my-1" />
+                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
+                  No  : #{receiptData.booking.queueNumber.toString().padStart(4, '0')}
+                </Typography>
+                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
+                  Tgl : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
+                </Typography>
+                <Divider className="my-1" />
+                <Typography
+                  variant="body2"
+                  className="text-center font-bold block"
+                  sx={{ fontFamily: 'inherit', fontWeight: 700 }}
+                >
+                  {receiptData.booking.serviceName}
+                </Typography>
+                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
+                  Pelanggan: {receiptData.booking.customerName}
+                </Typography>
+                {receiptData.booking.barberName && (
+                  <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
+                    Barber: {receiptData.booking.barberName}
+                  </Typography>
+                )}
+                <Divider className="my-1" />
+                <Typography
+                  variant="body2"
+                  className="text-center font-bold block"
+                  sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: 13 }}
+                >
+                  TOTAL: Rp {receiptData.payment.amount.toLocaleString('id-ID')}
+                </Typography>
+                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
+                  Metode: {receiptData.payment.method === 'cash' ? 'Tunai' : 'QRIS'}
+                </Typography>
+                <Divider className="my-1" />
+                <Typography
+                  variant="caption"
+                  className="text-center block"
+                  sx={{ fontFamily: 'inherit' }}
+                >
+                  Terima kasih! 😊
+                </Typography>
+              </Box>
+
+              <Box className="flex gap-2">
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<PrintIcon />}
+                  onClick={printReceiptBluetooth}
+                  size="small"
+                >
+                  Cetak Bluetooth
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<PrintIcon />}
+                  onClick={printReceiptBrowser}
+                  size="small"
+                >
+                  Cetak Browser
+                </Button>
+              </Box>
             </Box>
           )}
         </DialogContent>
         <DialogActions className="p-4">
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={printReceipt}
-          >
-            Cetak Nota Bluetooth
-          </Button>
           <Button fullWidth variant="contained" onClick={() => setReceiptDialog(false)}>
             Selesai
           </Button>

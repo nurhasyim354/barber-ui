@@ -9,6 +9,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
+import PersonIcon from '@mui/icons-material/Person';
 import { useAuthStore } from '@/store/authStore';
 
 export function CustomerBottomNav() {
@@ -42,7 +43,7 @@ export function TenantAdminBottomNav() {
   const router = useRouter();
   const { logout } = useAuthStore();
 
-  const routes = ['/dashboard', '/pos', '/customers', '/services'];
+  const routes = ['/dashboard', '/pos', '/barbers', '/customers', '/services'];
   const value = routes.findIndex((r) => pathname.startsWith(r));
 
   return (
@@ -52,12 +53,12 @@ export function TenantAdminBottomNav() {
         onChange={(_, v) => {
           const r = routes[v];
           if (r) router.push(r);
-          else { logout(); router.push('/login'); }
         }}
         showLabels
       >
         <BottomNavigationAction label="Dashboard" icon={<DashboardIcon />} />
         <BottomNavigationAction label="POS" icon={<ReceiptIcon />} />
+        <BottomNavigationAction label="Barber" icon={<PersonIcon />} />
         <BottomNavigationAction label="Pelanggan" icon={<PeopleIcon />} />
         <BottomNavigationAction label="Layanan" icon={<ContentCutIcon />} />
       </BottomNavigation>

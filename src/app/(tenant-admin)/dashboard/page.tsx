@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, CircularProgress,
-  Grid, IconButton, Divider,
+  Grid, IconButton, Divider, Button,
 } from '@mui/material';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PeopleIcon from '@mui/icons-material/People';
@@ -11,6 +11,9 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import LogoutIcon from '@mui/icons-material/Logout';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import SettingsIcon from '@mui/icons-material/Settings';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -54,7 +57,7 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
 }
 
 export default function DashboardPage() {
-  const { user, isLoading, loadFromStorage } = useAuthStore();
+  const { user, isLoading, loadFromStorage, logout } = useAuthStore();
   const router = useRouter();
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,9 +93,20 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         right={
-          <IconButton color="inherit" onClick={loadRevenue}>
-            <RefreshIcon />
-          </IconButton>
+          <Box className="flex items-center">
+            <IconButton color="inherit" onClick={() => router.push('/reports')}>
+              <BarChartIcon />
+            </IconButton>
+            <IconButton color="inherit" onClick={() => router.push('/settings')}>
+              <SettingsIcon />
+            </IconButton>
+            <IconButton color="inherit" onClick={loadRevenue}>
+              <RefreshIcon />
+            </IconButton>
+            <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>
+              <LogoutIcon />
+            </IconButton>
+          </Box>
         }
       />
 
@@ -161,6 +175,28 @@ export default function DashboardPage() {
               </Box>
             </CardContent>
           </Card>
+
+          {/* Quick Actions */}
+          <Box className="grid grid-cols-2 gap-3 mt-2">
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<BarChartIcon />}
+              onClick={() => router.push('/reports')}
+              sx={{ py: 1.5 }}
+            >
+              Laporan Barber
+            </Button>
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<SettingsIcon />}
+              onClick={() => router.push('/settings')}
+              sx={{ py: 1.5 }}
+            >
+              Pengaturan
+            </Button>
+          </Box>
         </Box>
       )}
 
