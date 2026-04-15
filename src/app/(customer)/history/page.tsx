@@ -28,7 +28,7 @@ const statusConfig: Record<string, { label: string; color: 'warning' | 'info' | 
   cancelled: { label: 'Dibatalkan', color: 'error' },
 };
 
-const PAGE_SIZE = 3;
+const PAGE_SIZE = 20;
 
 export default function HistoryPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();

@@ -162,10 +162,11 @@ function BookingContent() {
     try {
       const [svcRes, histRes] = await Promise.all([
         api.get(`/tenants/${effectiveTenantId}/services`),
-        api.get('/bookings/history'),
+        api.get('/bookings/history?limit=50'),
       ]);
       setServices(svcRes.data);
-      const active = (histRes.data as ActiveBooking[]).find(
+      const historyItems: ActiveBooking[] = histRes.data?.data ?? [];
+      const active = historyItems.find(
         (b) => b.status === 'waiting' || b.status === 'in_progress',
       );
       if (active) setActiveBooking(active);
@@ -265,8 +266,8 @@ function BookingContent() {
         // QR flow: show dedicated confirmed screen
         setBookingResult(result);
       } else {
-        // Regular flow: toast + reload
-        toast.success('Booking berhasil! Silakan tunggu giliran Anda.');
+        // Regular flow: show queue number + reload
+        toast.success(`Booking berhasil! Nomor antrian Anda: #${result.queueNumber}`, { duration: 6000 });
         setBookStep('service');
         setSelectedServices([]);
         setSelectedBarber(null);

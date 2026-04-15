@@ -23,7 +23,7 @@ interface Customer {
   createdAt: string;
 }
 
-const PAGE_SIZE = 3;
+const PAGE_SIZE = 20;
 
 export default function CustomersPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();

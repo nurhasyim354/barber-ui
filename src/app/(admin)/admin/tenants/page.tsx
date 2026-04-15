@@ -12,6 +12,8 @@ import StoreIcon from '@mui/icons-material/Store';
 import LogoutIcon from '@mui/icons-material/Logout';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
+import PersonIcon from '@mui/icons-material/Person';
+import PhoneIcon from '@mui/icons-material/Phone';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -24,6 +26,8 @@ interface Tenant {
   phone: string;
   isActive: boolean;
   createdAt: string;
+  adminName?: string;
+  adminPhone?: string;
 }
 
 const PAGE_SIZE = 20;
@@ -178,6 +182,22 @@ export default function AdminTenantsPage() {
                       </Box>
                       <Typography variant="body2" color="text.secondary">{t.address}</Typography>
                       <Typography variant="body2" color="text.secondary">{t.phone}</Typography>
+                      {(t.adminName || t.adminPhone) && (
+                        <Box className="flex flex-col gap-0.5 mt-1 p-1.5 rounded bg-gray-50 border border-gray-100">
+                          {t.adminName && (
+                            <Box className="flex items-center gap-1">
+                              <PersonIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
+                              <Typography variant="caption" color="text.secondary">{t.adminName}</Typography>
+                            </Box>
+                          )}
+                          {t.adminPhone && (
+                            <Box className="flex items-center gap-1">
+                              <PhoneIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
+                              <Typography variant="caption" color="text.secondary">{t.adminPhone}</Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      )}
                       <Typography variant="caption" color="text.disabled">
                         Didaftarkan {new Date(t.createdAt).toLocaleDateString('id-ID')}
                       </Typography>

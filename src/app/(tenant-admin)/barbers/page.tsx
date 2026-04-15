@@ -30,7 +30,7 @@ interface Barber {
 }
 
 const defaultForm = { name: '', photoUrl: '', specialty: '' };
-const PAGE_SIZE = 3;
+const PAGE_SIZE = 20;
 
 export default function BarbersPage() {
     const { user, isLoading, loadFromStorage, logout } = useAuthStore();
