@@ -10,6 +10,8 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import StoreIcon from '@mui/icons-material/Store';
 import LogoutIcon from '@mui/icons-material/Logout';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -23,6 +25,8 @@ interface Tenant {
   isActive: boolean;
   createdAt: string;
 }
+
+const PAGE_SIZE = 20;
 
 const defaultForm = {
   name: '', address: '', phone: '',
@@ -118,12 +122,17 @@ export default function AdminTenantsPage() {
       <PageHeader
         title="Kelola Barbershop"
         right={
-          <IconButton
-            color="inherit"
-            onClick={() => { logout(); router.push('/login'); }}
-          >
-            <LogoutIcon />
-          </IconButton>
+          <Box className="flex items-center">
+            <IconButton color="inherit" onClick={() => router.push('/admin/subscriptions')} title="Tagihan">
+              <CreditCardIcon />
+            </IconButton>
+            <IconButton color="inherit" onClick={() => router.push('/admin/report')} title="Laporan">
+              <BarChartIcon />
+            </IconButton>
+            <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>
+              <LogoutIcon />
+            </IconButton>
+          </Box>
         }
       />
 

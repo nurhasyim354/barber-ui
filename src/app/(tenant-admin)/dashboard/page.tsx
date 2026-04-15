@@ -14,6 +14,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import LogoutIcon from '@mui/icons-material/Logout';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SettingsIcon from '@mui/icons-material/Settings';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -204,6 +205,16 @@ export default function DashboardPage() {
               sx={{ py: 1.5 }}
             >
               Pengaturan
+            </Button>
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<CreditCardIcon />}
+              onClick={() => router.push('/subscription')}
+              sx={{ py: 1.5, gridColumn: 'span 2' }}
+              color="secondary"
+            >
+              Tagihan & Langganan
             </Button>
           </Box>
         </Box>
