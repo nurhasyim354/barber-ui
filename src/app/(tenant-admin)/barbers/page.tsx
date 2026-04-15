@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
     Box, Card, CardContent, Typography, Button, CircularProgress,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Avatar, IconButton, Chip, Switch, Rating,
+    TextField, Avatar, IconButton, Chip, Switch, Rating, Pagination,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -30,12 +30,16 @@ interface Barber {
 }
 
 const defaultForm = { name: '', photoUrl: '', specialty: '' };
+const PAGE_SIZE = 20;
 
 export default function BarbersPage() {
     const { user, isLoading, loadFromStorage, logout } = useAuthStore();
     const router = useRouter();
 
     const [barbers, setBarbers] = useState<Barber[]>([]);
+    const [total, setTotal] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+    const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [form, setForm] = useState(defaultForm);
@@ -54,11 +58,14 @@ export default function BarbersPage() {
         loadBarbers();
     }, [user, isLoading]);
 
-    const loadBarbers = useCallback(async () => {
+    const loadBarbers = useCallback(async (p = 1) => {
         setLoading(true);
         try {
-            const res = await api.get('/barbers');
-            setBarbers(res.data);
+            const res = await api.get(`/barbers?page=${p}&limit=${PAGE_SIZE}`);
+            setBarbers(res.data.data);
+            setTotal(res.data.total);
+            setTotalPages(res.data.totalPages);
+            setPage(p);
         } catch {
             toast.error('Gagal memuat data barber');
         } finally {
@@ -90,7 +97,7 @@ export default function BarbersPage() {
                 toast.success('Barber berhasil ditambahkan');
             }
             setDialogOpen(false);
-            loadBarbers();
+            loadBarbers(page);
         } catch {
             toast.error('Gagal menyimpan data barber');
         } finally {
@@ -102,7 +109,7 @@ export default function BarbersPage() {
         try {
             await api.patch(`/barbers/${b._id}`, { isActive: !b.isActive });
             toast.success(b.isActive ? 'Barber dinonaktifkan' : 'Barber diaktifkan');
-            loadBarbers();
+            loadBarbers(page);
         } catch {
             toast.error('Gagal update status');
         }
@@ -135,7 +142,7 @@ export default function BarbersPage() {
             await api.delete(`/barbers/${deleteId}`);
             toast.success('Barber dihapus');
             setDeleteId(null);
-            loadBarbers();
+            loadBarbers(page);
         } catch {
             toast.error('Gagal menghapus barber');
         }
@@ -144,7 +151,7 @@ export default function BarbersPage() {
     return (
         <Box className="min-h-screen bg-gray-50 pb-24">
             <PageHeader
-                title="Tim Barber"
+                title={`Tim Barber (${total})`}
                 right={
                     <Box className="flex items-center">
                         <IconButton color="inherit" onClick={openAdd}>
@@ -175,6 +182,7 @@ export default function BarbersPage() {
                             </CardContent>
                         </Card>
                     ) : (
+                        <>
                         <Box className="flex flex-col gap-3">
                             {barbers.map((b) => (
                                 <Card key={b._id} className={!b.isActive ? 'opacity-60' : ''}>
@@ -225,6 +233,18 @@ export default function BarbersPage() {
                                 </Card>
                             ))}
                         </Box>
+                        {totalPages > 1 && (
+                            <Box className="flex justify-center mt-4">
+                                <Pagination
+                                    count={totalPages}
+                                    page={page}
+                                    onChange={(_, v) => loadBarbers(v)}
+                                    color="primary"
+                                    size="small"
+                                />
+                            </Box>
+                        )}
+                        </>
                     )}
                 </Box>
             )}

@@ -1,14 +1,17 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
-  TextField, Divider, IconButton,
+  TextField, Divider, IconButton, Chip,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import QrCodeIcon from '@mui/icons-material/QrCode2';
+import UploadIcon from '@mui/icons-material/Upload';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -20,13 +23,16 @@ interface TenantSettings {
   name: string;
   address?: string;
   phone?: string;
-  gpsLat?: number | null;
-  gpsLng?: number | null;
+  location?: { lat: number; lng: number } | null;
+  qrisImageBase64?: string | null;
 }
+
+const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
 
 export default function SettingsPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [tenant, setTenant] = useState<TenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +47,10 @@ export default function SettingsPage() {
     gpsLng: '',
   });
 
+  // qrisImageBase64 state: null = unchanged/loading, '' = explicitly removed, 'data:...' = new or existing
+  const [qrisImage, setQrisImage] = useState<string | null>(null);
+  const [qrisUploading, setQrisUploading] = useState(false);
+
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
   useEffect(() => {
@@ -48,21 +58,24 @@ export default function SettingsPage() {
     if (!user) { router.replace('/login'); return; }
     if (user.role !== 'tenant_admin') { router.replace('/dashboard'); return; }
     loadTenant();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isLoading]);
 
   const loadTenant = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/tenants/${user!.tenantId}`);
+      // /settings endpoint returns full data including qrisImageBase64
+      const res = await api.get(`/tenants/${user!.tenantId}/settings`);
       const t: TenantSettings = res.data;
       setTenant(t);
       setForm({
         name: t.name || '',
         address: t.address || '',
         phone: t.phone || '',
-        gpsLat: t.gpsLat != null ? String(t.gpsLat) : '',
-        gpsLng: t.gpsLng != null ? String(t.gpsLng) : '',
+        gpsLat: t.location?.lat != null ? String(t.location.lat) : '',
+        gpsLng: t.location?.lng != null ? String(t.location.lng) : '',
       });
+      setQrisImage(t.qrisImageBase64 || '');
     } catch {
       toast.error('Gagal memuat data barbershop');
     } finally {
@@ -89,6 +102,7 @@ export default function SettingsPage() {
         phone: form.phone,
         gpsLat: lat,
         gpsLng: lng,
+        qrisImageBase64: qrisImage ?? undefined,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -97,6 +111,36 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleQrisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar (JPG, PNG, dst.)');
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error('Ukuran gambar maksimal 2 MB');
+      return;
+    }
+
+    setQrisUploading(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setQrisImage(reader.result as string);
+      setQrisUploading(false);
+      toast.success('Gambar QRIS siap — klik Simpan untuk menyimpan');
+    };
+    reader.onerror = () => {
+      setQrisUploading(false);
+      toast.error('Gagal membaca file');
+    };
+    reader.readAsDataURL(file);
+
+    // reset input agar file yang sama bisa dipilih ulang
+    e.target.value = '';
   };
 
   const detectLocation = () => {
@@ -119,7 +163,7 @@ export default function SettingsPage() {
         setDetecting(false);
         toast.error('Gagal deteksi lokasi: ' + err.message);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   };
 
@@ -134,6 +178,10 @@ export default function SettingsPage() {
       toast.success('Link Maps disalin');
     }
   };
+
+  const approxKb = qrisImage
+    ? Math.round((qrisImage.length * 0.75) / 1024)
+    : 0;
 
   return (
     <Box className="min-h-screen bg-gray-50 pb-24">
@@ -174,6 +222,118 @@ export default function SettingsPage() {
                   placeholder="08xxxxxxxxxx"
                 />
               </Box>
+            </CardContent>
+          </Card>
+
+          {/* QRIS Image */}
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <QrCodeIcon color="primary" />
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Gambar QRIS Pembayaran
+                  </Typography>
+                </Box>
+                {qrisImage && (
+                  <Chip
+                    label={`~${approxKb} KB`}
+                    size="small"
+                    variant="outlined"
+                    color="default"
+                  />
+                )}
+              </Box>
+
+              {qrisImage ? (
+                <>
+                  {/* Preview */}
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      mb: 2,
+                      textAlign: 'center',
+                      bgcolor: 'white',
+                      p: 1,
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrisImage}
+                      alt="QRIS"
+                      style={{ maxWidth: '100%', maxHeight: 280, objectFit: 'contain' }}
+                    />
+                  </Box>
+
+                  <Box display="flex" gap={1.5}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UploadIcon />}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={qrisUploading}
+                    >
+                      Ganti Gambar
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteOutlineIcon />}
+                      onClick={() => {
+                        setQrisImage('');
+                        toast('Gambar QRIS dihapus — klik Simpan untuk menyimpan', { icon: '🗑️' });
+                      }}
+                    >
+                      Hapus
+                    </Button>
+                  </Box>
+                </>
+              ) : (
+                <>
+                  <Box
+                    sx={{
+                      border: '2px dashed',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      p: 4,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      '&:hover': { borderColor: 'primary.main', bgcolor: 'rgba(192,57,43,0.04)' },
+                      transition: 'all 0.2s',
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <QrCodeIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary" mb={1}>
+                      Belum ada gambar QRIS
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={qrisUploading ? <CircularProgress size={14} /> : <UploadIcon />}
+                      disabled={qrisUploading}
+                    >
+                      {qrisUploading ? 'Memproses...' : 'Pilih Gambar'}
+                    </Button>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    Format JPG / PNG · Maksimal 2 MB · Gambar ditampilkan saat pelanggan bayar QRIS
+                  </Typography>
+                </>
+              )}
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleQrisFileChange}
+              />
             </CardContent>
           </Card>
 

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  IconButton, Chip, Fab, Avatar, Switch, FormControlLabel,
+  IconButton, Chip, Fab, Avatar, Switch, FormControlLabel, Pagination,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -33,6 +33,9 @@ export default function AdminTenantsPage() {
   const { user, isLoading, loadFromStorage, logout } = useAuthStore();
   const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState<{ open: boolean; editing: Tenant | null }>({ open: false, editing: null });
   const [form, setForm] = useState(defaultForm);
@@ -46,11 +49,14 @@ export default function AdminTenantsPage() {
     loadTenants();
   }, [user, isLoading]);
 
-  const loadTenants = useCallback(async () => {
+  const loadTenants = useCallback(async (p = 1) => {
     setLoading(true);
     try {
-      const res = await api.get('/admin/tenants');
-      setTenants(res.data);
+      const res = await api.get(`/admin/tenants?page=${p}&limit=${PAGE_SIZE}`);
+      setTenants(res.data.data);
+      setTotal(res.data.total);
+      setTotalPages(res.data.totalPages);
+      setPage(p);
     } catch {
       toast.error('Gagal memuat tenant');
     } finally {
@@ -89,7 +95,7 @@ export default function AdminTenantsPage() {
         toast.success('Tenant berhasil ditambahkan');
       }
       setDialog({ open: false, editing: null });
-      loadTenants();
+      loadTenants(page);
     } catch (err: unknown) {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menyimpan');
     } finally {
@@ -101,7 +107,7 @@ export default function AdminTenantsPage() {
     try {
       await api.patch(`/admin/tenants/${t._id}`, { isActive: !t.isActive });
       toast.success(`${t.name} ${t.isActive ? 'dinonaktifkan' : 'diaktifkan'}`);
-      loadTenants();
+      loadTenants(page);
     } catch {
       toast.error('Gagal update status');
     }
@@ -124,7 +130,7 @@ export default function AdminTenantsPage() {
       <Box className="p-4 max-w-lg mx-auto">
         <Box className="flex items-center justify-between mb-4">
           <Typography variant="h6" fontWeight={700}>
-            Total: {tenants.length} Barbershop
+            Total: {total} Barbershop
           </Typography>
         </Box>
 
@@ -143,6 +149,7 @@ export default function AdminTenantsPage() {
             </CardContent>
           </Card>
         ) : (
+          <>
           <Box className="flex flex-col gap-3">
             {tenants.map((t) => (
               <Card key={t._id} className={t.isActive ? '' : 'opacity-60'}>
@@ -186,6 +193,18 @@ export default function AdminTenantsPage() {
               </Card>
             ))}
           </Box>
+          {totalPages > 1 && (
+            <Box className="flex justify-center mt-4">
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(_, v) => loadTenants(v)}
+                color="primary"
+                size="small"
+              />
+            </Box>
+          )}
+          </>
         )}
       </Box>
 

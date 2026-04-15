@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, CircularProgress,
-  Avatar, TextField, InputAdornment, IconButton, Chip,
+  Avatar, TextField, InputAdornment, IconButton, Chip, Pagination,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import PhoneIcon from '@mui/icons-material/Phone';
@@ -23,37 +23,37 @@ interface Customer {
   createdAt: string;
 }
 
+const PAGE_SIZE = 20;
+
 export default function CustomersPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filtered, setFiltered] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
     if (user.role === 'customer') { router.replace('/booking'); return; }
-    loadCustomers();
+    loadCustomers(1, search);
   }, [user, isLoading]);
 
-  useEffect(() => {
-    const q = search.toLowerCase();
-    setFiltered(
-      customers.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q)
-      )
-    );
-  }, [search, customers]);
-
-  const loadCustomers = useCallback(async () => {
+  const loadCustomers = useCallback(async (p: number, q: string) => {
     setLoading(true);
     try {
-      const res = await api.get('/customers');
-      setCustomers(res.data);
-      setFiltered(res.data);
+      const params = new URLSearchParams({ page: String(p), limit: String(PAGE_SIZE) });
+      if (q) params.set('search', q);
+      const res = await api.get(`/customers?${params}`);
+      setCustomers(res.data.data);
+      setTotal(res.data.total);
+      setTotalPages(res.data.totalPages);
+      setPage(p);
     } catch {
       toast.error('Gagal memuat pelanggan');
     } finally {
@@ -61,11 +61,20 @@ export default function CustomersPage() {
     }
   }, []);
 
+  const handleSearch = () => {
+    setSearch(searchInput);
+    loadCustomers(1, searchInput);
+  };
+
+  const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
+    loadCustomers(value, search);
+  };
+
   const handleToggleActive = async (c: Customer) => {
     try {
       await api.patch(`/customers/${c._id}`, { isActive: !c.isActive });
       toast.success(`${c.name} ${c.isActive ? 'dinonaktifkan' : 'diaktifkan'}`);
-      loadCustomers();
+      loadCustomers(page, search);
     } catch {
       toast.error('Gagal mengubah status');
     }
@@ -76,78 +85,96 @@ export default function CustomersPage() {
 
   return (
     <Box className="min-h-screen bg-gray-50 pb-24">
-      <PageHeader title={`Pelanggan (${customers.length})`} />
+      <PageHeader title={`Pelanggan (${total})`} />
 
       <Box className="p-4 max-w-lg mx-auto">
-        <TextField
-          fullWidth
-          placeholder="Cari nama atau nomor HP..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="mb-4"
-          sx={{ mb: 3 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon color="action" />
-              </InputAdornment>
-            ),
-          }}
-        />
+        <Box className="flex gap-2 mb-4">
+          <TextField
+            fullWidth
+            placeholder="Cari nama atau nomor HP..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <IconButton onClick={handleSearch} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, px: 2 }}>
+            <SearchIcon />
+          </IconButton>
+        </Box>
 
         {loading ? (
           <Box className="flex justify-center mt-8"><CircularProgress /></Box>
-        ) : filtered.length === 0 ? (
+        ) : customers.length === 0 ? (
           <Box className="text-center py-12">
             <Typography color="text.secondary">
               {search ? 'Pelanggan tidak ditemukan' : 'Belum ada pelanggan'}
             </Typography>
           </Box>
         ) : (
-          <Box className="flex flex-col gap-3">
-            {filtered.map((c) => (
-              <Card key={c._id} className={c.isActive ? '' : 'opacity-60'}>
-                <CardContent className="flex items-center gap-3">
-                  <Avatar
-                    sx={{
-                      bgcolor: c.isActive ? 'primary.main' : 'grey.400',
-                      width: 48,
-                      height: 48,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {getInitials(c.name)}
-                  </Avatar>
-                  <Box className="flex-1">
-                    <Box className="flex items-center gap-2">
-                      <Typography fontWeight={700}>{c.name}</Typography>
-                      {!c.isActive && <Chip label="Nonaktif" size="small" color="error" />}
-                    </Box>
-                    <Box className="flex items-center gap-1">
-                      <PhoneIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {c.phone}
+          <>
+            <Box className="flex flex-col gap-3 mb-4">
+              {customers.map((c) => (
+                <Card key={c._id} className={c.isActive ? '' : 'opacity-60'}>
+                  <CardContent className="flex items-center gap-3">
+                    <Avatar
+                      sx={{
+                        bgcolor: c.isActive ? 'primary.main' : 'grey.400',
+                        width: 48,
+                        height: 48,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {getInitials(c.name)}
+                    </Avatar>
+                    <Box className="flex-1">
+                      <Box className="flex items-center gap-2">
+                        <Typography fontWeight={700}>{c.name}</Typography>
+                        {!c.isActive && <Chip label="Nonaktif" size="small" color="error" />}
+                      </Box>
+                      <Box className="flex items-center gap-1">
+                        <PhoneIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                        <Typography variant="body2" color="text.secondary">
+                          {c.phone}
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" color="text.disabled">
+                        Bergabung {new Date(c.createdAt).toLocaleDateString('id-ID')}
                       </Typography>
                     </Box>
-                    <Typography variant="caption" color="text.disabled">
-                      Bergabung {new Date(c.createdAt).toLocaleDateString('id-ID')}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleToggleActive(c)}
-                    title={c.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-                  >
-                    {c.isActive ? (
-                      <BlockIcon color="error" fontSize="small" />
-                    ) : (
-                      <CheckCircleIcon color="success" fontSize="small" />
-                    )}
-                  </IconButton>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleToggleActive(c)}
+                      title={c.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                    >
+                      {c.isActive ? (
+                        <BlockIcon color="error" fontSize="small" />
+                      ) : (
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      )}
+                    </IconButton>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+
+            {totalPages > 1 && (
+              <Box className="flex justify-center mt-2">
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={handlePageChange}
+                  color="primary"
+                  size="small"
+                />
+              </Box>
+            )}
+          </>
         )}
       </Box>
 

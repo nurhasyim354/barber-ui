@@ -179,6 +179,15 @@ export default function DashboardPage() {
           {/* Quick Actions */}
           <Box className="grid grid-cols-2 gap-3 mt-2">
             <Button
+              variant="contained"
+              fullWidth
+              startIcon={<QrCodeIcon />}
+              onClick={() => router.push('/dashboard/booking-qr')}
+              sx={{ py: 1.5, gridColumn: 'span 2' }}
+            >
+              QR Booking Pelanggan
+            </Button>
+            <Button
               variant="outlined"
               fullWidth
               startIcon={<BarChartIcon />}

@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, Chip,
   CircularProgress, Dialog, DialogTitle, DialogContent,
-  DialogActions, Divider, IconButton,
+  DialogActions, Divider, IconButton, List, ListItemButton,
+  ListItemAvatar, Avatar, ListItemText, Radio,
 } from '@mui/material';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -12,6 +13,8 @@ import PrintIcon from '@mui/icons-material/Print';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import PersonIcon from '@mui/icons-material/Person';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -26,8 +29,15 @@ interface Booking {
   queueNumber: number;
   status: string;
   notes?: string;
+  barberId?: string;
   barberName?: string;
   date: string;
+}
+
+interface BarberOption {
+  _id: string;
+  name: string;
+  photoUrl?: string | null;
 }
 
 interface Payment {
@@ -128,12 +138,22 @@ export default function PosPage() {
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [qrisImageBase64, setQrisImageBase64] = useState<string | null>(null);
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({
     open: false, booking: null,
   });
+  const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
   const [paying, setPaying] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
+
+  const [barberDialog, setBarberDialog] = useState<{ open: boolean; booking: Booking | null }>({
+    open: false, booking: null,
+  });
+  const [barbers, setBarbers] = useState<BarberOption[]>([]);
+  const [barbersLoaded, setBarbersLoaded] = useState(false);
+  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
+  const [savingBarber, setSavingBarber] = useState(false);
 
   // Keep latest booking ref so receipt still has data after dialog closes
   const lastBookingRef = useRef<Booking | null>(null);
@@ -145,6 +165,12 @@ export default function PosPage() {
     if (!user) { router.replace('/login'); return; }
     if (user.role === 'customer') { router.replace('/booking'); return; }
     loadBookings();
+    // Muat QRIS image sekali saat halaman dibuka
+    if (user.tenantId) {
+      api.get(`/tenants/${user.tenantId}/settings`)
+        .then((r) => setQrisImageBase64(r.data?.qrisImageBase64 || null))
+        .catch(() => {});
+    }
   }, [user, isLoading]);
 
   const loadBookings = useCallback(async () => {
@@ -169,8 +195,39 @@ export default function PosPage() {
     }
   };
 
+  const handleOpenBarberDialog = async (b: Booking) => {
+    setSelectedBarberId(b.barberId ?? null);
+    setBarberDialog({ open: true, booking: b });
+    if (!barbersLoaded && user?.tenantId) {
+      try {
+        const res = await api.get(`/tenants/${user.tenantId}/barbers`);
+        setBarbers(res.data);
+        setBarbersLoaded(true);
+      } catch {
+        toast.error('Gagal memuat daftar barber');
+      }
+    }
+  };
+
+  const handleSaveBarber = async () => {
+    const booking = barberDialog.booking;
+    if (!booking) return;
+    setSavingBarber(true);
+    try {
+      await api.patch(`/bookings/${booking._id}/barber`, { barberId: selectedBarberId });
+      toast.success('Barber berhasil diubah');
+      setBarberDialog({ open: false, booking: null });
+      loadBookings();
+    } catch {
+      toast.error('Gagal mengubah barber');
+    } finally {
+      setSavingBarber(false);
+    }
+  };
+
   const handleOpenPayDialog = (b: Booking) => {
     lastBookingRef.current = b;
+    setPayStep('select');
     setPayDialog({ open: true, booking: b });
   };
 
@@ -415,6 +472,15 @@ export default function PosPage() {
                       Bayar
                     </Button>
                     <Button
+                      variant="outlined"
+                      size="small"
+                      color="secondary"
+                      startIcon={<SwapHorizIcon />}
+                      onClick={() => handleOpenBarberDialog(b)}
+                    >
+                      Ganti Barber
+                    </Button>
+                    <Button
                       variant="text"
                       size="small"
                       color="error"
@@ -462,56 +528,146 @@ export default function PosPage() {
       {/* Payment Dialog */}
       <Dialog
         open={payDialog.open}
-        onClose={() => setPayDialog({ open: false, booking: null })}
+        onClose={() => { setPayDialog({ open: false, booking: null }); setPayStep('select'); }}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle fontWeight={700}>Pilih Metode Bayar</DialogTitle>
-        <DialogContent>
-          {payDialog.booking && (
-            <Box className="text-center mb-4">
-              <Typography variant="h5" fontWeight={800} color="primary">
-                Rp {payDialog.booking.servicePrice.toLocaleString('id-ID')}
-              </Typography>
-              <Typography color="text.secondary">
-                {payDialog.booking.customerName} — {payDialog.booking.serviceName}
-              </Typography>
-              {payDialog.booking.barberName && (
-                <Typography variant="body2" color="text.secondary">
-                  Barber: {payDialog.booking.barberName}
-                </Typography>
+        {payStep === 'select' ? (
+          <>
+            <DialogTitle fontWeight={700}>Pilih Metode Bayar</DialogTitle>
+            <DialogContent>
+              {payDialog.booking && (
+                <Box className="text-center mb-4">
+                  <Typography variant="h5" fontWeight={800} color="primary">
+                    Rp {payDialog.booking.servicePrice.toLocaleString('id-ID')}
+                  </Typography>
+                  <Typography color="text.secondary">
+                    {payDialog.booking.customerName} — {payDialog.booking.serviceName}
+                  </Typography>
+                  {payDialog.booking.barberName && (
+                    <Typography variant="body2" color="text.secondary">
+                      Barber: {payDialog.booking.barberName}
+                    </Typography>
+                  )}
+                </Box>
               )}
-            </Box>
-          )}
-          <Box className="flex gap-3">
-            <Button
-              fullWidth
-              variant="outlined"
-              size="large"
-              onClick={() => handlePayment('cash')}
-              disabled={paying}
-              sx={{ py: 3, flexDirection: 'column', gap: 1 }}
-            >
-              <PaymentsIcon sx={{ fontSize: 40 }} />
-              Tunai
-            </Button>
-            <Button
-              fullWidth
-              variant="outlined"
-              size="large"
-              onClick={() => handlePayment('qris')}
-              disabled={paying}
-              sx={{ py: 3, flexDirection: 'column', gap: 1 }}
-            >
-              <QrCodeIcon sx={{ fontSize: 40 }} />
-              QRIS
-            </Button>
-          </Box>
-          {paying && <Box className="flex justify-center mt-4"><CircularProgress /></Box>}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPayDialog({ open: false, booking: null })}>Batal</Button>
-        </DialogActions>
+              <Box className="flex gap-3">
+                <Button
+                  fullWidth variant="outlined" size="large"
+                  onClick={() => handlePayment('cash')}
+                  disabled={paying}
+                  sx={{ py: 3, flexDirection: 'column', gap: 1 }}
+                >
+                  <PaymentsIcon sx={{ fontSize: 40 }} />
+                  Tunai
+                </Button>
+                <Button
+                  fullWidth variant="outlined" size="large"
+                  onClick={() => setPayStep('qris-confirm')}
+                  disabled={paying}
+                  sx={{ py: 3, flexDirection: 'column', gap: 1 }}
+                >
+                  <QrCodeIcon sx={{ fontSize: 40 }} />
+                  QRIS
+                </Button>
+              </Box>
+              {paying && <Box className="flex justify-center mt-4"><CircularProgress /></Box>}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setPayDialog({ open: false, booking: null })}>Batal</Button>
+            </DialogActions>
+          </>
+        ) : (
+          <>
+            <DialogTitle fontWeight={700} sx={{ textAlign: 'center', pb: 0 }}>
+              Konfirmasi Pembayaran QRIS
+            </DialogTitle>
+            <DialogContent>
+              {/* QRIS waiting screen */}
+              <Box className="text-center py-2">
+                {/* QRIS image or placeholder */}
+                {qrisImageBase64 ? (
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      mb: 2,
+                      bgcolor: 'white',
+                      p: 1,
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrisImageBase64}
+                      alt="QRIS"
+                      style={{ width: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }}
+                    />
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      width: 80, height: 80, borderRadius: '20px',
+                      bgcolor: 'rgba(192,57,43,0.1)', border: '2px solid',
+                      borderColor: 'primary.main',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      mx: 'auto', mb: 2,
+                    }}
+                  >
+                    <QrCodeIcon sx={{ fontSize: 48, color: 'primary.main' }} />
+                  </Box>
+                )}
+
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  {qrisImageBase64
+                    ? 'Minta pelanggan scan QR di atas'
+                    : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
+                </Typography>
+                <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
+                  Rp {payDialog.booking?.servicePrice.toLocaleString('id-ID')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {payDialog.booking?.customerName} — {payDialog.booking?.serviceName}
+                </Typography>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* Primary: confirm QRIS paid */}
+              <Button
+                fullWidth variant="contained" size="large"
+                color="success"
+                onClick={() => handlePayment('qris')}
+                disabled={paying}
+                startIcon={paying ? <CircularProgress size={20} color="inherit" /> : <CheckCircleIcon />}
+                sx={{ mb: 1.5, py: 1.5 }}
+              >
+                {paying ? 'Memproses…' : 'QRIS Sudah Dibayar'}
+              </Button>
+
+              {/* Fallback: switch to cash */}
+              <Button
+                fullWidth variant="outlined" size="large"
+                onClick={() => handlePayment('cash')}
+                disabled={paying}
+                startIcon={<PaymentsIcon />}
+                sx={{ mb: 1 }}
+              >
+                Ganti ke Tunai
+              </Button>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => setPayStep('select')}
+                disabled={paying}
+                color="inherit"
+              >
+                ← Kembali
+              </Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
 
       {/* Receipt Dialog */}
@@ -617,6 +773,75 @@ export default function PosPage() {
         <DialogActions className="p-4">
           <Button fullWidth variant="contained" onClick={() => setReceiptDialog(false)}>
             Selesai
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Change Barber Dialog */}
+      <Dialog
+        open={barberDialog.open}
+        onClose={() => setBarberDialog({ open: false, booking: null })}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle fontWeight={700}>Ganti Barber</DialogTitle>
+        <DialogContent sx={{ pt: 0 }}>
+          {barberDialog.booking && (
+            <Typography variant="body2" color="text.secondary" mb={1}>
+              Booking #{barberDialog.booking.queueNumber} — {barberDialog.booking.customerName}
+            </Typography>
+          )}
+          <List disablePadding>
+            {/* Opsi tanpa barber */}
+            <ListItemButton
+              onClick={() => setSelectedBarberId(null)}
+              selected={selectedBarberId === null}
+              sx={{ borderRadius: 1, mb: 0.5 }}
+            >
+              <ListItemAvatar>
+                <Avatar sx={{ bgcolor: 'grey.300' }}>
+                  <PersonIcon />
+                </Avatar>
+              </ListItemAvatar>
+              <ListItemText primary="Tanpa Barber" />
+              <Radio checked={selectedBarberId === null} size="small" />
+            </ListItemButton>
+
+            {barbers.map((barber) => (
+              <ListItemButton
+                key={barber._id}
+                onClick={() => setSelectedBarberId(barber._id)}
+                selected={selectedBarberId === barber._id}
+                sx={{ borderRadius: 1, mb: 0.5 }}
+              >
+                <ListItemAvatar>
+                  <Avatar src={barber.photoUrl ?? undefined} alt={barber.name}>
+                    {barber.name[0]}
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText primary={barber.name} />
+                <Radio checked={selectedBarberId === barber._id} size="small" />
+              </ListItemButton>
+            ))}
+
+            {!barbersLoaded && (
+              <Box className="flex justify-center py-4">
+                <CircularProgress size={24} />
+              </Box>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBarberDialog({ open: false, booking: null })} color="inherit">
+            Batal
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveBarber}
+            disabled={savingBarber}
+            startIcon={savingBarber ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
+            Simpan
           </Button>
         </DialogActions>
       </Dialog>
