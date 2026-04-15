@@ -3,12 +3,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, CircularProgress,
-  Avatar, Divider, ToggleButton, ToggleButtonGroup, Chip,
+  Avatar, Divider, Chip, Button, TextField,
 } from '@mui/material';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import StarIcon from '@mui/icons-material/Star';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import QrCodeIcon from '@mui/icons-material/QrCode2';
+import SearchIcon from '@mui/icons-material/Search';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -18,35 +20,42 @@ import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 interface BarberReport {
   barberId: string;
   barberName: string;
-  barberPhoto?: string;
+  photoUrl?: string | null;
   totalRevenue: number;
   totalTransactions: number;
-  avgRating: number;
-  reviewCount: number;
+  completedBookings: number;
 }
 
 interface ReportSummary {
-  period: string;
-  barbers: BarberReport[];
-  grandTotal: number;
-  grandTransactions: number;
+  period: { from: string; to: string };
+  summary: {
+    totalRevenue: number;
+    totalTransactions: number;
+    cashTotal: number;
+    qrisTotal: number;
+    completedBookings: number;
+  };
+  byBarber: BarberReport[];
 }
 
-type Period = 'today' | 'week' | 'month';
-
-const PERIOD_LABELS: Record<Period, string> = {
-  today: 'Hari Ini',
-  week: 'Minggu Ini',
-  month: 'Bulan Ini',
-};
+function toLocalDateStr(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 export default function ReportsPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();
   const router = useRouter();
 
+  const today = toLocalDateStr(new Date());
+  const firstOfMonth = toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+
   const [report, setReport] = useState<ReportSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<Period>('today');
+  const [loading, setLoading] = useState(false);
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(today);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -54,13 +63,15 @@ export default function ReportsPage() {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
     if (user.role !== 'tenant_admin') { router.replace('/dashboard'); return; }
-    loadReport(period);
+    loadReport(firstOfMonth, today);
   }, [user, isLoading]);
 
-  const loadReport = useCallback(async (p: Period) => {
+  const loadReport = useCallback(async (from: string, to: string) => {
+    if (!from || !to) { toast.error('Pilih rentang tanggal'); return; }
+    if (from > to) { toast.error('Tanggal awal tidak boleh setelah tanggal akhir'); return; }
     setLoading(true);
     try {
-      const res = await api.get(`/reports/barbers?period=${p}`);
+      const res = await api.get(`/revenue/barbers?from=${from}&to=${to}`);
       setReport(res.data);
     } catch {
       toast.error('Gagal memuat laporan');
@@ -69,11 +80,7 @@ export default function ReportsPage() {
     }
   }, []);
 
-  const handlePeriodChange = (_: React.MouseEvent, val: Period | null) => {
-    if (!val) return;
-    setPeriod(val);
-    loadReport(val);
-  };
+  const handleSearch = () => loadReport(fromDate, toDate);
 
   const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 
@@ -84,33 +91,60 @@ export default function ReportsPage() {
     return null;
   };
 
-  const sorted = report?.barbers
-    ? [...report.barbers].sort((a, b) => b.totalRevenue - a.totalRevenue)
+  const sorted = report?.byBarber
+    ? [...report.byBarber].sort((a, b) => b.totalRevenue - a.totalRevenue)
     : [];
+
+  const grandTotal = report?.summary.totalRevenue ?? 0;
 
   return (
     <Box className="min-h-screen bg-gray-50 pb-24">
       <PageHeader title="Laporan per Barber" back />
 
       <Box className="p-4 max-w-lg mx-auto">
-        <Box className="flex justify-center mb-4">
-          <ToggleButtonGroup
-            value={period}
-            exclusive
-            onChange={handlePeriodChange}
-            size="small"
-          >
-            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
-              <ToggleButton key={p} value={p}>
-                {PERIOD_LABELS[p]}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
+
+        {/* Date Range Picker */}
+        <Card className="mb-4">
+          <CardContent className="pb-3">
+            <Typography variant="subtitle2" fontWeight={700} className="mb-3">
+              Rentang Tanggal
+            </Typography>
+            <Box className="flex gap-3 items-end">
+              <TextField
+                label="Dari"
+                type="date"
+                size="small"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <TextField
+                label="Sampai"
+                type="date"
+                size="small"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <Button
+                variant="contained"
+                size="medium"
+                startIcon={<SearchIcon />}
+                onClick={handleSearch}
+                disabled={loading}
+                sx={{ minWidth: 90, height: 40 }}
+              >
+                Cari
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
 
         {loading ? (
           <Box className="flex justify-center mt-12"><CircularProgress /></Box>
-        ) : !report || sorted.length === 0 ? (
+        ) : !report ? null : sorted.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
               <ReceiptLongIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
@@ -122,17 +156,40 @@ export default function ReportsPage() {
         ) : (
           <>
             {/* Summary Card */}
-            <Card className="mb-4 bg-gradient-to-r from-orange-500 to-orange-400 text-white">
+            <Card className="mb-4 bg-gradient-to-r from-orange-500 to-orange-400">
               <CardContent>
-                <Typography variant="body2" sx={{ opacity: 0.85 }}>
-                  Total Pendapatan — {PERIOD_LABELS[period]}
+                <Typography variant="body2" sx={{ opacity: 0.85, color: 'white' }}>
+                  Total Pendapatan
                 </Typography>
                 <Typography variant="h4" fontWeight={800} sx={{ color: 'white' }}>
-                  {fmt(report.grandTotal)}
+                  {fmt(report.summary.totalRevenue)}
                 </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.75, mt: 0.5 }}>
-                  {report.grandTransactions} transaksi dari {sorted.length} barber
+                <Typography variant="body2" sx={{ opacity: 0.75, color: 'white', mt: 0.5 }}>
+                  {report.summary.completedBookings} booking selesai · {report.summary.totalTransactions} transaksi
                 </Typography>
+
+                <Divider sx={{ borderColor: 'rgba(255,255,255,0.3)', my: 1.5 }} />
+
+                <Box className="flex gap-4">
+                  <Box className="flex items-center gap-1">
+                    <PaymentsIcon sx={{ fontSize: 18, color: 'white', opacity: 0.85 }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ color: 'white', opacity: 0.75 }}>Tunai</Typography>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: 'white' }}>
+                        {fmt(report.summary.cashTotal)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box className="flex items-center gap-1">
+                    <QrCodeIcon sx={{ fontSize: 18, color: 'white', opacity: 0.85 }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ color: 'white', opacity: 0.75 }}>QRIS</Typography>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: 'white' }}>
+                        {fmt(report.summary.qrisTotal)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
               </CardContent>
             </Card>
 
@@ -145,72 +202,53 @@ export default function ReportsPage() {
             <Box className="flex flex-col gap-3">
               {sorted.map((b, i) => {
                 const revenueShare =
-                  report.grandTotal > 0
-                    ? Math.round((b.totalRevenue / report.grandTotal) * 100)
-                    : 0;
+                  grandTotal > 0 ? Math.round((b.totalRevenue / grandTotal) * 100) : 0;
 
                 return (
-                  <Card key={b.barberId} className={i === 0 ? 'border-2 border-yellow-400' : ''}>
+                  <Card key={b.barberId || i} className={i === 0 ? 'border-2 border-yellow-400' : ''}>
                     <CardContent>
                       <Box className="flex items-center gap-3">
                         <Box className="relative">
                           <Avatar
-                            src={b.barberPhoto}
+                            src={b.photoUrl ?? undefined}
                             sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: 22, fontWeight: 700 }}
                           >
-                            {!b.barberPhoto && b.barberName.charAt(0).toUpperCase()}
+                            {!b.photoUrl && b.barberName.charAt(0).toUpperCase()}
                           </Avatar>
                           {medal(i) && (
-                            <Box
-                              className="absolute -top-1 -right-1 text-base leading-none"
-                              sx={{ fontSize: 18 }}
-                            >
+                            <Box className="absolute -top-1 -right-1 text-base leading-none" sx={{ fontSize: 18 }}>
                               {medal(i)}
                             </Box>
                           )}
                         </Box>
 
-                        <Box className="flex-1">
-                          <Box className="flex items-center gap-1">
+                        <Box className="flex-1 min-w-0">
+                          <Box className="flex items-center gap-1 flex-wrap">
                             <Typography fontWeight={700}>{b.barberName}</Typography>
                             {i === 0 && <Chip label="Terbaik" size="small" color="warning" />}
                           </Box>
-                          <Box className="flex items-center gap-1">
-                            <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
-                            <Typography variant="body2">
-                              {b.avgRating > 0 ? b.avgRating.toFixed(1) : '–'}
-                              {b.reviewCount > 0 && ` (${b.reviewCount} ulasan)`}
-                            </Typography>
-                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {b.completedBookings} booking selesai
+                          </Typography>
                         </Box>
 
-                        <Box className="text-right">
+                        <Box className="text-right shrink-0">
                           <Typography fontWeight={800} color="primary">
                             {fmt(b.totalRevenue)}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             {b.totalTransactions} transaksi
                           </Typography>
-                          <Chip
-                            label={`${revenueShare}%`}
-                            size="small"
-                            color="default"
-                            variant="outlined"
-                          />
+                          <Chip label={`${revenueShare}%`} size="small" color="default" variant="outlined" />
                         </Box>
                       </Box>
 
                       {/* Revenue bar */}
-                      <Box className="mt-3">
+                      <Box className="mt-3 h-2 rounded-full bg-orange-100 overflow-hidden">
                         <Box
-                          className="h-2 rounded-full bg-orange-100"
-                          sx={{ position: 'relative', overflow: 'hidden' }}
-                        >
-                          <Box
-                            className="h-2 rounded-full bg-orange-500"
-                            sx={{ width: `${revenueShare}%`, transition: 'width 0.6s ease' }}
-                          />
-                        </Box>
+                          className="h-2 rounded-full bg-orange-500"
+                          sx={{ width: `${revenueShare}%`, transition: 'width 0.6s ease' }}
+                        />
                       </Box>
                     </CardContent>
                   </Card>
@@ -228,28 +266,39 @@ export default function ReportsPage() {
                   Ringkasan
                 </Typography>
                 {sorted.map((b) => (
-                  <Box key={b.barberId} className="flex justify-between items-center py-2 border-b last:border-0">
+                  <Box key={b.barberId || b.barberName} className="flex justify-between items-center py-2 border-b last:border-0">
                     <Box className="flex items-center gap-2">
-                      <Avatar src={b.barberPhoto} sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: 12 }}>
-                        {!b.barberPhoto && b.barberName.charAt(0)}
+                      <Avatar src={b.photoUrl ?? undefined} sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: 12 }}>
+                        {!b.photoUrl && b.barberName.charAt(0)}
                       </Avatar>
-                      <Typography variant="body2" fontWeight={600}>{b.barberName}</Typography>
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>{b.barberName}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {b.completedBookings} selesai
+                        </Typography>
+                      </Box>
                     </Box>
                     <Box className="text-right">
                       <Typography variant="body2" fontWeight={700} color="primary">
                         {fmt(b.totalRevenue)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {b.totalTransactions}x
+                        {b.totalTransactions}x transaksi
                       </Typography>
                     </Box>
                   </Box>
                 ))}
                 <Divider className="my-2" />
-                <Box className="flex justify-between">
+                <Box className="flex justify-between items-center">
                   <Typography fontWeight={700}>Grand Total</Typography>
                   <Typography fontWeight={800} color="primary" variant="h6">
-                    {fmt(report.grandTotal)}
+                    {fmt(grandTotal)}
+                  </Typography>
+                </Box>
+                <Box className="flex justify-between mt-1">
+                  <Typography variant="body2" color="text.secondary">Tunai / QRIS</Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {fmt(report.summary.cashTotal)} / {fmt(report.summary.qrisTotal)}
                   </Typography>
                 </Box>
               </CardContent>

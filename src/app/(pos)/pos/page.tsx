@@ -10,6 +10,7 @@ import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import PrintIcon from '@mui/icons-material/Print';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LogoutIcon from '@mui/icons-material/Logout';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -122,7 +123,7 @@ function buildReceipt(data: ReceiptData): string {
 }
 
 export default function PosPage() {
-  const { user, isLoading, loadFromStorage } = useAuthStore();
+  const { user, isLoading, loadFromStorage, logout } = useAuthStore();
   const router = useRouter();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -333,9 +334,14 @@ export default function PosPage() {
       <PageHeader
         title="Kasir / POS"
         right={
+          <Box className="flex items-center">
           <IconButton color="inherit" onClick={loadBookings}>
             <RefreshIcon />
           </IconButton>
+          <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>
+          <LogoutIcon />
+        </IconButton>
+        </Box>
         }
       />
 

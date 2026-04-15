@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Avatar, Divider, LinearProgress,
+  TextField, Avatar, Divider, LinearProgress, Checkbox,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -13,6 +13,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import StarIcon from '@mui/icons-material/Star';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -56,7 +57,7 @@ export default function BookingPage() {
 
   const [services, setServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [notes, setNotes] = useState('');
   const [step, setStep] = useState<Step>('service');
@@ -107,8 +108,20 @@ export default function BookingPage() {
     }
   }, [user]);
 
-  const handleSelectService = (svc: Service) => {
-    setSelectedService(svc);
+  const toggleService = (svc: Service) => {
+    if (booking) return;
+    setSelectedServices((prev) => {
+      const exists = prev.find((s) => s._id === svc._id);
+      if (exists) return prev.filter((s) => s._id !== svc._id);
+      return [...prev, svc];
+    });
+  };
+
+  const handleGoToBarber = () => {
+    if (selectedServices.length === 0) {
+      toast.error('Pilih minimal satu layanan');
+      return;
+    }
     setSelectedBarber(null);
     setStep('barber');
     loadBarbers();
@@ -119,13 +132,16 @@ export default function BookingPage() {
     setDialogOpen(true);
   };
 
+  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+
   const handleBook = async () => {
-    if (!selectedService) return;
+    if (selectedServices.length === 0) return;
     setSubmitting(true);
     try {
       await api.post('/bookings', {
         tenantId: user!.tenantId,
-        serviceId: selectedService._id,
+        serviceIds: selectedServices.map((s) => s._id),
         barberId: selectedBarber?._id,
         notes,
       });
@@ -133,7 +149,7 @@ export default function BookingPage() {
       setDialogOpen(false);
       setNotes('');
       setStep('service');
-      setSelectedService(null);
+      setSelectedServices([]);
       setSelectedBarber(null);
       loadData();
     } catch (err: unknown) {
@@ -221,51 +237,108 @@ export default function BookingPage() {
             </Card>
           )}
 
-          {/* Step 1: Select Service */}
+          {/* Step 1: Select Services (multi) */}
           {step === 'service' && (
             <>
-              <Typography variant="h6" fontWeight={700} className="mb-4">
-                Pilih Layanan
-              </Typography>
+              <Box className="flex justify-between items-center mb-4">
+                <Typography variant="h6" fontWeight={700}>
+                  Pilih Layanan
+                </Typography>
+                {selectedServices.length > 0 && (
+                  <Chip
+                    icon={<ShoppingCartIcon />}
+                    label={`${selectedServices.length} dipilih`}
+                    color="primary"
+                    size="small"
+                  />
+                )}
+              </Box>
+
               {services.length === 0 ? (
                 <Typography color="text.secondary" className="text-center py-8">
                   Belum ada layanan tersedia
                 </Typography>
               ) : (
                 <Box className="flex flex-col gap-3">
-                  {services.map((svc) => (
-                    <Card
-                      key={svc._id}
-                      className="cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => !booking && handleSelectService(svc)}
-                      sx={{ opacity: booking ? 0.6 : 1 }}
-                    >
-                      <CardContent className="flex items-center gap-3 py-4">
-                        <Avatar sx={{ bgcolor: 'primary.light', width: 48, height: 48 }}>
-                          <ContentCutIcon color="primary" />
-                        </Avatar>
-                        <Box className="flex-1">
-                          <Typography fontWeight={700}>{svc.name}</Typography>
-                          {svc.description && (
-                            <Typography variant="body2" color="text.secondary">{svc.description}</Typography>
-                          )}
-                          <Box className="flex items-center gap-2 mt-1">
+                  {services.map((svc) => {
+                    const selected = !!selectedServices.find((s) => s._id === svc._id);
+                    return (
+                      <Card
+                        key={svc._id}
+                        className="cursor-pointer hover:shadow-md transition-shadow border-2"
+                        sx={{
+                          borderColor: selected ? 'primary.main' : 'transparent',
+                          opacity: booking ? 0.6 : 1,
+                        }}
+                        onClick={() => toggleService(svc)}
+                      >
+                        <CardContent className="flex items-center gap-3 py-4">
+                          <Checkbox
+                            checked={selected}
+                            color="primary"
+                            sx={{ p: 0 }}
+                            disabled={!!booking}
+                            onChange={() => toggleService(svc)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Avatar sx={{ bgcolor: selected ? 'primary.main' : 'primary.light', width: 44, height: 44 }}>
+                            <ContentCutIcon color={selected ? 'inherit' : 'primary'} sx={{ color: selected ? 'white' : undefined }} />
+                          </Avatar>
+                          <Box className="flex-1">
+                            <Typography fontWeight={700}>{svc.name}</Typography>
+                            {svc.description && (
+                              <Typography variant="body2" color="text.secondary">{svc.description}</Typography>
+                            )}
                             <Chip
                               icon={<AccessTimeIcon />}
                               label={`${svc.durationMinutes} menit`}
                               size="small"
                               variant="outlined"
+                              className="mt-1"
                             />
                           </Box>
-                        </Box>
-                        <Typography fontWeight={800} color="primary" variant="h6">
-                          Rp {svc.price.toLocaleString('id-ID')}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          <Typography fontWeight={800} color="primary" variant="h6">
+                            Rp {svc.price.toLocaleString('id-ID')}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </Box>
               )}
+
+              {/* Cart summary */}
+              {selectedServices.length > 0 && (
+                <Box className="mt-4 p-4 bg-orange-50 rounded-xl border border-orange-200">
+                  <Typography variant="subtitle2" fontWeight={700} className="mb-2">
+                    Layanan Dipilih ({selectedServices.length})
+                  </Typography>
+                  {selectedServices.map((s) => (
+                    <Box key={s._id} className="flex justify-between text-sm mb-1">
+                      <Typography variant="body2">{s.name}</Typography>
+                      <Typography variant="body2" fontWeight={600}>Rp {s.price.toLocaleString('id-ID')}</Typography>
+                    </Box>
+                  ))}
+                  <Divider className="my-2" />
+                  <Box className="flex justify-between">
+                    <Typography variant="body2" color="text.secondary">
+                      Total waktu: ~{totalDuration} menit
+                    </Typography>
+                    <Typography fontWeight={800} color="primary">
+                      Rp {totalPrice.toLocaleString('id-ID')}
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    className="mt-3"
+                    onClick={handleGoToBarber}
+                  >
+                    Pilih Barber
+                  </Button>
+                </Box>
+              )}
+
               {booking && (
                 <Typography variant="body2" color="text.secondary" className="text-center mt-4">
                   Anda sudah memiliki booking aktif
@@ -275,15 +348,27 @@ export default function BookingPage() {
           )}
 
           {/* Step 2: Select Barber */}
-          {step === 'barber' && selectedService && (
+          {step === 'barber' && selectedServices.length > 0 && (
             <>
+              {/* Selected services summary */}
               <Card className="mb-4 bg-orange-50 border border-orange-200">
                 <CardContent className="py-3">
-                  <Typography variant="body2" color="text.secondary">Layanan dipilih</Typography>
-                  <Box className="flex justify-between items-center">
-                    <Typography fontWeight={700}>{selectedService.name}</Typography>
+                  <Typography variant="body2" color="text.secondary" className="mb-1">
+                    Layanan dipilih ({selectedServices.length})
+                  </Typography>
+                  {selectedServices.map((s) => (
+                    <Box key={s._id} className="flex justify-between">
+                      <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
+                      <Typography variant="body2" fontWeight={700} color="primary">
+                        Rp {s.price.toLocaleString('id-ID')}
+                      </Typography>
+                    </Box>
+                  ))}
+                  <Divider className="my-1" />
+                  <Box className="flex justify-between">
+                    <Typography variant="body2" color="text.secondary">Total</Typography>
                     <Typography fontWeight={800} color="primary">
-                      Rp {selectedService.price.toLocaleString('id-ID')}
+                      Rp {totalPrice.toLocaleString('id-ID')}
                     </Typography>
                   </Box>
                 </CardContent>
@@ -336,7 +421,6 @@ export default function BookingPage() {
                           >
                             {!b.photoUrl && b.name.charAt(0).toUpperCase()}
                           </Avatar>
-
                           <Box className="flex-1">
                             <Typography fontWeight={700} variant="body1">{b.name}</Typography>
                             {b.specialty && (
@@ -354,7 +438,6 @@ export default function BookingPage() {
                               )}
                             </Box>
                           </Box>
-
                           <Box className="text-right">
                             <Chip
                               icon={<HourglassTopIcon />}
@@ -396,15 +479,25 @@ export default function BookingPage() {
         <DialogTitle fontWeight={700}>Konfirmasi Booking</DialogTitle>
         <DialogContent>
           <Box className="bg-gray-50 rounded-xl p-3 mb-4">
+            <Typography variant="body2" color="text.secondary" className="mb-2">Layanan</Typography>
+            {selectedServices.map((s) => (
+              <Box key={s._id} className="flex justify-between mb-1">
+                <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
+                <Typography variant="body2" fontWeight={700} color="primary">
+                  Rp {s.price.toLocaleString('id-ID')}
+                </Typography>
+              </Box>
+            ))}
+            <Divider className="my-2" />
             <Box className="flex justify-between mb-1">
-              <Typography variant="body2" color="text.secondary">Layanan</Typography>
-              <Typography fontWeight={700}>{selectedService?.name}</Typography>
+              <Typography variant="body2" color="text.secondary">Total</Typography>
+              <Typography fontWeight={800} color="primary" variant="body1">
+                Rp {totalPrice.toLocaleString('id-ID')}
+              </Typography>
             </Box>
             <Box className="flex justify-between mb-1">
-              <Typography variant="body2" color="text.secondary">Harga</Typography>
-              <Typography fontWeight={700} color="primary">
-                Rp {selectedService?.price.toLocaleString('id-ID')}
-              </Typography>
+              <Typography variant="body2" color="text.secondary">Durasi</Typography>
+              <Typography fontWeight={600}>~{totalDuration} menit</Typography>
             </Box>
             <Box className="flex justify-between">
               <Typography variant="body2" color="text.secondary">Barber</Typography>

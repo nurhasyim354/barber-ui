@@ -10,6 +10,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import PersonIcon from '@mui/icons-material/Person';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import { useAuthStore } from '@/store/authStore';
 
 export function CustomerBottomNav() {
@@ -31,6 +32,33 @@ export function CustomerBottomNav() {
         showLabels
       >
         <BottomNavigationAction label="Booking" icon={<ContentCutIcon />} />
+        <BottomNavigationAction label="Riwayat" icon={<HistoryIcon />} />
+        <BottomNavigationAction label="Keluar" icon={<LogoutIcon />} />
+      </BottomNavigation>
+    </Paper>
+  );
+}
+
+export function BarberBottomNav() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuthStore();
+
+  const routes = ['/barber', '/barber/history'];
+  const value = routes.findIndex((r) => pathname === r || pathname.startsWith(r + '/'));
+
+  return (
+    <Paper elevation={8} className="fixed bottom-0 left-0 right-0 safe-bottom z-50">
+      <BottomNavigation
+        value={value === -1 ? 0 : value}
+        onChange={(_, v) => {
+          if (v === 0) router.push('/barber');
+          else if (v === 1) router.push('/barber/history');
+          else { logout(); router.push('/login'); }
+        }}
+        showLabels
+      >
+        <BottomNavigationAction label="Antrian" icon={<ListAltIcon />} />
         <BottomNavigationAction label="Riwayat" icon={<HistoryIcon />} />
         <BottomNavigationAction label="Keluar" icon={<LogoutIcon />} />
       </BottomNavigation>

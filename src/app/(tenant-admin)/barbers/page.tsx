@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Box, Card, CardContent, Typography, Button, CircularProgress,
@@ -11,6 +11,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PersonIcon from '@mui/icons-material/Person';
 import LogoutIcon from '@mui/icons-material/Logout';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import ClearIcon from '@mui/icons-material/Clear';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -40,6 +42,8 @@ export default function BarbersPage() {
     const [editId, setEditId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [photoUploading, setPhotoUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -79,7 +83,7 @@ export default function BarbersPage() {
         setSaving(true);
         try {
             if (editId) {
-                await api.patch(`/barbers/${editId}`, form);
+                await api.patch(`/barbers/${editId}`, { ...form, isActive: true });
                 toast.success('Barber diupdate');
             } else {
                 await api.post('/barbers', form);
@@ -102,6 +106,27 @@ export default function BarbersPage() {
         } catch {
             toast.error('Gagal update status');
         }
+    };
+
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 1.5 * 1024 * 1024) {
+            toast.error('Ukuran foto maksimal 1.5MB');
+            return;
+        }
+        setPhotoUploading(true);
+        const reader = new FileReader();
+        reader.onload = () => {
+            setForm((prev) => ({ ...prev, photoUrl: reader.result as string }));
+            setPhotoUploading(false);
+        };
+        reader.onerror = () => {
+            toast.error('Gagal membaca file foto');
+            setPhotoUploading(false);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
     };
 
     const handleDelete = async () => {
@@ -159,7 +184,7 @@ export default function BarbersPage() {
                                                 src={b.photoUrl}
                                                 sx={{ width: 68, height: 68, bgcolor: 'primary.main', fontSize: 28, fontWeight: 700 }}
                                             >
-                                                {!b.photoUrl && b.name.charAt(0).toUpperCase()}
+                                                {!b.photoUrl && b.name ? b.name.charAt(0).toUpperCase() : <PersonIcon />}
                                             </Avatar>
 
                                             <Box className="flex-1 min-w-0">
@@ -209,24 +234,56 @@ export default function BarbersPage() {
                 <DialogTitle fontWeight={700}>{editId ? 'Edit Barber' : 'Tambah Barber'}</DialogTitle>
                 <DialogContent>
                     <Box className="flex flex-col gap-4 pt-2">
-                        {form.photoUrl && (
-                            <Box className="flex justify-center">
-                                <Avatar src={form.photoUrl} sx={{ width: 88, height: 88 }} />
+                        {/* Photo upload area */}
+                        <Box className="flex flex-col items-center gap-2">
+                            <Box className="relative">
+                                <Avatar
+                                    src={form.photoUrl || undefined}
+                                    sx={{ width: 96, height: 96, bgcolor: 'primary.main', fontSize: 36, fontWeight: 700 }}
+                                >
+                                    {!form.photoUrl && (form.name ? form.name.charAt(0).toUpperCase() : <PersonIcon />)}
+                                </Avatar>
+                                {photoUploading && (
+                                    <Box className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full">
+                                        <CircularProgress size={28} sx={{ color: 'white' }} />
+                                    </Box>
+                                )}
+                                {form.photoUrl && (
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setForm((p) => ({ ...p, photoUrl: '' }))}
+                                        sx={{ position: 'absolute', top: -4, right: -4, bgcolor: 'error.main', color: 'white', '&:hover': { bgcolor: 'error.dark' }, width: 24, height: 24 }}
+                                    >
+                                        <ClearIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                )}
                             </Box>
-                        )}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                hidden
+                                onChange={handlePhotoUpload}
+                            />
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<PhotoCameraIcon />}
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={photoUploading}
+                            >
+                                {form.photoUrl ? 'Ganti Foto' : 'Upload Foto'}
+                            </Button>
+                            <Typography variant="caption" color="text.secondary">
+                                Format JPG/PNG, maks. 2MB
+                            </Typography>
+                        </Box>
+
                         <TextField
                             fullWidth
                             label="Nama Barber *"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        />
-                        <TextField
-                            fullWidth
-                            label="URL Foto (opsional)"
-                            value={form.photoUrl}
-                            onChange={(e) => setForm({ ...form, photoUrl: e.target.value })}
-                            placeholder="https://..."
-                            helperText="Link gambar profil barber"
                         />
                         <TextField
                             fullWidth
