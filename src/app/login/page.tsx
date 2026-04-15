@@ -4,10 +4,12 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, TextField,
   Button, InputAdornment, CircularProgress,
+  Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText,
 } from '@mui/material';
 import PhoneIcon from '@mui/icons-material/Phone';
 import LockIcon from '@mui/icons-material/Lock';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -23,6 +25,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [pendingAuth, setPendingAuth] = useState<{ token: string; user: object } | null>(null);
+  const [tenantOptions, setTenantOptions] = useState<{ _id: string; name: string }[]>([]);
+  const [switchingTenant, setSwitchingTenant] = useState(false);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
   useEffect(() => {
@@ -68,12 +73,40 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.post('/auth/verify-otp', { phone, otp });
-      setAuth(res.data.user, res.data.token);
-      toast.success(`Selamat datang, ${res.data.user.name}!`);
+      if (res.data.allTenants && res.data.allTenants.length > 1) {
+        // Simpan sementara, tunjukkan dialog pilih salon
+        setPendingAuth({ token: res.data.token, user: res.data.user });
+        setTenantOptions(res.data.allTenants);
+      } else {
+        setAuth(res.data.user, res.data.token);
+        toast.success(`Selamat datang, ${res.data.user.name}!`);
+      }
     } catch (err: unknown) {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'OTP salah');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectTenant = async (tenantId: string) => {
+    if (!pendingAuth) return;
+    setSwitchingTenant(true);
+    try {
+      // Login dulu dengan token sementara, lalu switch ke tenant yang dipilih
+      setAuth(pendingAuth.user, pendingAuth.token);
+      const res = await api.post(
+        '/auth/switch-customer-tenant',
+        { tenantId },
+        { headers: { Authorization: `Bearer ${pendingAuth.token}` } },
+      );
+      setAuth(res.data.user, res.data.token);
+      toast.success(`Selamat datang! Salon aktif: ${tenantOptions.find((t) => t._id === tenantId)?.name}`);
+      setTenantOptions([]);
+      setPendingAuth(null);
+    } catch {
+      toast.error('Gagal memilih salon');
+    } finally {
+      setSwitchingTenant(false);
     }
   };
 
@@ -90,6 +123,32 @@ export default function LoginPage() {
           Masuk untuk melanjutkan
         </Typography>
       </Box>
+
+      {/* Dialog pilih salon untuk customer multi-tenant */}
+      <Dialog open={tenantOptions.length > 1} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <StorefrontIcon color="primary" />
+          Pilih Barbershop
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Nomor Anda terdaftar di beberapa barbershop. Pilih barbershop yang ingin Anda kunjungi:
+          </Typography>
+          <List disablePadding>
+            {tenantOptions.map((t) => (
+              <ListItemButton
+                key={t._id}
+                onClick={() => handleSelectTenant(t._id)}
+                disabled={switchingTenant}
+                sx={{ borderRadius: 2, mb: 1, border: '1px solid', borderColor: 'divider' }}
+              >
+                <ListItemText primary={t.name} />
+                {switchingTenant && <CircularProgress size={18} />}
+              </ListItemButton>
+            ))}
+          </List>
+        </DialogContent>
+      </Dialog>
 
       <Card className="w-full max-w-sm shadow-xl">
         <CardContent className="p-6">

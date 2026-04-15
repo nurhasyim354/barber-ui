@@ -24,12 +24,14 @@ interface Barber {
     name: string;
     photoUrl?: string;
     specialty?: string;
+    phone?: string;
     rating: number;
     reviewCount: number;
     isActive: boolean;
+    isAvailable: boolean;
 }
 
-const defaultForm = { name: '', photoUrl: '', specialty: '' };
+const defaultForm = { name: '', photoUrl: '', specialty: '', phone: '' };
 const PAGE_SIZE = 20;
 
 export default function BarbersPage() {
@@ -80,7 +82,7 @@ export default function BarbersPage() {
     };
 
     const handleEdit = (b: Barber) => {
-        setForm({ name: b.name, photoUrl: b.photoUrl || '', specialty: b.specialty || '' });
+        setForm({ name: b.name, photoUrl: b.photoUrl || '', specialty: b.specialty || '', phone: b.phone || '' });
         setEditId(b._id);
         setDialogOpen(true);
     };
@@ -205,6 +207,9 @@ export default function BarbersPage() {
                                                 {b.specialty && (
                                                     <Typography variant="body2" color="text.secondary">{b.specialty}</Typography>
                                                 )}
+                                                {b.phone && (
+                                                    <Typography variant="caption" color="text.secondary">📱 {b.phone}</Typography>
+                                                )}
                                                 <Box className="flex items-center gap-1 mt-1">
                                                     <Rating value={b.rating || 0} precision={0.1} size="small" readOnly />
                                                     <Typography variant="body2" color="text.secondary">
@@ -311,6 +316,15 @@ export default function BarbersPage() {
                             value={form.specialty}
                             onChange={(e) => setForm({ ...form, specialty: e.target.value })}
                             placeholder="Contoh: Fade, Undercut, Classic Cut"
+                        />
+                        <TextField
+                            fullWidth
+                            label="No. HP / WA (opsional — untuk akun login barber)"
+                            value={form.phone}
+                            onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
+                            inputMode="tel"
+                            placeholder="08xx xxxx xxxx"
+                            helperText={editId ? 'Kosongkan jika tidak ingin mengubah HP' : 'Jika diisi, barber bisa login via OTP WA'}
                         />
                     </Box>
                 </DialogContent>

@@ -18,6 +18,20 @@ import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
+interface TenantTheme {
+  primaryColor: string;
+  accentColor: string;
+  bgColor: string;
+  paperColor: string;
+}
+
+const DEFAULT_THEME: TenantTheme = {
+  primaryColor: '#8B3A2A',
+  accentColor: '#2C3A47',
+  bgColor: '#F0EDE8',
+  paperColor: '#FFFFFF',
+};
+
 interface TenantSettings {
   _id: string;
   name: string;
@@ -25,6 +39,7 @@ interface TenantSettings {
   phone?: string;
   location?: { lat: number; lng: number } | null;
   qrisImageBase64?: string | null;
+  theme?: TenantTheme | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -50,6 +65,7 @@ export default function SettingsPage() {
   // qrisImageBase64 state: null = unchanged/loading, '' = explicitly removed, 'data:...' = new or existing
   const [qrisImage, setQrisImage] = useState<string | null>(null);
   const [qrisUploading, setQrisUploading] = useState(false);
+  const [theme, setTheme] = useState<TenantTheme>(DEFAULT_THEME);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -76,6 +92,7 @@ export default function SettingsPage() {
         gpsLng: t.location?.lng != null ? String(t.location.lng) : '',
       });
       setQrisImage(t.qrisImageBase64 || '');
+      setTheme(t.theme ?? DEFAULT_THEME);
     } catch {
       toast.error('Gagal memuat data barbershop');
     } finally {
@@ -103,6 +120,7 @@ export default function SettingsPage() {
         gpsLat: lat,
         gpsLng: lng,
         qrisImageBase64: qrisImage ?? undefined,
+        theme,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -409,6 +427,60 @@ export default function SettingsPage() {
                   Belum ada koordinat GPS. Klik &quot;Deteksi Otomatis&quot; atau isi manual.
                 </Typography>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Theme Customization */}
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} className="mb-1">
+                Tema Warna
+              </Typography>
+              <Typography variant="caption" color="text.secondary" className="mb-3 block">
+                Default: Industrial Modern palette
+              </Typography>
+              <Box className="grid grid-cols-2 gap-3">
+                {([
+                  { key: 'primaryColor', label: 'Warna Utama (CTA)' },
+                  { key: 'accentColor', label: 'Warna Aksen (Header)' },
+                  { key: 'bgColor', label: 'Latar Halaman' },
+                  { key: 'paperColor', label: 'Latar Kartu' },
+                ] as { key: keyof TenantTheme; label: string }[]).map(({ key, label }) => (
+                  <Box key={key}>
+                    <Typography variant="caption" color="text.secondary" className="block mb-1">{label}</Typography>
+                    <Box className="flex items-center gap-2">
+                      <Box
+                        component="input"
+                        type="color"
+                        value={theme[key]}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setTheme((t) => ({ ...t, [key]: e.target.value }))
+                        }
+                        sx={{ width: 40, height: 40, border: 'none', borderRadius: 1, cursor: 'pointer', p: 0 }}
+                      />
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{theme[key]}</Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+              <Box className="flex gap-2 mt-3">
+                <Box className="rounded-lg p-3 flex-1 text-center" sx={{ bgcolor: theme.bgColor }}>
+                  <Box className="rounded px-2 py-1 inline-block mb-1" sx={{ bgcolor: theme.primaryColor }}>
+                    <Typography variant="caption" sx={{ color: '#fff', fontWeight: 700 }}>Tombol</Typography>
+                  </Box>
+                  <Box className="rounded px-2 py-1" sx={{ bgcolor: theme.paperColor, border: '1px solid #eee' }}>
+                    <Typography variant="caption" sx={{ color: theme.accentColor, fontWeight: 700 }}>Teks</Typography>
+                  </Box>
+                </Box>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => setTheme(DEFAULT_THEME)}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  Reset Default
+                </Button>
+              </Box>
             </CardContent>
           </Card>
 

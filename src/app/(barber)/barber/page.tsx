@@ -6,6 +6,7 @@ import {
   CircularProgress, Dialog, DialogTitle, DialogContent,
   DialogActions, Divider, IconButton, Avatar, List,
   ListItem, ListItemButton, ListItemText, ListItemAvatar,
+  Switch, FormControlLabel,
 } from '@mui/material';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -128,6 +129,8 @@ export default function BarberPage() {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
   const [takingId, setTakingId] = useState<string | null>(null);
+  const [isAvailable, setIsAvailable] = useState(true);
+  const [togglingAvail, setTogglingAvail] = useState(false);
 
   const lastBookingRef = useRef<Booking | null>(null);
 
@@ -149,10 +152,10 @@ export default function BarberPage() {
   const loadTenants = useCallback(async () => {
     setTenantLoading(true);
     try {
-      const res = await api.get('/tenants');
+      const res = await api.get('/barbers/my-tenants');
       setTenants(res.data);
     } catch {
-      toast.error('Gagal memuat daftar tenant');
+      toast.error('Gagal memuat daftar salon');
     } finally {
       setTenantLoading(false);
     }
@@ -167,16 +170,27 @@ export default function BarberPage() {
 
   const handleSelectTenant = async (tenant: Tenant) => {
     try {
-      await api.patch('/auth/profile', { tenantId: tenant._id });
-      if (user && token) {
-        const updatedUser = { ...user, tenantId: tenant._id };
-        setAuth(updatedUser, token);
-      }
+      const res = await api.post('/auth/switch-tenant', { tenantId: tenant._id });
+      setAuth(res.data.user, res.data.token);
       setCurrentTenant(tenant);
       setTenantDialogOpen(false);
       loadBookings(tenant._id);
     } catch {
-      toast.error('Gagal menyimpan pilihan tenant');
+      toast.error('Gagal berpindah salon');
+    }
+  };
+
+  const handleToggleAvailability = async () => {
+    if (!user?.barberId) return;
+    setTogglingAvail(true);
+    try {
+      const res = await api.patch(`/barbers/${user.barberId}/availability`);
+      setIsAvailable(res.data.isAvailable);
+      toast.success(res.data.isAvailable ? 'Status: Tersedia' : 'Status: Tidak Tersedia');
+    } catch {
+      toast.error('Gagal mengubah status');
+    } finally {
+      setTogglingAvail(false);
     }
   };
 
@@ -372,14 +386,34 @@ export default function BarberPage() {
       ) : (
         <Box className="p-4 max-w-lg mx-auto">
           {/* Info barber */}
-          <Card className="mb-4 bg-orange-50 border border-orange-200">
-            <CardContent className="py-3 flex items-center gap-3">
-              <Avatar sx={{ bgcolor: 'primary.main', width: 44, height: 44, fontWeight: 700 }}>
-                {user?.name?.charAt(0).toUpperCase()}
-              </Avatar>
-              <Box>
-                <Typography fontWeight={700}>{user?.name}</Typography>
-                <Typography variant="caption" color="text.secondary">Barber · {currentTenant?.name}</Typography>
+          <Card className="mb-4" sx={{ border: '1px solid', borderColor: isAvailable ? 'success.light' : 'warning.light', bgcolor: isAvailable ? '#f0fdf4' : '#fffbeb' }}>
+            <CardContent className="py-3">
+              <Box className="flex items-center gap-3">
+                <Avatar sx={{ bgcolor: 'primary.main', width: 44, height: 44, fontWeight: 700 }}>
+                  {user?.name?.charAt(0).toUpperCase()}
+                </Avatar>
+                <Box className="flex-1">
+                  <Typography fontWeight={700}>{user?.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">Barber · {currentTenant?.name}</Typography>
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={isAvailable}
+                      onChange={handleToggleAvailability}
+                      disabled={togglingAvail || !user?.barberId}
+                      color="success"
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="caption" fontWeight={600} color={isAvailable ? 'success.main' : 'warning.main'}>
+                      {isAvailable ? 'Tersedia' : 'Tidak Tersedia'}
+                    </Typography>
+                  }
+                  labelPlacement="start"
+                  sx={{ m: 0 }}
+                />
               </Box>
             </CardContent>
           </Card>

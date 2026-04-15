@@ -28,7 +28,7 @@ import { CustomerBottomNav } from '@/components/layout/BottomNav';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface TenantInfo { _id: string; name: string; address: string; }
+interface TenantInfo { _id: string; name: string; address: string; theme?: { primaryColor?: string } | null; }
 
 interface Service {
   _id: string;
@@ -98,6 +98,8 @@ function BookingContent() {
 
   // ── State: tenant meta ─────────────────────────────────────────────────────
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
+  const [visitedTenants, setVisitedTenants] = useState<TenantInfo[]>([]);
+  const [tenantSelectorOpen, setTenantSelectorOpen] = useState(false);
 
   // ── State: QR registration ─────────────────────────────────────────────────
   const [regStep, setRegStep] = useState<'form' | 'otp'>('form');
@@ -162,20 +164,32 @@ function BookingContent() {
     try {
       const [svcRes, histRes] = await Promise.all([
         api.get(`/tenants/${effectiveTenantId}/services`),
-        api.get('/bookings/history?limit=50'),
+        api.get('/bookings/history?limit=100'),
       ]);
       setServices(svcRes.data);
-      const historyItems: ActiveBooking[] = histRes.data?.data ?? [];
+      const historyItems: (ActiveBooking & { tenantId?: string })[] = histRes.data?.data ?? [];
       const active = historyItems.find(
         (b) => b.status === 'waiting' || b.status === 'in_progress',
       );
       if (active) setActiveBooking(active);
+
+      // Derive visited tenants from booking history for multi-tenant selector
+      if (!isQrFlow) {
+        const tenantIdSet = new Set(historyItems.map((b) => b.tenantId).filter(Boolean));
+        const distinctTenantIds = Array.from(tenantIdSet) as string[];
+        if (distinctTenantIds.length > 1) {
+          const tenantInfos = await Promise.all(
+            distinctTenantIds.map((tid) => api.get(`/tenants/${tid}`).then((r) => r.data).catch(() => null)),
+          );
+          setVisitedTenants(tenantInfos.filter(Boolean));
+        }
+      }
     } catch {
       toast.error('Gagal memuat data');
     } finally {
       setPageLoading(false);
     }
-  }, [effectiveTenantId]);
+  }, [effectiveTenantId, isQrFlow]);
 
   // Reload booking data when effectiveTenantId becomes available (after OTP login)
   useEffect(() => {
@@ -215,7 +229,12 @@ function BookingContent() {
     if (otpCode.length !== 6) { toast.error('Kode OTP harus 6 angka'); return; }
     setRegLoading(true);
     try {
-      const res = await api.post('/auth/verify-otp', { phone, otp: otpCode });
+      // Kirim tenantId (dari URL param) agar BE menemukan record yang benar
+      const res = await api.post('/auth/verify-otp', {
+        phone,
+        otp: otpCode,
+        ...(effectiveTenantId && { tenantId: effectiveTenantId }),
+      });
       setAuth(res.data.user, res.data.token);
       toast.success(`Selamat datang, ${res.data.user.name}!`);
       // useEffect for [user] will trigger loadBookingData
@@ -487,9 +506,41 @@ function BookingContent() {
             >
               Ganti Layanan
             </Button>
+          ) : visitedTenants.length > 1 ? (
+            <Button color="inherit" size="small" startIcon={<QrCodeScannerIcon />}
+              onClick={() => setTenantSelectorOpen(true)}
+            >
+              Ganti Salon
+            </Button>
           ) : undefined
         }
       />
+
+      {/* Multi-tenant selector dialog */}
+      <Dialog open={tenantSelectorOpen} onClose={() => setTenantSelectorOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle fontWeight={700}>Pilih Barbershop</DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          {visitedTenants.map((t) => (
+            <Box
+              key={t._id}
+              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 border-b"
+              onClick={() => {
+                router.push(`/booking?tenantId=${t._id}&type=booking`);
+                setTenantSelectorOpen(false);
+              }}
+            >
+              <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+                {t.name.charAt(0).toUpperCase()}
+              </Avatar>
+              <Box className="flex-1">
+                <Typography fontWeight={700}>{t.name}</Typography>
+                {t.address && <Typography variant="caption" color="text.secondary">{t.address}</Typography>}
+              </Box>
+              {effectiveTenantId === t._id && <Chip label="Aktif" size="small" color="primary" />}
+            </Box>
+          ))}
+        </DialogContent>
+      </Dialog>
 
       {pageLoading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
