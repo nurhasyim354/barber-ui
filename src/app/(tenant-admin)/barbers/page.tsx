@@ -15,6 +15,7 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import ClearIcon from '@mui/icons-material/Clear';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { compressImage } from '@/lib/imageUtils';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
@@ -117,24 +118,18 @@ export default function BarbersPage() {
         }
     };
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 1.5 * 1024 * 1024) {
-            toast.error('Ukuran foto maksimal 1.5MB');
-            return;
-        }
         setPhotoUploading(true);
-        const reader = new FileReader();
-        reader.onload = () => {
-            setForm((prev) => ({ ...prev, photoUrl: reader.result as string }));
+        try {
+            const base64 = await compressImage(file);
+            setForm((prev) => ({ ...prev, photoUrl: base64 }));
+        } catch {
+            toast.error('Gagal memproses foto');
+        } finally {
             setPhotoUploading(false);
-        };
-        reader.onerror = () => {
-            toast.error('Gagal membaca file foto');
-            setPhotoUploading(false);
-        };
-        reader.readAsDataURL(file);
+        }
         e.target.value = '';
     };
 

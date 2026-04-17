@@ -12,7 +12,7 @@ import ContentCutIcon from '@mui/icons-material/ContentCut';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, AuthUser } from '@/store/authStore';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [pendingAuth, setPendingAuth] = useState<{ token: string; user: object } | null>(null);
+  const [pendingAuth, setPendingAuth] = useState<{ token: string; user: AuthUser } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<{ _id: string; name: string }[]>([]);
   const [switchingTenant, setSwitchingTenant] = useState(false);
 

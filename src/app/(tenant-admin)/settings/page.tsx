@@ -13,6 +13,7 @@ import QrCodeIcon from '@mui/icons-material/QrCode2';
 import UploadIcon from '@mui/icons-material/Upload';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import toast from 'react-hot-toast';
+import { compressImage } from '@/lib/imageUtils';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
@@ -131,7 +132,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleQrisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQrisFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -145,17 +146,15 @@ export default function SettingsPage() {
     }
 
     setQrisUploading(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setQrisImage(reader.result as string);
-      setQrisUploading(false);
+    try {
+      const base64 = await compressImage(file);
+      setQrisImage(base64);
       toast.success('Gambar QRIS siap — klik Simpan untuk menyimpan');
-    };
-    reader.onerror = () => {
+    } catch {
+      toast.error('Gagal memproses gambar');
+    } finally {
       setQrisUploading(false);
-      toast.error('Gagal membaca file');
-    };
-    reader.readAsDataURL(file);
+    }
 
     // reset input agar file yang sama bisa dipilih ulang
     e.target.value = '';

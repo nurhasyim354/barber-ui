@@ -15,14 +15,19 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import PanToolIcon from '@mui/icons-material/PanTool';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import HistoryIcon from '@mui/icons-material/History';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { compressImage } from '@/lib/imageUtils';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import { BarberBottomNav } from '@/components/layout/BottomNav';
 
 interface Booking {
   _id: string;
+  customerId: string;
   customerName: string;
   serviceName: string;
   servicePrice: number;
@@ -32,6 +37,13 @@ interface Booking {
   barberName?: string;
   barberId?: string;
   date: string;
+}
+
+interface HaircutPhoto {
+  _id: string;
+  photos: string[];
+  barberName?: string | null;
+  createdAt: string;
 }
 
 interface Tenant {
@@ -131,6 +143,13 @@ export default function BarberPage() {
   const [takingId, setTakingId] = useState<string | null>(null);
   const [isAvailable, setIsAvailable] = useState(true);
   const [togglingAvail, setTogglingAvail] = useState(false);
+
+  // Foto hasil cukur
+  const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [lastHaircutDialog, setLastHaircutDialog] = useState<{ open: boolean; booking: Booking | null; data: HaircutPhoto | null; loading: boolean }>({
+    open: false, booking: null, data: null, loading: false,
+  });
 
   const lastBookingRef = useRef<Booking | null>(null);
 
@@ -351,6 +370,44 @@ export default function BarberPage() {
     if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { w.print(); }, 300); }
   };
 
+  const handleSelectPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const remaining = 3 - uploadPhotos.length;
+    const toProcess = files.slice(0, remaining);
+    try {
+      const compressed = await Promise.all(toProcess.map(compressImage));
+      setUploadPhotos((prev) => [...prev, ...compressed].slice(0, 3));
+    } catch {
+      toast.error('Gagal memproses foto');
+    }
+    e.target.value = '';
+  };
+
+  const handleUploadPhotos = async (bookingId: string) => {
+    if (uploadPhotos.length === 0) return;
+    setUploadingPhotos(true);
+    try {
+      await api.post(`/bookings/${bookingId}/haircut-photos`, { photos: uploadPhotos });
+      toast.success('Foto berhasil disimpan!');
+      setUploadPhotos([]);
+    } catch {
+      toast.error('Gagal menyimpan foto');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  const handleOpenLastHaircut = async (b: Booking) => {
+    setLastHaircutDialog({ open: true, booking: b, data: null, loading: true });
+    try {
+      const res = await api.get(`/bookings/${b._id}/last-haircut`);
+      setLastHaircutDialog((prev) => ({ ...prev, data: res.data, loading: false }));
+    } catch {
+      setLastHaircutDialog((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
   const myBarberId = user?.barberId || user?._id;
   const pendingBookings = bookings.filter((b) => b.status !== 'done' && b.status !== 'cancelled');
   const doneBookings = bookings.filter((b) => b.status === 'done');
@@ -503,6 +560,17 @@ export default function BarberPage() {
                           onClick={() => handleUpdateStatus(b._id, 'in_progress')}
                         >
                           Mulai Layani
+                        </Button>
+                      )}
+                      {mine && b.status === 'in_progress' && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="info"
+                          startIcon={<HistoryIcon />}
+                          onClick={() => handleOpenLastHaircut(b)}
+                        >
+                          Foto Terakhir
                         </Button>
                       )}
                       {mine && (
@@ -683,11 +751,100 @@ export default function BarberPage() {
                 <Button fullWidth variant="outlined" startIcon={<PrintIcon />} onClick={printReceiptBluetooth} size="small">Cetak Bluetooth</Button>
                 <Button fullWidth variant="outlined" startIcon={<PrintIcon />} onClick={printReceiptBrowser} size="small">Cetak Browser</Button>
               </Box>
+
+              {/* Upload foto hasil cukur (opsional) */}
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <CameraAltIcon fontSize="small" />
+                Foto Hasil Cukur (Opsional, maks 3)
+              </Typography>
+              <Box className="flex gap-2 flex-wrap mb-2">
+                {uploadPhotos.map((src, i) => (
+                  <Box key={i} sx={{ position: 'relative', width: 72, height: 72 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`foto-${i + 1}`} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd' }} />
+                    <Box
+                      onClick={() => setUploadPhotos((p) => p.filter((_, idx) => idx !== i))}
+                      sx={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', bgcolor: 'error.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 700, lineHeight: 1 }}
+                    >
+                      ✕
+                    </Box>
+                  </Box>
+                ))}
+                {uploadPhotos.length < 3 && (
+                  <label>
+                    <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleSelectPhotos} />
+                    <Box sx={{ width: 72, height: 72, border: '2px dashed', borderColor: 'primary.main', borderRadius: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'primary.main' }}>
+                      <PhotoLibraryIcon fontSize="small" />
+                      <Typography variant="caption" sx={{ fontSize: 9, textAlign: 'center', mt: 0.3 }}>Tambah Foto</Typography>
+                    </Box>
+                  </label>
+                )}
+              </Box>
+              {uploadPhotos.length > 0 && (
+                <Button
+                  fullWidth variant="contained" color="success" size="small"
+                  startIcon={uploadingPhotos ? <CircularProgress size={14} color="inherit" /> : <CameraAltIcon />}
+                  onClick={() => receiptData && handleUploadPhotos(receiptData.booking._id)}
+                  disabled={uploadingPhotos}
+                >
+                  {uploadingPhotos ? 'Menyimpan...' : `Simpan ${uploadPhotos.length} Foto`}
+                </Button>
+              )}
             </Box>
           )}
         </DialogContent>
         <DialogActions className="p-4">
-          <Button fullWidth variant="contained" onClick={() => setReceiptDialog(false)}>Selesai</Button>
+          <Button fullWidth variant="contained" onClick={() => { setReceiptDialog(false); setUploadPhotos([]); }}>Selesai</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog Foto Cukur Terakhir */}
+      <Dialog
+        open={lastHaircutDialog.open}
+        onClose={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}
+        fullWidth maxWidth="xs"
+      >
+        <DialogTitle fontWeight={700}>
+          <HistoryIcon sx={{ mr: 1, verticalAlign: 'middle', color: 'info.main' }} />
+          Foto Cukur Terakhir
+          {lastHaircutDialog.booking && (
+            <Typography variant="caption" display="block" color="text.secondary">
+              {lastHaircutDialog.booking.customerName}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {lastHaircutDialog.loading ? (
+            <Box className="flex justify-center py-8"><CircularProgress /></Box>
+          ) : !lastHaircutDialog.data ? (
+            <Box className="text-center py-8">
+              <CameraAltIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+              <Typography color="text.secondary" className="mt-2">
+                Belum ada foto cukur tersimpan untuk customer ini
+              </Typography>
+            </Box>
+          ) : (
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                {new Date(lastHaircutDialog.data.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {lastHaircutDialog.data.barberName && ` · ${lastHaircutDialog.data.barberName}`}
+              </Typography>
+              <Box className="flex flex-col gap-2">
+                {lastHaircutDialog.data.photos.map((src, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} src={src} alt={`foto-${i + 1}`}
+                    style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}>
+            Tutup
+          </Button>
         </DialogActions>
       </Dialog>
 
