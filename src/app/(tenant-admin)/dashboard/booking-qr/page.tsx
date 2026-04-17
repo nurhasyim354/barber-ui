@@ -93,15 +93,10 @@ export default function BookingQrPage() {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100svh', p: 2, pb: 6,
-        background: 'linear-gradient(160deg, #1a0000 0%, #0f0f0f 65%)',
-      }}
-    >
+    <Box sx={{ minHeight: '100svh', p: 2, pb: 6, bgcolor: 'background.default' }}>
       {/* Header */}
       <Box display="flex" alignItems="center" gap={1} pt={2} mb={4}>
-        <IconButton onClick={() => router.back()} size="small" sx={{ color: 'text.secondary', mr: 0.5 }}>
+        <IconButton onClick={() => router.back()} size="small" sx={{ mr: 0.5 }}>
           <ArrowBackIcon />
         </IconButton>
         <QrCode2Icon sx={{ fontSize: 26, color: 'primary.main' }} />
@@ -126,7 +121,8 @@ export default function BookingQrPage() {
             ref={qrContainerRef}
             sx={{
               p: 3, borderRadius: 3, bgcolor: 'white',
-              boxShadow: '0 8px 40px rgba(192,57,43,0.35)',
+              boxShadow: '0 8px 40px rgba(139,58,42,0.2)',
+              border: '1px solid', borderColor: 'divider',
               mb: 3,
             }}
           >
@@ -143,13 +139,13 @@ export default function BookingQrPage() {
             <Box
               sx={{
                 width: 28, height: 28, borderRadius: '8px',
-                background: 'linear-gradient(135deg, #c0392b, #922b21)',
+                bgcolor: 'primary.main',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
               <ContentCutIcon sx={{ fontSize: 16, color: 'white' }} />
             </Box>
-            <Typography variant="subtitle1" fontWeight={700}>
+            <Typography variant="subtitle1" fontWeight={700} color="text.primary">
               {user.name || 'Barbershop'}
             </Typography>
           </Box>
@@ -186,7 +182,7 @@ export default function BookingQrPage() {
       {/* Pre-fill customer phone */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="subtitle2" fontWeight={700} mb={0.5}>
+          <Typography variant="subtitle2" fontWeight={700} mb={0.5} color="text.primary">
             QR untuk Pelanggan Tertentu
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" mb={2}>
@@ -227,15 +223,17 @@ export default function BookingQrPage() {
           </Typography>
           <Box
             sx={{
-              p: 1.5, borderRadius: 2, bgcolor: '#0d0d11',
-              border: '1px solid #2a2a2e',
+              p: 1.5, borderRadius: 2,
+              bgcolor: 'grey.100',
+              border: '1px solid', borderColor: 'divider',
               cursor: 'pointer',
+              '&:hover': { bgcolor: 'grey.200' },
             }}
             onClick={handleCopy}
           >
             <Typography
               variant="caption"
-              sx={{ wordBreak: 'break-all', color: '#888', fontFamily: 'monospace' }}
+              sx={{ wordBreak: 'break-all', color: 'text.secondary', fontFamily: 'monospace' }}
             >
               {qrUrl}
             </Typography>

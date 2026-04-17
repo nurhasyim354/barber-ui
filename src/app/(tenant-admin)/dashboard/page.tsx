@@ -90,7 +90,7 @@ export default function DashboardPage() {
   });
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
+    <Box sx={{ minHeight: '100svh', bgcolor: 'background.default', pb: 12 }}>
       <PageHeader
         title="Dashboard"
         right={
@@ -115,13 +115,21 @@ export default function DashboardPage() {
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
         <Box className="p-4 max-w-lg mx-auto">
-          <Card className="mb-4 bg-gradient-to-r from-orange-500 to-orange-400 text-white">
+          <Card
+            sx={{
+              mb: 3,
+              background: (t) =>
+                `linear-gradient(135deg, ${t.palette.primary.main} 0%, ${t.palette.primary.dark} 100%)`,
+              boxShadow: (t) => `0 8px 32px ${t.palette.primary.main}44`,
+              color: 'white',
+            }}
+          >
             <CardContent>
-              <Typography variant="body2" sx={{ opacity: 0.85 }}>Pendapatan Hari Ini</Typography>
-              <Typography variant="h4" fontWeight={800} sx={{ color: 'white' }}>
+              <Typography variant="body2" sx={{ opacity: 0.8 }}>Pendapatan Hari Ini</Typography>
+              <Typography variant="h4" fontWeight={800} sx={{ color: 'white', my: 0.5 }}>
                 {fmt(summary?.totalRevenue || 0)}
               </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.75, mt: 0.5 }}>{today}</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.7 }}>{today}</Typography>
             </CardContent>
           </Card>
 

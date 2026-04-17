@@ -315,26 +315,28 @@ function BookingContent() {
 
   // ── QR Registration (not yet authenticated) ───────────────────────────────
   if (!user && isQrFlow) {
-    const bgGradient = 'linear-gradient(160deg, #1a0000 0%, #0f0f0f 65%)';
     return (
       <Box
         sx={{
           minHeight: '100svh', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', p: 3,
-          background: bgGradient,
+          background: (t) =>
+            `linear-gradient(160deg, ${t.palette.primary.light}28 0%, ${t.palette.background.default} 55%, ${t.palette.background.paper} 100%)`,
         }}
       >
         {/* Tenant branding */}
         <Box textAlign="center" mb={4}>
           <Box
             sx={{
-              width: 64, height: 64, borderRadius: '18px',
-              background: 'linear-gradient(135deg, #c0392b 0%, #922b21 100%)',
+              width: 72, height: 72, borderRadius: '20px',
+              background: (t) =>
+                `linear-gradient(135deg, ${t.palette.primary.main} 0%, ${t.palette.primary.dark} 100%)`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              mx: 'auto', mb: 2, boxShadow: '0 6px 24px rgba(192,57,43,0.45)',
+              mx: 'auto', mb: 2,
+              boxShadow: (t) => `0 8px 28px ${t.palette.primary.main}55`,
             }}
           >
-            <ContentCutIcon sx={{ fontSize: 36, color: 'white' }} />
+            <ContentCutIcon sx={{ fontSize: 38, color: 'white' }} />
           </Box>
           <Typography variant="h5" fontWeight={800}>
             {tenant?.name ?? '…'}
@@ -439,7 +441,8 @@ function BookingContent() {
         sx={{
           minHeight: '100svh', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', p: 3, textAlign: 'center',
-          background: 'linear-gradient(160deg, #1a0000 0%, #0f0f0f 65%)',
+          background: (t) =>
+            `linear-gradient(160deg, ${t.palette.success.main}18 0%, ${t.palette.background.default} 55%, ${t.palette.background.paper} 100%)`,
         }}
       >
         <CheckCircleIcon sx={{ fontSize: 72, color: 'success.main', mb: 2 }} />

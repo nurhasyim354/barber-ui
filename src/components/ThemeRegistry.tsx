@@ -3,9 +3,11 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
 import theme from '@/lib/theme';
+import TenantThemeProvider from './TenantThemeProvider';
 
 export default function ThemeRegistry({ children }: { children: React.ReactNode }) {
   return (
+    // Base dark theme — TenantThemeProvider overrides this when a tenantId is active
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Toaster
@@ -15,7 +17,7 @@ export default function ThemeRegistry({ children }: { children: React.ReactNode 
           style: { borderRadius: 12, fontWeight: 500 },
         }}
       />
-      {children}
+      <TenantThemeProvider>{children}</TenantThemeProvider>
     </ThemeProvider>
   );
 }

@@ -111,15 +111,30 @@ export default function LoginPage() {
   };
 
   return (
-    <Box className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-orange-50 to-white">
-      <Box className="mb-8 text-center">
-        <Box className="w-20 h-20 rounded-2xl bg-orange-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
+      <Box
+        sx={{
+          minHeight: '100svh', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', p: 2,
+          background: (t) =>
+            `linear-gradient(160deg, ${t.palette.primary.light}22 0%, ${t.palette.background.default} 55%, ${t.palette.background.paper} 100%)`,
+        }}
+      >
+      <Box sx={{ mb: 5, textAlign: 'center' }}>
+        <Box
+          sx={{
+            width: 80, height: 80, borderRadius: 4,
+            bgcolor: 'primary.main',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            mx: 'auto', mb: 3,
+            boxShadow: (t) => `0 8px 32px ${t.palette.primary.main}55`,
+          }}
+        >
           <ContentCutIcon sx={{ fontSize: 44, color: 'white' }} />
         </Box>
         <Typography variant="h4" color="primary" fontWeight={800}>
           Barbershop
         </Typography>
-        <Typography variant="body1" color="text.secondary" className="mt-1">
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
           Masuk untuk melanjutkan
         </Typography>
       </Box>
@@ -150,8 +165,13 @@ export default function LoginPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="w-full max-w-sm shadow-xl">
-        <CardContent className="p-6">
+      <Card
+        sx={{
+          width: '100%', maxWidth: 380,
+          boxShadow: (t) => `0 8px 40px ${t.palette.primary.main}18`,
+        }}
+      >
+        <CardContent sx={{ p: 3 }}>
           {step === 'phone' ? (
             <>
               <Typography variant="h6" className="mb-6 text-center">

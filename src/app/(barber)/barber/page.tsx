@@ -358,7 +358,7 @@ export default function BarberPage() {
   const isMyQueue = (b: Booking) => b.barberId === myBarberId;
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
+    <Box sx={{ minHeight: '100svh', bgcolor: 'background.default', pb: 12 }}>
       <PageHeader
         title={`Antrian — ${currentTenant?.name || 'Pilih Salon'}`}
         right={
@@ -386,7 +386,17 @@ export default function BarberPage() {
       ) : (
         <Box className="p-4 max-w-lg mx-auto">
           {/* Info barber */}
-          <Card className="mb-4" sx={{ border: '1px solid', borderColor: isAvailable ? 'success.light' : 'warning.light', bgcolor: isAvailable ? '#f0fdf4' : '#fffbeb' }}>
+          <Card
+            className="mb-4"
+            sx={{
+              border: '1px solid',
+              borderColor: isAvailable ? 'success.light' : 'warning.light',
+              bgcolor: isAvailable ? 'rgba(46,125,50,0.06)' : 'rgba(230,81,0,0.06)',
+              boxShadow: (t) => isAvailable
+                ? `0 2px 12px ${t.palette.success.main}22`
+                : `0 2px 12px ${t.palette.warning.main}22`,
+            }}
+          >
             <CardContent className="py-3">
               <Box className="flex items-center gap-3">
                 <Avatar sx={{ bgcolor: 'primary.main', width: 44, height: 44, fontWeight: 700 }}>
