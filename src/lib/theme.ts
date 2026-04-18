@@ -1,43 +1,38 @@
 import { createTheme } from '@mui/material/styles';
+import { defaultBrandPalette, muiBreakpointValues } from '@/lib/uiStyleConfig';
 
-// Palette matches DEFAULT_TENANT_THEME — consistent with tenant light theme
-const PRIMARY = '#8B3A2A';       // brick red
-const PRIMARY_LIGHT = '#B5503D';
-const PRIMARY_DARK = '#5C2218';
-const SECONDARY = '#2C3A47';     // dark navy
-const BG_DEFAULT = '#F0EDE8';    // warm off-white
-const BG_PAPER = '#FFFFFF';
-const DIVIDER = '#DDD9D3';
+const P = defaultBrandPalette;
 
 const theme = createTheme({
+  breakpoints: { values: muiBreakpointValues },
   palette: {
     mode: 'light',
     primary: {
-      main: PRIMARY,
-      light: PRIMARY_LIGHT,
-      dark: PRIMARY_DARK,
+      main: P.primary,
+      light: P.primaryLight,
+      dark: P.primaryDark,
       contrastText: '#ffffff',
     },
     secondary: {
-      main: SECONDARY,
-      light: '#3E5268',
-      dark: '#1A2530',
+      main: P.secondary,
+      light: P.secondaryLight,
+      dark: P.secondaryDark,
       contrastText: '#ffffff',
     },
     background: {
-      default: BG_DEFAULT,
-      paper: BG_PAPER,
+      default: P.background,
+      paper: P.paper,
     },
     text: {
-      primary: '#1A1A1A',
-      secondary: '#555555',
-      disabled: '#AAAAAA',
+      primary: P.textPrimary,
+      secondary: P.textSecondary,
+      disabled: P.textDisabled,
     },
-    divider: DIVIDER,
-    error: { main: '#C62828' },
-    warning: { main: '#E65100', contrastText: '#ffffff' },
-    success: { main: '#2E7D32' },
-    info: { main: '#1565C0' },
+    divider: P.divider,
+    error: { main: P.error },
+    warning: { main: P.warning, contrastText: '#ffffff' },
+    success: { main: P.success },
+    info: { main: P.info },
   },
   typography: {
     fontFamily: '"Inter", "Helvetica", "Arial", sans-serif',
@@ -49,8 +44,8 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: BG_DEFAULT,
-          color: '#1A1A1A',
+          backgroundColor: P.background,
+          color: P.textPrimary,
         },
       },
     },
@@ -68,16 +63,16 @@ const theme = createTheme({
           fontSize: '1.1rem',
         },
         containedPrimary: {
-          background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_DARK} 100%)`,
+          background: `linear-gradient(135deg, ${P.primary} 0%, ${P.primaryDark} 100%)`,
           '&:hover': {
-            background: `linear-gradient(135deg, ${PRIMARY_LIGHT} 0%, ${PRIMARY} 100%)`,
+            background: `linear-gradient(135deg, ${P.primaryLight} 0%, ${P.primary} 100%)`,
           },
         },
         outlinedPrimary: {
-          borderColor: PRIMARY,
-          color: PRIMARY,
+          borderColor: P.primary,
+          color: P.primary,
           '&:hover': {
-            borderColor: PRIMARY_LIGHT,
+            borderColor: P.primaryLight,
             backgroundColor: 'rgba(139,58,42,0.06)',
           },
         },
@@ -87,9 +82,9 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 16,
-          backgroundColor: BG_PAPER,
+          backgroundColor: P.paper,
           boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
-          border: `1px solid ${DIVIDER}`,
+          border: `1px solid ${P.divider}`,
         },
       },
     },
@@ -99,11 +94,11 @@ const theme = createTheme({
           '& .MuiOutlinedInput-root': {
             borderRadius: 12,
             backgroundColor: '#FAFAF9',
-            '& fieldset': { borderColor: DIVIDER },
-            '&:hover fieldset': { borderColor: PRIMARY },
-            '&.Mui-focused fieldset': { borderColor: PRIMARY },
+            '& fieldset': { borderColor: P.divider },
+            '&:hover fieldset': { borderColor: P.primary },
+            '&.Mui-focused fieldset': { borderColor: P.primary },
           },
-          '& .MuiInputLabel-root.Mui-focused': { color: PRIMARY },
+          '& .MuiInputLabel-root.Mui-focused': { color: P.primary },
         },
       },
     },
@@ -111,13 +106,13 @@ const theme = createTheme({
       styleOverrides: { root: { borderRadius: 8 } },
     },
     MuiDivider: {
-      styleOverrides: { root: { borderColor: DIVIDER } },
+      styleOverrides: { root: { borderColor: P.divider } },
     },
     MuiBottomNavigation: {
       styleOverrides: {
         root: {
-          backgroundColor: BG_PAPER,
-          borderTop: `1px solid ${DIVIDER}`,
+          backgroundColor: P.paper,
+          borderTop: `1px solid ${P.divider}`,
         },
       },
     },
@@ -125,15 +120,15 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           color: '#888888',
-          '&.Mui-selected': { color: PRIMARY },
+          '&.Mui-selected': { color: P.primary },
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundColor: BG_PAPER,
-          border: `1px solid ${DIVIDER}`,
+          backgroundColor: P.paper,
+          border: `1px solid ${P.divider}`,
         },
       },
     },
@@ -141,12 +136,12 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           color: '#555555',
-          borderColor: DIVIDER,
+          borderColor: P.divider,
           '&.Mui-selected': {
             color: '#ffffff',
-            backgroundColor: PRIMARY,
-            borderColor: PRIMARY,
-            '&:hover': { backgroundColor: PRIMARY_DARK },
+            backgroundColor: P.primary,
+            borderColor: P.primary,
+            '&:hover': { backgroundColor: P.primaryDark },
           },
           '&:hover': { backgroundColor: 'rgba(139,58,42,0.06)' },
         },
@@ -156,15 +151,15 @@ const theme = createTheme({
       styleOverrides: {
         switchBase: {
           '&.Mui-checked': {
-            color: PRIMARY,
-            '& + .MuiSwitch-track': { backgroundColor: PRIMARY_LIGHT },
+            color: P.primary,
+            '& + .MuiSwitch-track': { backgroundColor: P.primaryLight },
           },
         },
       },
     },
     MuiAvatar: {
       styleOverrides: {
-        root: { backgroundColor: PRIMARY },
+        root: { backgroundColor: P.primary },
       },
     },
     MuiListItemButton: {
@@ -181,7 +176,7 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         colorPrimary: {
-          background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_DARK} 100%)`,
+          background: `linear-gradient(135deg, ${P.primary} 0%, ${P.primaryDark} 100%)`,
           boxShadow: `0 2px 20px rgba(139,58,42,0.22)`,
         },
       },

@@ -22,7 +22,13 @@ export default function PageHeader({ title, back, right }: Props) {
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Typography variant="h6" className="flex-1 font-bold">
+        <Typography
+          variant="h6"
+          component="h1"
+          className="flex-1 font-bold"
+          noWrap
+          sx={{ minWidth: 0, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+        >
           {title}
         </Typography>
         {right}

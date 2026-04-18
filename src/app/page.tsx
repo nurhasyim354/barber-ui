@@ -22,7 +22,7 @@ export default function Home() {
   }, [user, isLoading, router]);
 
   return (
-    <Box className="flex items-center justify-center min-h-screen">
+    <Box className="flex items-center justify-center" sx={{ minHeight: '100svh' }}>
       <CircularProgress color="primary" />
     </Box>
   );

@@ -5,7 +5,7 @@ import {
   Box, Card, CardContent, Typography, CircularProgress,
   Chip, Pagination, Avatar, Divider,
 } from '@mui/material';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import PersonIcon from '@mui/icons-material/Person';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -13,6 +13,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { BarberBottomNav } from '@/components/layout/BottomNav';
 
 interface BookingHistory {
@@ -86,15 +88,22 @@ export default function BarberHistoryPage() {
     .reduce((sum, b) => sum + b.servicePrice, 0);
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
+    <AppPageShell variant="withBottomNav">
       <PageHeader title="Riwayat Layanan" />
 
-      <Box className="p-4 max-w-lg mx-auto">
+      <PageContainer>
         {/* Summary */}
-        <Box className="grid grid-cols-2 gap-3 mb-4">
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: 1.5,
+            mb: 2,
+          }}
+        >
           <Card>
             <CardContent className="py-3 text-center">
-              <Typography variant="h5" fontWeight={800} color="primary">
+              <Typography variant="h5" fontWeight={600} color="primary">
                 {total}
               </Typography>
               <Typography variant="caption" color="text.secondary">Total Booking</Typography>
@@ -102,7 +111,7 @@ export default function BarberHistoryPage() {
           </Card>
           <Card>
             <CardContent className="py-3 text-center">
-              <Typography variant="h6" fontWeight={800} color="success.main">
+              <Typography variant="h6" fontWeight={600} color="success.main">
                 Rp {totalRevenue.toLocaleString('id-ID')}
               </Typography>
               <Typography variant="caption" color="text.secondary">Pendapatan Halaman Ini</Typography>
@@ -144,8 +153,8 @@ export default function BarberHistoryPage() {
 
                       <Box className="flex-1">
                         <Box className="flex items-center justify-between mb-0.5">
-                          <Typography fontWeight={700}>{b.customerName}</Typography>
-                          <Typography fontWeight={800} color="primary" variant="body2">
+                          <Typography fontWeight={500}>{b.customerName}</Typography>
+                          <Typography fontWeight={600} color="primary" variant="body2">
                             Rp {b.servicePrice.toLocaleString('id-ID')}
                           </Typography>
                         </Box>
@@ -197,9 +206,9 @@ export default function BarberHistoryPage() {
             )}
           </>
         )}
-      </Box>
+      </PageContainer>
 
       <BarberBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

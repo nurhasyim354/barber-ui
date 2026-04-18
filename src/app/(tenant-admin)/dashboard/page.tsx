@@ -19,6 +19,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface RevenueSummary {
@@ -49,7 +51,7 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
           </Box>
           <Box>
             <Typography variant="body2" color="text.secondary">{title}</Typography>
-            <Typography variant="h6" fontWeight={800}>{value}</Typography>
+            <Typography variant="h6" fontWeight={600}>{value}</Typography>
           </Box>
         </Box>
       </CardContent>
@@ -90,7 +92,7 @@ export default function DashboardPage() {
   });
 
   return (
-    <Box sx={{ minHeight: '100svh', bgcolor: 'background.default', pb: 12 }}>
+    <AppPageShell variant="withBottomNav">
       <PageHeader
         title="Dashboard"
         right={
@@ -114,7 +116,7 @@ export default function DashboardPage() {
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
-        <Box className="p-4 max-w-lg mx-auto">
+        <PageContainer>
           <Card
             sx={{
               mb: 3,
@@ -126,7 +128,7 @@ export default function DashboardPage() {
           >
             <CardContent>
               <Typography variant="body2" sx={{ opacity: 0.8 }}>Pendapatan Hari Ini</Typography>
-              <Typography variant="h4" fontWeight={800} sx={{ color: 'white', my: 0.5 }}>
+              <Typography variant="h4" fontWeight={600} sx={{ color: 'white', my: 0.5 }}>
                 {fmt(summary?.totalRevenue || 0)}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.7 }}>{today}</Typography>
@@ -134,7 +136,7 @@ export default function DashboardPage() {
           </Card>
 
           <Grid container spacing={2} className="mb-4">
-            <Grid item xs={6}>
+            <Grid item xs={12} sm={6}>
               <StatCard
                 title="Transaksi"
                 value={String(summary?.totalTransactions || 0)}
@@ -142,7 +144,7 @@ export default function DashboardPage() {
                 color="#ede9fe"
               />
             </Grid>
-            <Grid item xs={6}>
+            <Grid item xs={12} sm={6}>
               <StatCard
                 title="Selesai"
                 value={String(summary?.completedBookings || 0)}
@@ -154,7 +156,7 @@ export default function DashboardPage() {
 
           <Card>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} className="mb-3">
+              <Typography variant="subtitle1" fontWeight={500} className="mb-3">
                 Rincian Pembayaran
               </Typography>
               <Divider className="mb-3" />
@@ -163,22 +165,22 @@ export default function DashboardPage() {
                   <PaymentsIcon color="action" fontSize="small" />
                   <Typography>Tunai</Typography>
                 </Box>
-                <Typography fontWeight={700}>{fmt(summary?.cashTotal || 0)}</Typography>
+                <Typography fontWeight={500}>{fmt(summary?.cashTotal || 0)}</Typography>
               </Box>
               <Box className="flex justify-between items-center">
                 <Box className="flex items-center gap-2">
                   <QrCodeIcon color="action" fontSize="small" />
                   <Typography>QRIS</Typography>
                 </Box>
-                <Typography fontWeight={700}>{fmt(summary?.qrisTotal || 0)}</Typography>
+                <Typography fontWeight={500}>{fmt(summary?.qrisTotal || 0)}</Typography>
               </Box>
               <Divider className="my-3" />
               <Box className="flex justify-between items-center">
                 <Box className="flex items-center gap-2">
                   <AttachMoneyIcon color="primary" />
-                  <Typography fontWeight={700}>Total</Typography>
+                  <Typography fontWeight={500}>Total</Typography>
                 </Box>
-                <Typography fontWeight={800} color="primary" variant="h6">
+                <Typography fontWeight={600} color="primary" variant="h6">
                   {fmt(summary?.totalRevenue || 0)}
                 </Typography>
               </Box>
@@ -186,13 +188,20 @@ export default function DashboardPage() {
           </Card>
 
           {/* Quick Actions */}
-          <Box className="grid grid-cols-2 gap-3 mt-2">
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+              gap: 1.5,
+              mt: 1,
+            }}
+          >
             <Button
               variant="contained"
               fullWidth
               startIcon={<QrCodeIcon />}
               onClick={() => router.push('/dashboard/booking-qr')}
-              sx={{ py: 1.5, gridColumn: 'span 2' }}
+              sx={{ py: 1.5, gridColumn: { xs: 'span 1', sm: 'span 2' } }}
             >
               QR Booking Pelanggan
             </Button>
@@ -219,16 +228,16 @@ export default function DashboardPage() {
               fullWidth
               startIcon={<CreditCardIcon />}
               onClick={() => router.push('/subscription')}
-              sx={{ py: 1.5, gridColumn: 'span 2' }}
+              sx={{ py: 1.5, gridColumn: { xs: 'span 1', sm: 'span 2' } }}
               color="secondary"
             >
               Tagihan & Langganan
             </Button>
           </Box>
-        </Box>
+        </PageContainer>
       )}
 
       <TenantAdminBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

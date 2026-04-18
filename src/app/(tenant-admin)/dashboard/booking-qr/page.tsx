@@ -12,11 +12,13 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ClearIcon from '@mui/icons-material/Clear';
 import DownloadIcon from '@mui/icons-material/Download';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import QRCode from 'react-qr-code';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 
 export default function BookingQrPage() {
   const router = useRouter();
@@ -93,7 +95,8 @@ export default function BookingQrPage() {
   };
 
   return (
-    <Box sx={{ minHeight: '100svh', p: 2, pb: 6, bgcolor: 'background.default' }}>
+    <AppPageShell variant="adminFooter" sx={{ pb: 6 }}>
+      <PageContainer>
       {/* Header */}
       <Box display="flex" alignItems="center" gap={1} pt={2} mb={4}>
         <IconButton onClick={() => router.back()} size="small" sx={{ mr: 0.5 }}>
@@ -101,7 +104,7 @@ export default function BookingQrPage() {
         </IconButton>
         <QrCode2Icon sx={{ fontSize: 26, color: 'primary.main' }} />
         <Box>
-          <Typography variant="h6" fontWeight={700} lineHeight={1.2}>QR Booking</Typography>
+          <Typography variant="h6" fontWeight={500} lineHeight={1.2}>QR Booking</Typography>
           <Typography variant="caption" color="text.secondary">
             Tampilkan ke pelanggan untuk scan
           </Typography>
@@ -126,35 +129,18 @@ export default function BookingQrPage() {
               mb: 3,
             }}
           >
-            <QRCode
-              value={qrUrl}
-              size={220}
-              level="M"
-              style={{ display: 'block' }}
-            />
+            <Box sx={{ width: '100%', maxWidth: 220, mx: 'auto', '& svg': { width: '100% !important', height: 'auto !important' } }}>
+              <QRCode value={qrUrl} size={220} level="M" style={{ display: 'block' }} />
+            </Box>
           </Box>
 
-          {/* Tenant branding */}
-          <Box display="flex" alignItems="center" gap={1} mb={0.75}>
-            <Box
-              sx={{
-                width: 28, height: 28, borderRadius: '8px',
-                bgcolor: 'primary.main',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <ContentCutIcon sx={{ fontSize: 16, color: 'white' }} />
-            </Box>
-            <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-              {user.name || 'Barbershop'}
-            </Typography>
-          </Box>
+          
           <Typography variant="body2" color="text.secondary" mb={3}>
             Scan untuk booking sekarang
           </Typography>
 
           {/* Action buttons */}
-          <Box display="flex" gap={1.5}>
+          <Box display="flex" flexWrap="wrap" gap={1.5} justifyContent="center">
             <Tooltip title="Salin link">
               <Button
                 variant="outlined"
@@ -182,7 +168,7 @@ export default function BookingQrPage() {
       {/* Pre-fill customer phone */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="subtitle2" fontWeight={700} mb={0.5} color="text.primary">
+          <Typography variant="subtitle2" fontWeight={500} mb={0.5} color="text.primary">
             QR untuk Pelanggan Tertentu
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" mb={2}>
@@ -243,6 +229,7 @@ export default function BookingQrPage() {
           </Typography>
         </CardContent>
       </Card>
-    </Box>
+      </PageContainer>
+    </AppPageShell>
   );
 }

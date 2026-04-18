@@ -3,7 +3,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import BottomNavigation from '@mui/material/BottomNavigation';
 import BottomNavigationAction from '@mui/material/BottomNavigationAction';
 import Paper from '@mui/material/Paper';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import HistoryIcon from '@mui/icons-material/History';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -30,6 +30,13 @@ export function CustomerBottomNav() {
           else { logout(); router.push('/login'); }
         }}
         showLabels
+        sx={{
+          '& .MuiBottomNavigationAction-label': {
+            fontSize: { xs: '0.65rem', sm: '0.75rem' },
+            opacity: 1,
+          },
+          '& .MuiBottomNavigationAction-root': { minWidth: { xs: 0, sm: 80 }, px: { xs: 0.5, sm: 1 } },
+        }}
       >
         <BottomNavigationAction label="Booking" icon={<ContentCutIcon />} />
         <BottomNavigationAction label="Riwayat" icon={<HistoryIcon />} />
@@ -57,6 +64,13 @@ export function BarberBottomNav() {
           else { logout(); router.push('/login'); }
         }}
         showLabels
+        sx={{
+          '& .MuiBottomNavigationAction-label': {
+            fontSize: { xs: '0.65rem', sm: '0.75rem' },
+            opacity: 1,
+          },
+          '& .MuiBottomNavigationAction-root': { minWidth: { xs: 0, sm: 80 }, px: { xs: 0.5, sm: 1 } },
+        }}
       >
         <BottomNavigationAction label="Antrian" icon={<ListAltIcon />} />
         <BottomNavigationAction label="Riwayat" icon={<HistoryIcon />} />
@@ -83,6 +97,14 @@ export function TenantAdminBottomNav() {
           if (r) router.push(r);
         }}
         showLabels
+        sx={{
+          '& .MuiBottomNavigationAction-label': {
+            fontSize: { xs: '0.6rem', sm: '0.7rem' },
+            opacity: 1,
+            whiteSpace: { xs: 'nowrap', md: 'normal' },
+          },
+          '& .MuiBottomNavigationAction-root': { minWidth: { xs: 0, sm: 64, md: 80 }, px: { xs: 0.25, sm: 0.5 } },
+        }}
       >
         <BottomNavigationAction label="Dashboard" icon={<DashboardIcon />} />
         <BottomNavigationAction label="POS" icon={<ReceiptIcon />} />

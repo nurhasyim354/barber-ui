@@ -9,10 +9,13 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LogoutIcon from '@mui/icons-material/Logout';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface Service {
@@ -27,7 +30,7 @@ interface Service {
 const defaultForm = { name: '', description: '', price: '', durationMinutes: '30' };
 
 export default function ServicesPage() {
-  const { user, isLoading, loadFromStorage } = useAuthStore();
+  const { user, isLoading, loadFromStorage, logout } = useAuthStore();
   const router = useRouter();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,13 +124,22 @@ export default function ServicesPage() {
   };
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
-      <PageHeader title="Kelola Layanan" />
+    <AppPageShell variant="withBottomNav">
+      <PageHeader title="Kelola Layanan"
+      
+      right={
+                    <Box className="flex items-center">
+                        <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>
+                            <LogoutIcon />
+                        </IconButton>
+                    </Box>
+                }
+            />
 
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
-        <Box className="p-4 max-w-lg mx-auto">
+        <PageContainer>
           {services.length === 0 ? (
             <Card>
               <CardContent className="text-center py-12">
@@ -144,11 +156,11 @@ export default function ServicesPage() {
                   <CardContent>
                     <Box className="flex justify-between items-start">
                       <Box className="flex-1">
-                        <Typography fontWeight={700}>{svc.name}</Typography>
+                        <Typography fontWeight={500}>{svc.name}</Typography>
                         {svc.description && (
                           <Typography variant="body2" color="text.secondary">{svc.description}</Typography>
                         )}
-                        <Typography color="primary" fontWeight={800} className="mt-1">
+                        <Typography color="primary" fontWeight={600} className="mt-1">
                           Rp {svc.price.toLocaleString('id-ID')} · {svc.durationMinutes} menit
                         </Typography>
                       </Box>
@@ -177,7 +189,7 @@ export default function ServicesPage() {
               ))}
             </Box>
           )}
-        </Box>
+        </PageContainer>
       )}
 
       <Fab
@@ -190,7 +202,7 @@ export default function ServicesPage() {
       </Fab>
 
       <Dialog open={dialog.open} onClose={() => setDialog({ open: false, editing: null })} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700}>
+        <DialogTitle fontWeight={500}>
           {dialog.editing ? 'Edit Layanan' : 'Tambah Layanan'}
         </DialogTitle>
         <DialogContent className="flex flex-col gap-4 pt-2">
@@ -235,6 +247,6 @@ export default function ServicesPage() {
       </Dialog>
 
       <TenantAdminBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

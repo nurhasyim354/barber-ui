@@ -18,6 +18,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 
 interface Tenant {
   _id: string;
@@ -87,7 +89,7 @@ export default function AdminTenantsPage() {
       toast.error('Nama, alamat, dan telepon wajib diisi'); return;
     }
     if (!dialog.editing && (!form.adminPhone || !form.adminName)) {
-      toast.error('Data admin barbershop wajib diisi'); return;
+      toast.error('Data admin tenant wajib diisi'); return;
     }
     setSaving(true);
     try {
@@ -122,9 +124,9 @@ export default function AdminTenantsPage() {
   };
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-8">
+    <AppPageShell variant="adminFooter">
       <PageHeader
-        title="Kelola Barbershop"
+        title="Kelola Tenant"
         right={
           <Box className="flex items-center">
             <IconButton color="inherit" onClick={() => router.push('/admin/subscriptions')} title="Tagihan">
@@ -140,10 +142,10 @@ export default function AdminTenantsPage() {
         }
       />
 
-      <Box className="p-4 max-w-lg mx-auto">
+      <PageContainer>
         <Box className="flex items-center justify-between mb-4">
-          <Typography variant="h6" fontWeight={700}>
-            Total: {total} Barbershop
+          <Typography variant="h6" fontWeight={500}>
+            Total: {total} Tenants
           </Typography>
         </Box>
 
@@ -154,10 +156,10 @@ export default function AdminTenantsPage() {
             <CardContent className="text-center py-12">
               <StoreIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
               <Typography color="text.secondary" className="mt-2">
-                Belum ada barbershop terdaftar
+                Belum ada tenant terdaftar
               </Typography>
               <Button variant="contained" startIcon={<AddIcon />} className="mt-4" onClick={openAdd}>
-                Tambah Barbershop
+                Tambah Tenant
               </Button>
             </CardContent>
           </Card>
@@ -173,7 +175,7 @@ export default function AdminTenantsPage() {
                     </Avatar>
                     <Box className="flex-1">
                       <Box className="flex items-center gap-2">
-                        <Typography fontWeight={700}>{t.name}</Typography>
+                        <Typography fontWeight={500}>{t.name}</Typography>
                         <Chip
                           label={t.isActive ? 'Aktif' : 'Nonaktif'}
                           color={t.isActive ? 'success' : 'error'}
@@ -235,7 +237,7 @@ export default function AdminTenantsPage() {
           )}
           </>
         )}
-      </Box>
+      </PageContainer>
 
       <Fab
         color="primary"
@@ -246,12 +248,12 @@ export default function AdminTenantsPage() {
       </Fab>
 
       <Dialog open={dialog.open} onClose={() => setDialog({ open: false, editing: null })} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700}>
-          {dialog.editing ? 'Edit Barbershop' : 'Tambah Barbershop Baru'}
+        <DialogTitle fontWeight={500}>
+          {dialog.editing ? 'Edit Tenant' : 'Tambah Tenant Baru'}
         </DialogTitle>
         <DialogContent className="flex flex-col gap-3 pt-2">
           <TextField
-            fullWidth label="Nama Barbershop" value={form.name}
+            fullWidth label="Nama Tenant" value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             sx={{ mt: 1 }}
           />
@@ -260,14 +262,14 @@ export default function AdminTenantsPage() {
             onChange={(e) => setForm({ ...form, address: e.target.value })}
           />
           <TextField
-            fullWidth label="Telepon Barbershop" value={form.phone}
+            fullWidth label="Telepon Outlet" value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
             inputMode="tel"
           />
           {!dialog.editing && (
             <>
               <Typography variant="subtitle2" color="text.secondary" className="mt-2">
-                Data Admin Barbershop
+                Data Admin Tenant
               </Typography>
               <TextField
                 fullWidth label="Nama Admin" value={form.adminName}
@@ -290,6 +292,6 @@ export default function AdminTenantsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </AppPageShell>
   );
 }

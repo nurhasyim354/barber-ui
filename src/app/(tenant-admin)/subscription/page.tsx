@@ -15,6 +15,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface Plan {
@@ -129,10 +131,10 @@ export default function SubscriptionPage() {
   };
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
+    <AppPageShell variant="withBottomNav">
       <PageHeader title="Langganan & Tagihan" back />
 
-      <Box className="p-4 max-w-lg mx-auto">
+      <PageContainer>
         {loading ? (
           <Box className="flex justify-center mt-12"><CircularProgress /></Box>
         ) : (
@@ -147,7 +149,7 @@ export default function SubscriptionPage() {
               }}>
                 <CardContent>
                   <Box className="flex items-center justify-between mb-2">
-                    <Typography variant="h6" fontWeight={700}>
+                    <Typography variant="h6" fontWeight={500}>
                       Bulan Ini — {formatMonth(billing.month)}
                     </Typography>
                     <Chip
@@ -172,7 +174,7 @@ export default function SubscriptionPage() {
 
                   <Box className="flex justify-between items-center">
                     <Typography fontWeight={600}>Tagihan</Typography>
-                    <Typography variant="h6" fontWeight={800}
+                    <Typography variant="h6" fontWeight={600}
                       color={billing.amount === 0 ? 'success.main' : 'primary.main'}>
                       {formatRp(billing.amount)}
                     </Typography>
@@ -214,7 +216,7 @@ export default function SubscriptionPage() {
             {/* Plans Info */}
             <Card className="mb-4">
               <CardContent>
-                <Typography variant="subtitle1" fontWeight={700} mb={2}>Paket Berlangganan</Typography>
+                <Typography variant="subtitle1" fontWeight={500} mb={2}>Paket Berlangganan</Typography>
                 {plans.map((p) => (
                   <Box key={p._id} className="flex justify-between items-center py-2 border-b last:border-0">
                     <Box>
@@ -224,7 +226,7 @@ export default function SubscriptionPage() {
                         {p.maxTransactions != null ? `–${p.maxTransactions}` : '+'} transaksi/bulan
                       </Typography>
                     </Box>
-                    <Typography fontWeight={700} color={p.pricePerMonth === 0 ? 'success.main' : 'primary.main'}>
+                    <Typography fontWeight={500} color={p.pricePerMonth === 0 ? 'success.main' : 'primary.main'}>
                       {formatRp(p.pricePerMonth)}
                     </Typography>
                   </Box>
@@ -233,7 +235,7 @@ export default function SubscriptionPage() {
             </Card>
 
             {/* History */}
-            <Typography variant="subtitle1" fontWeight={700} mb={2}>
+            <Typography variant="subtitle1" fontWeight={500} mb={2}>
               Riwayat Tagihan {historyTotal > 0 && `(${historyTotal})`}
             </Typography>
 
@@ -262,7 +264,7 @@ export default function SubscriptionPage() {
                         </Box>
                         <Box className="text-right">
                           <Chip label={statusChip[h.status]?.label} color={statusChip[h.status]?.color} size="small" />
-                          <Typography variant="body2" fontWeight={700} mt={0.5}>
+                          <Typography variant="body2" fontWeight={500} mt={0.5}>
                             {formatRp(h.amount)}
                           </Typography>
                         </Box>
@@ -280,11 +282,11 @@ export default function SubscriptionPage() {
             )}
           </>
         )}
-      </Box>
+      </PageContainer>
 
       {/* Payment Ref Dialog */}
       <Dialog open={payDialog} onClose={() => setPayDialog(false)} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700}>Konfirmasi Pembayaran</DialogTitle>
+        <DialogTitle fontWeight={500}>Konfirmasi Pembayaran</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" mb={2}>
             Transfer ke rekening admin dan masukkan nomor referensi / bukti transfer di bawah ini.
@@ -293,7 +295,7 @@ export default function SubscriptionPage() {
           {billing && (
             <Box className="bg-gray-50 rounded-lg p-3 mb-3 text-center">
               <Typography variant="caption" color="text.secondary">Jumlah yang harus dibayar</Typography>
-              <Typography variant="h5" fontWeight={800} color="primary">
+              <Typography variant="h5" fontWeight={600} color="primary">
                 {formatRp(billing.amount)}
               </Typography>
             </Box>
@@ -315,6 +317,6 @@ export default function SubscriptionPage() {
       </Dialog>
 
       <TenantAdminBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

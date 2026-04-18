@@ -1,16 +1,18 @@
 import type { Config } from 'tailwindcss';
+import { defaultBrandPalette, tailwindScreens } from './src/lib/uiStyleConfig';
 
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
+      screens: tailwindScreens,
       colors: {
         brand: {
           50: '#fff8f0',
           100: '#ffe8d0',
-          500: '#f97316',
-          600: '#ea580c',
-          700: '#c2410c',
+          500: defaultBrandPalette.primary,
+          600: defaultBrandPalette.primaryDark,
+          700: defaultBrandPalette.primaryDark,
         },
       },
     },

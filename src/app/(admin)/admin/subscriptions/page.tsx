@@ -16,6 +16,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 
 interface Billing {
   _id: string;
@@ -139,7 +141,7 @@ export default function AdminSubscriptionsPage() {
   const pendingCount = billings.filter((b) => b.status === 'pending' || b.status === 'overdue').length;
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-8">
+    <AppPageShell variant="adminFooter">
       <PageHeader
         title="Tagihan Langganan"
         right={
@@ -157,7 +159,7 @@ export default function AdminSubscriptionsPage() {
         }
       />
 
-      <Box className="p-4 max-w-2xl mx-auto">
+      <PageContainer maxWidth="md">
         {/* Alert for pending */}
         {pendingCount > 0 && !loading && (
           <Alert severity="warning" sx={{ mb: 2 }}>
@@ -221,7 +223,7 @@ export default function AdminSubscriptionsPage() {
                   <CardContent>
                     <Box className="flex items-start justify-between mb-1">
                       <Box>
-                        <Typography fontWeight={700}>{b.tenantName}</Typography>
+                        <Typography fontWeight={500}>{b.tenantName}</Typography>
                         <Typography variant="body2" color="text.secondary">
                           {formatMonth(b.month)} · {b.planDisplayName} · {b.transactionCount} tx
                         </Typography>
@@ -238,7 +240,7 @@ export default function AdminSubscriptionsPage() {
                       </Box>
                       <Box className="text-right">
                         <Chip label={statusChip[b.status]?.label} color={statusChip[b.status]?.color} size="small" />
-                        <Typography variant="body2" fontWeight={700} mt={0.5}>
+                        <Typography variant="body2" fontWeight={500} mt={0.5}>
                           {formatRp(b.amount)}
                         </Typography>
                       </Box>
@@ -281,11 +283,11 @@ export default function AdminSubscriptionsPage() {
             )}
           </>
         )}
-      </Box>
+      </PageContainer>
 
       {/* Confirm Paid Dialog */}
       <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ open: false, billing: null })} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700}>Konfirmasi Pembayaran</DialogTitle>
+        <DialogTitle fontWeight={500}>Konfirmasi Pembayaran</DialogTitle>
         <DialogContent>
           {confirmDialog.billing && (
             <Box className="bg-gray-50 rounded-lg p-3 mb-3">
@@ -314,7 +316,7 @@ export default function AdminSubscriptionsPage() {
 
       {/* Cancel Confirm */}
       <Dialog open={cancelDialog.open} onClose={() => setCancelDialog({ open: false, billingId: null })} maxWidth="xs" fullWidth>
-        <DialogTitle fontWeight={700}>Batalkan Tagihan?</DialogTitle>
+        <DialogTitle fontWeight={500}>Batalkan Tagihan?</DialogTitle>
         <DialogContent>
           <Typography color="text.secondary">Tagihan akan diubah menjadi Gratis dan tidak perlu dibayar.</Typography>
         </DialogContent>
@@ -323,6 +325,6 @@ export default function AdminSubscriptionsPage() {
           <Button fullWidth variant="contained" color="error" onClick={handleCancel}>Ya, Batalkan</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </AppPageShell>
   );
 }

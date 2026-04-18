@@ -8,7 +8,7 @@ import {
   TextField, Avatar, Divider, LinearProgress, Checkbox,
   InputAdornment,
 } from '@mui/material';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PersonIcon from '@mui/icons-material/Person';
@@ -25,6 +25,7 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
+import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -181,7 +182,7 @@ function BookingContent() {
       );
       if (active) setActiveBooking(active);
 
-      // Ambil foto cukur terakhir customer di tenant ini
+      // Ambil foto  terakhir customer di tenant ini
       try {
         const photoRes = await api.get(`/haircut-photos/my-last?tenantId=${effectiveTenantId}`);
         setLastHaircut(photoRes.data ?? null);
@@ -277,7 +278,7 @@ function BookingContent() {
     setBarbersLoading(true);
     api.get(`/tenants/${effectiveTenantId}/barbers/queue`)
       .then((r) => setBarbers(r.data))
-      .catch(() => toast.error('Gagal memuat daftar barber'))
+      .catch(() => toast.error('Gagal memuat daftar staff'))
       .finally(() => setBarbersLoading(false));
   };
 
@@ -352,7 +353,7 @@ function BookingContent() {
           >
             <ContentCutIcon sx={{ fontSize: 38, color: 'white' }} />
           </Box>
-          <Typography variant="h5" fontWeight={800} letterSpacing={-0.5}>
+          <Typography variant="h5" fontWeight={600} letterSpacing={-0.5}>
             {tenant?.name ?? '…'}
           </Typography>
           {tenant?.address && (
@@ -362,7 +363,8 @@ function BookingContent() {
 
         <Card
           sx={{
-            width: '100%', maxWidth: 380,
+            width: '100%',
+            maxWidth: { xs: '100%', sm: UI_LAYOUT.loginCardMaxWidthPx },
             boxShadow: '0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)',
             borderRadius: 4,
             border: '1px solid rgba(0,0,0,0.06)',
@@ -371,7 +373,7 @@ function BookingContent() {
           <CardContent sx={{ p: 3.5 }}>
             {regStep === 'form' ? (
               <>
-                <Typography variant="h6" textAlign="center" fontWeight={700} mb={3}>
+                <Typography variant="h6" textAlign="center" fontWeight={500} mb={3}>
                   {isNewUser ? 'Daftar untuk Booking' : 'Masuk untuk Booking'}
                 </Typography>
 
@@ -408,7 +410,7 @@ function BookingContent() {
               </>
             ) : (
               <>
-                <Typography variant="h6" textAlign="center" fontWeight={700} mb={1}>Masukkan Kode OTP</Typography>
+                <Typography variant="h6" textAlign="center" fontWeight={500} mb={1}>Masukkan Kode OTP</Typography>
                 <Typography variant="body2" color="text.secondary" textAlign="center" mb={3}>
                   Kode 6 digit dikirim ke WA {phone}
                 </Typography>
@@ -453,7 +455,7 @@ function BookingContent() {
     return (
       <Box sx={{ minHeight: '100svh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center' }}>
         <QrCodeScannerIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-        <Typography color="text.secondary">Scan QR code di barbershop untuk mulai booking</Typography>
+        <Typography color="text.secondary">Scan QR code di outlet untuk mulai booking</Typography>
       </Box>
     );
   }
@@ -480,7 +482,7 @@ function BookingContent() {
         >
           <CheckCircleIcon sx={{ fontSize: 44, color: 'white' }} />
         </Box>
-        <Typography variant="h5" fontWeight={800} letterSpacing={-0.5} mb={0.5}>Booking Berhasil!</Typography>
+        <Typography variant="h5" fontWeight={600} letterSpacing={-0.5} mb={0.5}>Booking Berhasil!</Typography>
         <Typography color="text.secondary" mb={4}>{tenant?.name}</Typography>
 
         <Card
@@ -516,12 +518,12 @@ function BookingContent() {
           <CardContent sx={{ textAlign: 'left', px: 2.5 }}>
             <Box display="flex" justifyContent="space-between" mb={1}>
               <Typography variant="body2" color="text.secondary">Layanan</Typography>
-              <Typography variant="body2" fontWeight={700}>{bookingResult.serviceName}</Typography>
+              <Typography variant="body2" fontWeight={500}>{bookingResult.serviceName}</Typography>
             </Box>
             {bookingResult.barberName && (
               <Box display="flex" justifyContent="space-between" mb={1}>
                 <Typography variant="body2" color="text.secondary">Barber</Typography>
-                <Typography variant="body2" fontWeight={700}>{bookingResult.barberName}</Typography>
+                <Typography variant="body2" fontWeight={500}>{bookingResult.barberName}</Typography>
               </Box>
             )}
             <Divider sx={{ my: 1.5, opacity: 0.5, borderColor: 'rgba(0,0,0,0.08)' }} />
@@ -583,7 +585,7 @@ function BookingContent() {
         fullWidth maxWidth="xs"
         PaperProps={{ sx: { borderRadius: 4 } }}
       >
-        <DialogTitle fontWeight={700}>Pilih Barbershop</DialogTitle>
+        <DialogTitle fontWeight={500}>Pilih Outlet</DialogTitle>
         <DialogContent sx={{ p: 0 }}>
           {visitedTenants.map((t) => (
             <Box
@@ -609,7 +611,7 @@ function BookingContent() {
                 {t.name.charAt(0).toUpperCase()}
               </Avatar>
               <Box flex={1}>
-                <Typography fontWeight={700}>{t.name}</Typography>
+                <Typography fontWeight={500}>{t.name}</Typography>
                 {t.address && <Typography variant="caption" color="text.secondary">{t.address}</Typography>}
               </Box>
               {effectiveTenantId === t._id && <Chip label="Aktif" size="small" color="primary" />}
@@ -624,11 +626,17 @@ function BookingContent() {
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', p: 4, textAlign: 'center' }}>
           <QrCodeScannerIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
           <Typography color="text.secondary">
-            Scan QR code di barbershop untuk mulai booking
+            Scan QR code di outlet untuk mulai booking
           </Typography>
         </Box>
       ) : (
-        <Box sx={{ p: 2.5, maxWidth: 520, mx: 'auto' }}>
+        <Box
+          sx={{
+            p: { xs: 2, sm: 2.5 },
+            maxWidth: { xs: '100%', sm: UI_LAYOUT.bookingColumnMaxWidthPx },
+            mx: 'auto',
+          }}
+        >
 
           {/* Active booking banner */}
           {activeBooking && (
@@ -675,7 +683,7 @@ function BookingContent() {
                       background: (t) => `linear-gradient(180deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`,
                     }}
                   />
-                  <Typography variant="h6" fontWeight={800} letterSpacing={-0.3}>Pilih Layanan</Typography>
+                  <Typography variant="h6" fontWeight={600} letterSpacing={-0.3}>Pilih Layanan</Typography>
                 </Box>
                 {selectedServices.length > 0 && (
                   <Chip
@@ -737,7 +745,7 @@ function BookingContent() {
                             <ContentCutIcon sx={{ color: 'white', fontSize: 20 }} />
                           </Avatar>
                           <Box flex={1} minWidth={0}>
-                            <Typography fontWeight={700} noWrap>{svc.name}</Typography>
+                            <Typography fontWeight={400} noWrap>{svc.name}</Typography>
                             {svc.description && (
                               <Typography variant="body2" color="text.secondary" noWrap>{svc.description}</Typography>
                             )}
@@ -747,13 +755,14 @@ function BookingContent() {
                               size="small" variant="outlined"
                               sx={{ mt: 0.75, height: 22, fontSize: '0.7rem', borderRadius: 2, borderColor: 'rgba(0,0,0,0.15)' }}
                             />
-                          </Box>
-                          <Typography
-                            fontWeight={800} color="primary" variant="h6"
+                            <Typography
+                            fontWeight={300} color="primary" variant="h6"
                             sx={{ whiteSpace: 'nowrap', letterSpacing: -0.5 }}
                           >
                             Rp {svc.price.toLocaleString('id-ID')}
                           </Typography>
+                          </Box>
+                          
                         </CardContent>
                       </Card>
                     );
@@ -771,13 +780,13 @@ function BookingContent() {
                     boxShadow: (t) => `0 4px 20px ${t.palette.primary.main}14`,
                   }}
                 >
-                  <Typography variant="subtitle2" fontWeight={700} mb={1.5} color="primary">
+                  <Typography variant="subtitle2" fontWeight={500} mb={1.5} color="primary">
                     Layanan Dipilih ({selectedServices.length})
                   </Typography>
                   {selectedServices.map((s) => (
                     <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
                       <Typography variant="body2">{s.name}</Typography>
-                      <Typography variant="body2" fontWeight={700}>Rp {s.price.toLocaleString('id-ID')}</Typography>
+                      <Typography variant="body2" fontWeight={500}>Rp {s.price.toLocaleString('id-ID')}</Typography>
                     </Box>
                   ))}
                   <Divider sx={{ my: 1.5, opacity: 0.4, borderColor: 'rgba(0,0,0,0.12)' }} />
@@ -785,7 +794,7 @@ function BookingContent() {
                     <Typography variant="body2" color="text.secondary">
                       Total waktu: ~{totalDuration} menit
                     </Typography>
-                    <Typography fontWeight={800} color="primary">
+                    <Typography fontWeight={600} color="primary">
                       Rp {totalPrice.toLocaleString('id-ID')}
                     </Typography>
                   </Box>
@@ -793,7 +802,7 @@ function BookingContent() {
                     variant="contained" fullWidth onClick={handleGoToBarber}
                     sx={{ borderRadius: 2.5, py: 1.3, fontWeight: 700, letterSpacing: 0.3 }}
                   >
-                    Pilih Barber →
+                    Pilih Staff →
                   </Button>
                 </Box>
               )}
@@ -825,7 +834,7 @@ function BookingContent() {
                   {selectedServices.map((s) => (
                     <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
                       <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
-                      <Typography variant="body2" fontWeight={800} color="primary">
+                      <Typography variant="body2" fontWeight={600} color="primary">
                         Rp {s.price.toLocaleString('id-ID')}
                       </Typography>
                     </Box>
@@ -833,7 +842,7 @@ function BookingContent() {
                   <Divider sx={{ my: 1, opacity: 0.35, borderColor: 'rgba(0,0,0,0.1)' }} />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Total</Typography>
-                    <Typography fontWeight={800} color="primary">Rp {totalPrice.toLocaleString('id-ID')}</Typography>
+                    <Typography fontWeight={600} color="primary">Rp {totalPrice.toLocaleString('id-ID')}</Typography>
                   </Box>
                 </CardContent>
               </Card>
@@ -845,26 +854,26 @@ function BookingContent() {
                     background: (t) => `linear-gradient(180deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`,
                   }}
                 />
-                <Typography variant="h6" fontWeight={800} letterSpacing={-0.3}>Pilih Barber</Typography>
+                <Typography variant="h6" fontWeight={600} letterSpacing={-0.3}>Pilih Barber</Typography>
               </Box>
 
               {barbersLoading ? (
                 <Box sx={{ px: 1 }}>
                   <LinearProgress sx={{ borderRadius: 2, height: 3 }} />
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
-                    Memuat daftar barber...
+                    Memuat daftar staff...
                   </Typography>
                 </Box>
               ) : barbers.length === 0 ? (
                 <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
                   <CardContent sx={{ textAlign: 'center', py: 5 }}>
                     <PersonIcon sx={{ fontSize: 52, color: 'text.disabled' }} />
-                    <Typography color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>Belum ada barber tersedia</Typography>
+                    <Typography color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>Belum ada staff tersedia</Typography>
                     <Button
                       variant="outlined" sx={{ borderRadius: 2.5 }}
                       onClick={() => { setSelectedBarber(null); setDialogOpen(true); }}
                     >
-                      Booking Tanpa Pilih Barber
+                      Booking Tanpa Pilih Staf
                     </Button>
                   </CardContent>
                 </Card>
@@ -906,10 +915,10 @@ function BookingContent() {
                               {!b.photoUrl && b.barberName.charAt(0).toUpperCase()}
                             </Avatar>
                             <Box flex={1}>
-                              <Typography fontWeight={700} fontSize="0.97rem">{b.barberName}</Typography>
+                              <Typography fontWeight={500} fontSize="0.97rem">{b.barberName}</Typography>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
                                 <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
-                                <Typography variant="body2" fontWeight={700}>
+                                <Typography variant="body2" fontWeight={500}>
                                   {b.rating > 0 ? b.rating.toFixed(1) : 'Baru'}
                                 </Typography>
                                 {b.totalReviews > 0 && (
@@ -949,7 +958,7 @@ function BookingContent() {
                       '&:hover': { bgcolor: 'rgba(0,0,0,0.025)', borderColor: 'rgba(0,0,0,0.25)' },
                     }}
                   >
-                    <Typography variant="body2" fontWeight={600}>Tidak ada preferensi barber</Typography>
+                    <Typography variant="body2" fontWeight={600}>Tidak ada preferensi staff</Typography>
                   </Box>
                 </Box>
               )}
@@ -964,7 +973,7 @@ function BookingContent() {
         fullWidth maxWidth="xs"
         PaperProps={{ sx: { borderRadius: 4 } }}
       >
-        <DialogTitle fontWeight={800} sx={{ pb: 1, letterSpacing: -0.3 }}>Konfirmasi Booking</DialogTitle>
+        <DialogTitle fontWeight={600} sx={{ pb: 1, letterSpacing: -0.3 }}>Konfirmasi Booking</DialogTitle>
         <DialogContent sx={{ pt: 0 }}>
           <Box
             sx={{
@@ -979,7 +988,7 @@ function BookingContent() {
             {selectedServices.map((s) => (
               <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
                 <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
-                <Typography variant="body2" fontWeight={700} color="primary">
+                <Typography variant="body2" fontWeight={500} color="primary">
                   Rp {s.price.toLocaleString('id-ID')}
                 </Typography>
               </Box>
@@ -987,7 +996,7 @@ function BookingContent() {
             <Divider sx={{ my: 1.5, opacity: 0.4, borderColor: 'rgba(0,0,0,0.1)' }} />
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
               <Typography variant="body2" color="text.secondary">Total</Typography>
-              <Typography fontWeight={800} color="primary" fontSize="1rem">Rp {totalPrice.toLocaleString('id-ID')}</Typography>
+              <Typography fontWeight={600} color="primary" fontSize="1rem">Rp {totalPrice.toLocaleString('id-ID')}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
               <Typography variant="body2" color="text.secondary">Durasi</Typography>
@@ -995,7 +1004,7 @@ function BookingContent() {
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography variant="body2" color="text.secondary">Barber</Typography>
-              <Typography fontWeight={700} variant="body2">{selectedBarber?.barberName || 'Siapapun tersedia'}</Typography>
+              <Typography fontWeight={500} variant="body2">{selectedBarber?.barberName || 'Siapapun tersedia'}</Typography>
             </Box>
             {selectedBarber && selectedBarber.estimatedWaitMinutes > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
@@ -1009,7 +1018,7 @@ function BookingContent() {
             )}
           </Box>
 
-          {/* Foto cukur terakhir customer */}
+          {/* Foto  terakhir customer */}
           {lastHaircut && lastHaircut.photos.length > 0 && (
             <Box
               sx={{
@@ -1019,13 +1028,13 @@ function BookingContent() {
               }}
             >
               <Typography variant="overline" display="block" sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'text.secondary', mb: 1 }}>
-                Foto Cukur Terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                Foto  Terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
                 {lastHaircut.photos.map((src, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    key={i} src={src} alt={`foto-cukur-${i + 1}`}
+                    key={i} src={src} alt={`foto--${i + 1}`}
                     style={{
                       height: 82, width: 82, objectFit: 'cover',
                       borderRadius: 10, flexShrink: 0,

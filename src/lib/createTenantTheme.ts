@@ -1,4 +1,5 @@
 import { createTheme, Theme } from '@mui/material/styles';
+import { muiBreakpointValues } from '@/lib/uiStyleConfig';
 
 export interface TenantThemeColors {
   primaryColor: string;
@@ -45,6 +46,7 @@ export function createTenantTheme(colors: TenantThemeColors): Theme {
   const primaryDark = adjustHex(primary, -30);
 
   return createTheme({
+    breakpoints: { values: muiBreakpointValues },
     palette: {
       mode,
       primary: {

@@ -8,11 +8,12 @@ import {
 } from '@mui/material';
 import PhoneIcon from '@mui/icons-material/Phone';
 import LockIcon from '@mui/icons-material/Lock';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore, AuthUser } from '@/store/authStore';
+import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -131,8 +132,13 @@ export default function LoginPage() {
         >
           <ContentCutIcon sx={{ fontSize: 44, color: 'white' }} />
         </Box>
-        <Typography variant="h4" color="primary" fontWeight={800}>
-          Barbershop
+        <Typography
+          variant="h4"
+          color="primary"
+          fontWeight={600}
+          sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
+        >
+          Booking App
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
           Masuk untuk melanjutkan
@@ -143,11 +149,11 @@ export default function LoginPage() {
       <Dialog open={tenantOptions.length > 1} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <StorefrontIcon color="primary" />
-          Pilih Barbershop
+          Pilih Outlet
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Nomor Anda terdaftar di beberapa barbershop. Pilih barbershop yang ingin Anda kunjungi:
+            Nomor Anda terdaftar di beberapa outlet. Pilih outlet yang ingin Anda kunjungi:
           </Typography>
           <List disablePadding>
             {tenantOptions.map((t) => (
@@ -167,7 +173,8 @@ export default function LoginPage() {
 
       <Card
         sx={{
-          width: '100%', maxWidth: 380,
+          width: '100%',
+          maxWidth: { xs: '100%', sm: UI_LAYOUT.loginCardMaxWidthPx },
           boxShadow: (t) => `0 8px 40px ${t.palette.primary.main}18`,
         }}
       >
@@ -208,7 +215,7 @@ export default function LoginPage() {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ mb: 3 }}
+                sx={{ mb: 3, mt: 2}}
               />
 
               <Button

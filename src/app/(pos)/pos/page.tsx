@@ -23,6 +23,8 @@ import api from '@/lib/api';
 import { compressImage } from '@/lib/imageUtils';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface Booking {
@@ -110,7 +112,7 @@ function buildReceipt(data: ReceiptData): string {
     shopName + LINE_FEED,
     NORMAL_SIZE,
     BOLD_OFF,
-    '✂ BARBERSHOP ✂\n',
+    ' RECEIPT \n',
     dashes,
     LEFT,
     `Tgl : ${date}\n`,
@@ -122,7 +124,7 @@ function buildReceipt(data: ReceiptData): string {
     BOLD_OFF,
     LEFT,
     `Pelanggan : ${booking.customerName}\n`,
-    booking.barberName ? `Barber    : ${booking.barberName}\n` : '',
+    booking.barberName ? `Staff    : ${booking.barberName}\n` : '',
     booking.notes ? `Catatan   : ${booking.notes}\n` : '',
     divider,
     CENTER,
@@ -134,7 +136,8 @@ function buildReceipt(data: ReceiptData): string {
     divider,
     CENTER,
     'Terima kasih sudah berkunjung!\n',
-    'Sampai jumpa lagi 😊\n',
+    'Sampai jumpa lagi\n',
+    'https://booking.nh-apps.com\n',
     LINE_FEED,
     LINE_FEED,
     LINE_FEED,
@@ -167,7 +170,7 @@ export default function PosPage() {
   const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
   const [savingBarber, setSavingBarber] = useState(false);
 
-  // Foto hasil cukur
+  // Foto hasil 
   const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [lastHaircutDialog, setLastHaircutDialog] = useState<{ open: boolean; booking: Booking | null; data: HaircutPhoto | null; loading: boolean }>({
@@ -223,7 +226,7 @@ export default function PosPage() {
         setBarbers(res.data);
         setBarbersLoaded(true);
       } catch {
-        toast.error('Gagal memuat daftar barber');
+        toast.error('Gagal memuat daftar staff');
       }
     }
   };
@@ -238,7 +241,7 @@ export default function PosPage() {
       setBarberDialog({ open: false, booking: null });
       loadBookings();
     } catch {
-      toast.error('Gagal mengubah barber');
+      toast.error('Gagal mengubah staff');
     } finally {
       setSavingBarber(false);
     }
@@ -259,7 +262,7 @@ export default function PosPage() {
       const payment: Payment = res.data;
 
       // Fetch tenant name for receipt
-      let shopName = 'Barbershop';
+      let shopName = 'Outlet';
       try {
         const tenantRes = await api.get(`/tenants/${user!.tenantId}`);
         shopName = tenantRes.data?.name || shopName;
@@ -372,7 +375,7 @@ export default function PosPage() {
       </head>
       <body>
         <div class="center bold large spacer">${shopName}</div>
-        <div class="center spacer">✂ BARBERSHOP ✂</div>
+        <div class="center spacer"> RECEIPT </div>
         <div class="divider"></div>
         <div>Tgl : ${date}</div>
         <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
@@ -444,7 +447,7 @@ export default function PosPage() {
   const doneBookings = bookings.filter((b) => b.status === 'done');
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
+    <AppPageShell variant="withBottomNav">
       <PageHeader
         title="Kasir / POS"
         right={
@@ -462,31 +465,31 @@ export default function PosPage() {
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
-        <Box className="p-4 max-w-lg mx-auto">
-          <Typography variant="h6" fontWeight={700} className="mb-3">
+        <PageContainer>
+          <Typography variant="h6" fontWeight={500} className="mb-3">
             Antrian Hari Ini ({pendingBookings.length})
           </Typography>
 
           {pendingBookings.length === 0 && (
-            <Card className="mb-4">
+            <Card className="mb-4 mt-2">
               <CardContent className="text-center py-8">
                 <Typography color="text.secondary">Tidak ada antrian aktif</Typography>
               </CardContent>
             </Card>
           )}
 
-          <Box className="flex flex-col gap-3 mb-6">
+          <Box className="flex flex-col gap-3 mb-6 mt-2">
             {pendingBookings.map((b) => (
               <Card key={b._id} className="border-l-4" sx={{ borderLeftColor: 'primary.main' }}>
                 <CardContent>
                   <Box className="flex justify-between items-start mb-2">
                     <Box>
-                      <Typography variant="h6" fontWeight={800}>#{b.queueNumber}</Typography>
+                      <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
                       <Typography fontWeight={600}>{b.customerName}</Typography>
                       <Typography variant="body2" color="text.secondary">{b.serviceName}</Typography>
                       {b.barberName && (
                         <Typography variant="body2" color="text.secondary">
-                          Barber: {b.barberName}
+                        dengan  {b.barberName}
                         </Typography>
                       )}
                       {b.notes && (
@@ -496,7 +499,7 @@ export default function PosPage() {
                       )}
                     </Box>
                     <Box className="text-right">
-                      <Typography fontWeight={800} color="primary">
+                      <Typography fontWeight={600} color="primary">
                         Rp {b.servicePrice.toLocaleString('id-ID')}
                       </Typography>
                       <Chip
@@ -510,7 +513,22 @@ export default function PosPage() {
 
                   <Divider className="my-2" />
 
-                  <Box className="flex gap-2 flex-wrap">
+                  <Box
+                    className="mt-2"
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: {
+                        xs: 'repeat(2, minmax(0, 1fr))',
+                        md: 'repeat(3, minmax(0, 1fr))',
+                      },
+                      gap: 1,
+                      '& .MuiButton-root': {
+                        width: '100%',
+                        minHeight: 36,
+                        justifyContent: 'center',
+                      },
+                    }}
+                  >
                     {b.status === 'waiting' && (
                       <Button
                         variant="outlined"
@@ -546,10 +564,10 @@ export default function PosPage() {
                       startIcon={<SwapHorizIcon />}
                       onClick={() => handleOpenBarberDialog(b)}
                     >
-                      Ganti Barber
+                      Ganti Staff
                     </Button>
                     <Button
-                      variant="text"
+                      variant="outlined"
                       size="small"
                       color="error"
                       onClick={() => handleUpdateStatus(b._id, 'cancelled')}
@@ -567,7 +585,7 @@ export default function PosPage() {
               <Typography variant="subtitle1" fontWeight={600} color="text.secondary" className="mb-2">
                 Selesai ({doneBookings.length})
               </Typography>
-              <Box className="flex flex-col gap-2">
+              <Box className="flex flex-col gap-2 mt-2">
                 {doneBookings.map((b) => (
                   <Card key={b._id} className="opacity-60">
                     <CardContent className="py-3 flex justify-between items-center">
@@ -580,7 +598,7 @@ export default function PosPage() {
                       </Box>
                       <Box className="text-right">
                         <CheckCircleIcon color="success" />
-                        <Typography variant="body2" fontWeight={700}>
+                        <Typography variant="body2" fontWeight={500}>
                           Rp {b.servicePrice.toLocaleString('id-ID')}
                         </Typography>
                       </Box>
@@ -590,7 +608,7 @@ export default function PosPage() {
               </Box>
             </>
           )}
-        </Box>
+        </PageContainer>
       )}
 
       {/* Payment Dialog */}
@@ -602,11 +620,11 @@ export default function PosPage() {
       >
         {payStep === 'select' ? (
           <>
-            <DialogTitle fontWeight={700}>Pilih Metode Bayar</DialogTitle>
+            <DialogTitle fontWeight={500}>Pilih Metode Bayar</DialogTitle>
             <DialogContent>
               {payDialog.booking && (
                 <Box className="text-center mb-4">
-                  <Typography variant="h5" fontWeight={800} color="primary">
+                  <Typography variant="h5" fontWeight={600} color="primary">
                     Rp {payDialog.booking.servicePrice.toLocaleString('id-ID')}
                   </Typography>
                   <Typography color="text.secondary">
@@ -647,7 +665,7 @@ export default function PosPage() {
           </>
         ) : (
           <>
-            <DialogTitle fontWeight={700} sx={{ textAlign: 'center', pb: 0 }}>
+            <DialogTitle fontWeight={500} sx={{ textAlign: 'center', pb: 0 }}>
               Konfirmasi Pembayaran QRIS
             </DialogTitle>
             <DialogContent>
@@ -745,7 +763,7 @@ export default function PosPage() {
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle fontWeight={700} className="text-center">
+        <DialogTitle fontWeight={500} className="text-center">
           <CheckCircleIcon color="success" sx={{ fontSize: 48 }} />
           <br />Pembayaran Berhasil!
         </DialogTitle>
@@ -769,7 +787,7 @@ export default function PosPage() {
                   className="text-center block"
                   sx={{ fontFamily: 'inherit' }}
                 >
-                  ✂ BARBERSHOP ✂
+                    RECEIPT  
                 </Typography>
                 <Divider className="my-1" />
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
@@ -811,7 +829,7 @@ export default function PosPage() {
                   className="text-center block"
                   sx={{ fontFamily: 'inherit' }}
                 >
-                  Terima kasih! 😊
+                  Terima kasih!
                 </Typography>
               </Box>
 
@@ -836,11 +854,11 @@ export default function PosPage() {
                 </Button>
               </Box>
 
-              {/* Upload foto hasil cukur (opsional) */}
+              {/* Upload foto hasil  (opsional) */}
               <Divider sx={{ my: 2 }} />
-              <Typography variant="subtitle2" fontWeight={700} className="mb-2 flex items-center gap-1">
+              <Typography variant="subtitle2" fontWeight={500} className="mb-2 flex items-center gap-1">
                 <CameraAltIcon fontSize="small" />
-                Foto Hasil Cukur (Opsional, maks 3)
+                Foto Hasil (Opsional, maks 3)
               </Typography>
               <Box className="flex gap-2 flex-wrap mb-2">
                 {uploadPhotos.map((src, i) => (
@@ -909,7 +927,7 @@ export default function PosPage() {
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle fontWeight={700}>Ganti Barber</DialogTitle>
+        <DialogTitle fontWeight={500}>Ganti Staff</DialogTitle>
         <DialogContent sx={{ pt: 0 }}>
           {barberDialog.booking && (
             <Typography variant="body2" color="text.secondary" mb={1}>
@@ -928,7 +946,7 @@ export default function PosPage() {
                   <PersonIcon />
                 </Avatar>
               </ListItemAvatar>
-              <ListItemText primary="Tanpa Barber" />
+              <ListItemText primary="Tanpa Staff" />
               <Radio checked={selectedBarberId === null} size="small" />
             </ListItemButton>
 
@@ -971,16 +989,16 @@ export default function PosPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog Foto Cukur Terakhir */}
+      {/* Dialog Foto  Terakhir */}
       <Dialog
         open={lastHaircutDialog.open}
         onClose={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle fontWeight={700}>
+        <DialogTitle fontWeight={500}>
           <HistoryIcon sx={{ mr: 1, verticalAlign: 'middle', color: 'info.main' }} />
-          Foto Cukur Terakhir
+          Foto Terakhir
           {lastHaircutDialog.booking && (
             <Typography variant="caption" display="block" color="text.secondary">
               {lastHaircutDialog.booking.customerName}
@@ -994,7 +1012,7 @@ export default function PosPage() {
             <Box className="text-center py-8">
               <CameraAltIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
               <Typography color="text.secondary" className="mt-2">
-                Belum ada foto cukur tersimpan untuk customer ini
+                Belum ada foto tersimpan untuk customer ini
               </Typography>
             </Box>
           ) : (
@@ -1025,6 +1043,6 @@ export default function PosPage() {
       </Dialog>
 
       <TenantAdminBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

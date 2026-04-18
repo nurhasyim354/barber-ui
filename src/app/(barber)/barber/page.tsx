@@ -23,6 +23,8 @@ import api from '@/lib/api';
 import { compressImage } from '@/lib/imageUtils';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { BarberBottomNav } from '@/components/layout/BottomNav';
 
 interface Booking {
@@ -105,7 +107,7 @@ function buildReceipt(data: ReceiptData): string {
     RESET, CENTER, BOLD_ON, DOUBLE_HEIGHT,
     shopName + LINE_FEED,
     NORMAL_SIZE, BOLD_OFF,
-    '✂ BARBERSHOP ✂\n', dashes,
+    ' RECEIPT \n', dashes,
     LEFT,
     `Tgl : ${date}\n`,
     `No  : #${booking.queueNumber.toString().padStart(4, '0')}\n`,
@@ -113,7 +115,7 @@ function buildReceipt(data: ReceiptData): string {
     booking.serviceName + LINE_FEED,
     BOLD_OFF, LEFT,
     `Pelanggan : ${booking.customerName}\n`,
-    booking.barberName ? `Barber    : ${booking.barberName}\n` : '',
+    booking.barberName ? `Staff    : ${booking.barberName}\n` : '',
     booking.notes ? `Catatan   : ${booking.notes}\n` : '',
     divider, CENTER, BOLD_ON,
     `TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}\n`,
@@ -121,7 +123,8 @@ function buildReceipt(data: ReceiptData): string {
     `Metode    : ${payment.method === 'cash' ? 'Tunai' : 'QRIS'}\n`,
     divider, CENTER,
     'Terima kasih sudah berkunjung!\n',
-    'Sampai jumpa lagi 😊\n',
+    'Sampai jumpa lagi\n',
+    'https://booking.nh-apps.com\n',
     LINE_FEED, LINE_FEED, LINE_FEED, CUT,
   ].join('');
 }
@@ -144,7 +147,7 @@ export default function BarberPage() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [togglingAvail, setTogglingAvail] = useState(false);
 
-  // Foto hasil cukur
+  // Foto hasil 
   const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [lastHaircutDialog, setLastHaircutDialog] = useState<{ open: boolean; booking: Booking | null; data: HaircutPhoto | null; loading: boolean }>({
@@ -265,7 +268,7 @@ export default function BarberPage() {
       const res = await api.post('/payments', { bookingId: booking._id, method });
       const payment: Payment = res.data;
 
-      let shopName = currentTenant?.name || 'Barbershop';
+      let shopName = currentTenant?.name || 'Outlet';
       try {
         const tenantRes = await api.get(`/tenants/${user!.tenantId}`);
         shopName = tenantRes.data?.name || shopName;
@@ -350,7 +353,7 @@ export default function BarberPage() {
       .spacer { margin: 4px 0; } @media print { @page { margin: 0; size: 80mm auto; } }
     </style></head><body>
       <div class="center bold large spacer">${shopName}</div>
-      <div class="center spacer">✂ BARBERSHOP ✂</div>
+      <div class="center spacer"> RECEIPT </div>
       <div class="divider"></div>
       <div>Tgl : ${date}</div>
       <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
@@ -365,6 +368,7 @@ export default function BarberPage() {
       <div class="divider"></div>
       <div class="center spacer">Terima kasih sudah berkunjung!</div>
       <div class="center">Sampai jumpa lagi 😊</div>
+      <div class="center">https://booking.nh-apps.com</div>
     </body></html>`;
     const w = window.open('', '_blank', 'width=400,height=600');
     if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { w.print(); }, 300); }
@@ -415,7 +419,7 @@ export default function BarberPage() {
   const isMyQueue = (b: Booking) => b.barberId === myBarberId;
 
   return (
-    <Box sx={{ minHeight: '100svh', bgcolor: 'background.default', pb: 12 }}>
+    <AppPageShell variant="withBottomNav">
       <PageHeader
         title={`Antrian — ${currentTenant?.name || 'Pilih Salon'}`}
         right={
@@ -433,15 +437,15 @@ export default function BarberPage() {
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : !user?.tenantId ? (
-        <Box className="p-4 text-center mt-12">
+        <PageContainer sx={{ textAlign: 'center', py: 6 }}>
           <StorefrontIcon sx={{ fontSize: 72, color: 'text.disabled' }} />
           <Typography variant="h6" color="text.secondary" className="mt-2">Pilih Salon Tempat Bekerja</Typography>
           <Button variant="contained" className="mt-4" onClick={() => { loadTenants(); setTenantDialogOpen(true); }}>
             Pilih Salon
           </Button>
-        </Box>
+        </PageContainer>
       ) : (
-        <Box className="p-4 max-w-lg mx-auto">
+        <PageContainer>
           {/* Info barber */}
           <Card
             className="mb-4"
@@ -460,7 +464,7 @@ export default function BarberPage() {
                   {user?.name?.charAt(0).toUpperCase()}
                 </Avatar>
                 <Box className="flex-1">
-                  <Typography fontWeight={700}>{user?.name}</Typography>
+                  <Typography fontWeight={500}>{user?.name}</Typography>
                   <Typography variant="caption" color="text.secondary">Barber · {currentTenant?.name}</Typography>
                 </Box>
                 <FormControlLabel
@@ -485,7 +489,7 @@ export default function BarberPage() {
             </CardContent>
           </Card>
 
-          <Typography variant="h6" fontWeight={700} className="mb-3">
+          <Typography variant="h6" fontWeight={500} className="mb-3">
             Antrian Hari Ini ({pendingBookings.length})
           </Typography>
 
@@ -510,11 +514,11 @@ export default function BarberPage() {
                     <Box className="flex justify-between items-start mb-2">
                       <Box>
                         <Box className="flex items-center gap-2">
-                          <Typography variant="h6" fontWeight={800}>#{b.queueNumber}</Typography>
+                          <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
                           {mine ? (
                             <Chip label="Antrian Saya" size="small" color="primary" variant="outlined" />
                           ) : (
-                            <Chip label={b.barberName ? `Barber: ${b.barberName}` : 'Belum ada barber'} size="small" color="default" variant="outlined" />
+                            <Chip label={b.barberName ? `Staff: ${b.barberName}` : 'Belum ada staff'} size="small" color="default" variant="outlined" />
                           )}
                         </Box>
                         <Typography fontWeight={600}>{b.customerName}</Typography>
@@ -526,7 +530,7 @@ export default function BarberPage() {
                         )}
                       </Box>
                       <Box className="text-right">
-                        <Typography fontWeight={800} color="primary">
+                        <Typography fontWeight={600} color="primary">
                           Rp {b.servicePrice.toLocaleString('id-ID')}
                         </Typography>
                         <Chip
@@ -617,7 +621,7 @@ export default function BarberPage() {
                       </Box>
                       <Box className="text-right">
                         <CheckCircleIcon color="success" />
-                        <Typography variant="body2" fontWeight={700}>
+                        <Typography variant="body2" fontWeight={500}>
                           Rp {b.servicePrice.toLocaleString('id-ID')}
                         </Typography>
                       </Box>
@@ -627,12 +631,12 @@ export default function BarberPage() {
               </Box>
             </>
           )}
-        </Box>
+        </PageContainer>
       )}
 
       {/* Tenant Selection Dialog */}
       <Dialog open={tenantDialogOpen} onClose={() => { if (user?.tenantId) setTenantDialogOpen(false); }} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700}>
+        <DialogTitle fontWeight={500}>
           <StorefrontIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
           Pilih Salon Tempat Bekerja
         </DialogTitle>
@@ -654,7 +658,7 @@ export default function BarberPage() {
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
-                      primary={<Typography fontWeight={700}>{t.name}</Typography>}
+                      primary={<Typography fontWeight={500}>{t.name}</Typography>}
                       secondary={t.address}
                     />
                     {user?.tenantId === t._id && <Chip label="Aktif" size="small" color="primary" />}
@@ -673,11 +677,11 @@ export default function BarberPage() {
 
       {/* Payment Dialog */}
       <Dialog open={payDialog.open} onClose={() => setPayDialog({ open: false, booking: null })} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700}>Pilih Metode Bayar</DialogTitle>
+        <DialogTitle fontWeight={500}>Pilih Metode Bayar</DialogTitle>
         <DialogContent>
           {payDialog.booking && (
             <Box className="text-center mb-4">
-              <Typography variant="h5" fontWeight={800} color="primary">
+              <Typography variant="h5" fontWeight={600} color="primary">
                 Rp {payDialog.booking.servicePrice.toLocaleString('id-ID')}
               </Typography>
               <Typography color="text.secondary">
@@ -704,7 +708,7 @@ export default function BarberPage() {
 
       {/* Receipt Dialog */}
       <Dialog open={receiptDialog} onClose={() => setReceiptDialog(false)} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700} className="text-center">
+        <DialogTitle fontWeight={500} className="text-center">
           <CheckCircleIcon color="success" sx={{ fontSize: 48 }} />
           <br />Pembayaran Berhasil!
         </DialogTitle>
@@ -715,7 +719,7 @@ export default function BarberPage() {
                 <Typography variant="body2" className="text-center font-bold" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: 13 }}>
                   {receiptData.shopName}
                 </Typography>
-                <Typography variant="caption" className="text-center block" sx={{ fontFamily: 'inherit' }}>✂ BARBERSHOP ✂</Typography>
+                <Typography variant="caption" className="text-center block" sx={{ fontFamily: 'inherit' }}> RECEIPT </Typography>
                 <Divider className="my-1" />
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
                   No  : #{receiptData.booking.queueNumber.toString().padStart(4, '0')}
@@ -752,11 +756,11 @@ export default function BarberPage() {
                 <Button fullWidth variant="outlined" startIcon={<PrintIcon />} onClick={printReceiptBrowser} size="small">Cetak Browser</Button>
               </Box>
 
-              {/* Upload foto hasil cukur (opsional) */}
+              {/* Upload foto hasil  (opsional) */}
               <Divider sx={{ my: 2 }} />
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="subtitle2" fontWeight={500} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <CameraAltIcon fontSize="small" />
-                Foto Hasil Cukur (Opsional, maks 3)
+                Foto Hasil (Opsional, maks 3)
               </Typography>
               <Box className="flex gap-2 flex-wrap mb-2">
                 {uploadPhotos.map((src, i) => (
@@ -799,15 +803,15 @@ export default function BarberPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog Foto Cukur Terakhir */}
+      {/* Dialog Foto  Terakhir */}
       <Dialog
         open={lastHaircutDialog.open}
         onClose={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}
         fullWidth maxWidth="xs"
       >
-        <DialogTitle fontWeight={700}>
+        <DialogTitle fontWeight={500}>
           <HistoryIcon sx={{ mr: 1, verticalAlign: 'middle', color: 'info.main' }} />
-          Foto Cukur Terakhir
+          Foto Terakhir
           {lastHaircutDialog.booking && (
             <Typography variant="caption" display="block" color="text.secondary">
               {lastHaircutDialog.booking.customerName}
@@ -821,7 +825,7 @@ export default function BarberPage() {
             <Box className="text-center py-8">
               <CameraAltIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
               <Typography color="text.secondary" className="mt-2">
-                Belum ada foto cukur tersimpan untuk customer ini
+                Belum ada foto tersimpan untuk customer ini
               </Typography>
             </Box>
           ) : (
@@ -849,6 +853,6 @@ export default function BarberPage() {
       </Dialog>
 
       <BarberBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

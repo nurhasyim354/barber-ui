@@ -15,6 +15,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface BarberReport {
@@ -98,18 +100,26 @@ export default function ReportsPage() {
   const grandTotal = report?.summary.totalRevenue ?? 0;
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
+    <AppPageShell variant="withBottomNav">
       <PageHeader title="Laporan per Barber" back />
 
-      <Box className="p-4 max-w-lg mx-auto">
+      <PageContainer>
 
         {/* Date Range Picker */}
         <Card className="mb-4">
           <CardContent className="pb-3">
-            <Typography variant="subtitle2" fontWeight={700} className="mb-3">
+            <Typography variant="subtitle2" fontWeight={500} className="mb-3">
               Rentang Tanggal
             </Typography>
-            <Box className="flex gap-3 items-end">
+            <Box
+              sx={{
+                mt: 2,
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                gap: 1.5,
+                alignItems: { xs: 'stretch', sm: 'flex-end' },
+              }}
+            >
               <TextField
                 label="Dari"
                 type="date"
@@ -158,33 +168,32 @@ export default function ReportsPage() {
             {/* Summary Card */}
             <Card className="mb-4 bg-gradient-to-r from-orange-500 to-orange-400">
               <CardContent>
-                <Typography variant="body2" sx={{ opacity: 0.85, color: 'white' }}>
+                <Typography variant="body2" sx={{ opacity: 0.85 }}>
                   Total Pendapatan
                 </Typography>
-                <Typography variant="h4" fontWeight={800} sx={{ color: 'white' }}>
+                <Typography variant="h5" fontWeight={400}>
                   {fmt(report.summary.totalRevenue)}
                 </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.75, color: 'white', mt: 0.5 }}>
+                <Typography variant="body2" sx={{ opacity: 0.75, mt: 0.5 }}>
                   {report.summary.completedBookings} booking selesai · {report.summary.totalTransactions} transaksi
                 </Typography>
 
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.3)', my: 1.5 }} />
 
                 <Box className="flex gap-4">
                   <Box className="flex items-center gap-1">
-                    <PaymentsIcon sx={{ fontSize: 18, color: 'white', opacity: 0.85 }} />
+                    <PaymentsIcon sx={{ fontSize: 18, opacity: 0.85 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ color: 'white', opacity: 0.75 }}>Tunai</Typography>
-                      <Typography variant="body2" fontWeight={700} sx={{ color: 'white' }}>
+                      <Typography variant="caption" sx={{ opacity: 0.75 }}>Tunai</Typography>
+                      <Typography variant="body2" fontWeight={500} sx={{  }}>
                         {fmt(report.summary.cashTotal)}
                       </Typography>
                     </Box>
                   </Box>
                   <Box className="flex items-center gap-1">
-                    <QrCodeIcon sx={{ fontSize: 18, color: 'white', opacity: 0.85 }} />
+                    <QrCodeIcon sx={{ fontSize: 18, opacity: 0.85 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ color: 'white', opacity: 0.75 }}>QRIS</Typography>
-                      <Typography variant="body2" fontWeight={700} sx={{ color: 'white' }}>
+                      <Typography variant="caption" sx={{ opacity: 0.75 }}>QRIS</Typography>
+                      <Typography variant="body2" fontWeight={500} sx={{ }}>
                         {fmt(report.summary.qrisTotal)}
                       </Typography>
                     </Box>
@@ -194,7 +203,7 @@ export default function ReportsPage() {
             </Card>
 
             {/* Per-Barber Cards */}
-            <Typography variant="h6" fontWeight={700} className="mb-3 flex items-center gap-2">
+            <Typography variant="h6" fontWeight={500} className="mb-3 flex items-center gap-2">
               <EmojiEventsIcon color="warning" />
               Peringkat Barber
             </Typography>
@@ -224,7 +233,7 @@ export default function ReportsPage() {
 
                         <Box className="flex-1 min-w-0">
                           <Box className="flex items-center gap-1 flex-wrap">
-                            <Typography fontWeight={700}>{b.barberName}</Typography>
+                            <Typography fontWeight={500}>{b.barberName}</Typography>
                             {i === 0 && <Chip label="Terbaik" size="small" color="warning" />}
                           </Box>
                           <Typography variant="caption" color="text.secondary">
@@ -233,7 +242,7 @@ export default function ReportsPage() {
                         </Box>
 
                         <Box className="text-right shrink-0">
-                          <Typography fontWeight={800} color="primary">
+                          <Typography fontWeight={600} color="primary">
                             {fmt(b.totalRevenue)}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
@@ -256,12 +265,12 @@ export default function ReportsPage() {
               })}
             </Box>
 
-            <Divider className="my-4" />
+           
 
             {/* Summary table */}
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight={700} className="mb-3">
+            <Card sx={{ mt: 2 }}>
+              <CardContent >
+                <Typography variant="subtitle1" fontWeight={500} className="mb-3">
                   <TrendingUpIcon color="primary" sx={{ mr: 1, verticalAlign: 'middle' }} />
                   Ringkasan
                 </Typography>
@@ -279,7 +288,7 @@ export default function ReportsPage() {
                       </Box>
                     </Box>
                     <Box className="text-right">
-                      <Typography variant="body2" fontWeight={700} color="primary">
+                      <Typography variant="body2" fontWeight={500} color="primary">
                         {fmt(b.totalRevenue)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -290,8 +299,8 @@ export default function ReportsPage() {
                 ))}
                 <Divider className="my-2" />
                 <Box className="flex justify-between items-center">
-                  <Typography fontWeight={700}>Grand Total</Typography>
-                  <Typography fontWeight={800} color="primary" variant="h6">
+                  <Typography fontWeight={500}>Grand Total</Typography>
+                  <Typography fontWeight={600} color="primary" variant="h6">
                     {fmt(grandTotal)}
                   </Typography>
                 </Box>
@@ -305,9 +314,9 @@ export default function ReportsPage() {
             </Card>
           </>
         )}
-      </Box>
+      </PageContainer>
 
       <TenantAdminBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

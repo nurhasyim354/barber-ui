@@ -4,11 +4,13 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Chip, CircularProgress, Avatar, Pagination,
 } from '@mui/material';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 
 interface Booking {
@@ -67,13 +69,13 @@ export default function HistoryPage() {
     });
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
+    <AppPageShell variant="withBottomNav">
       <PageHeader title={`Riwayat Layanan${total > 0 ? ` (${total})` : ''}`} />
 
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
-        <Box className="p-4 max-w-lg mx-auto">
+        <PageContainer>
           {history.length === 0 ? (
             <Box className="text-center py-16">
               <ContentCutIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
@@ -94,7 +96,7 @@ export default function HistoryPage() {
                         </Avatar>
                         <Box className="flex-1">
                           <Box className="flex items-center justify-between">
-                            <Typography fontWeight={700}>{b.serviceName}</Typography>
+                            <Typography fontWeight={500}>{b.serviceName}</Typography>
                             <Chip label={cfg.label} color={cfg.color} size="small" />
                           </Box>
                           <Typography variant="body2" color="text.secondary">
@@ -106,7 +108,7 @@ export default function HistoryPage() {
                             </Typography>
                           )}
                         </Box>
-                        <Typography fontWeight={700} color="primary" className="text-right">
+                        <Typography fontWeight={500} color="primary" className="text-right">
                           Rp {b.servicePrice.toLocaleString('id-ID')}
                         </Typography>
                       </CardContent>
@@ -128,10 +130,10 @@ export default function HistoryPage() {
               )}
             </>
           )}
-        </Box>
+        </PageContainer>
       )}
 
       <CustomerBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

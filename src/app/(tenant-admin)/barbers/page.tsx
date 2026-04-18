@@ -18,6 +18,8 @@ import api from '@/lib/api';
 import { compressImage } from '@/lib/imageUtils';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface Barber {
@@ -70,7 +72,7 @@ export default function BarbersPage() {
             setTotalPages(res.data.totalPages);
             setPage(p);
         } catch {
-            toast.error('Gagal memuat data barber');
+            toast.error('Gagal memuat data staff');
         } finally {
             setLoading(false);
         }
@@ -102,7 +104,7 @@ export default function BarbersPage() {
             setDialogOpen(false);
             loadBarbers(page);
         } catch {
-            toast.error('Gagal menyimpan data barber');
+            toast.error('Gagal menyimpan data staff');
         } finally {
             setSaving(false);
         }
@@ -111,7 +113,7 @@ export default function BarbersPage() {
     const handleToggleActive = async (b: Barber) => {
         try {
             await api.patch(`/barbers/${b._id}`, { isActive: !b.isActive });
-            toast.success(b.isActive ? 'Barber dinonaktifkan' : 'Barber diaktifkan');
+            toast.success(b.isActive ? 'Staff dinonaktifkan' : 'Staff diaktifkan');
             loadBarbers(page);
         } catch {
             toast.error('Gagal update status');
@@ -137,18 +139,18 @@ export default function BarbersPage() {
         if (!deleteId) return;
         try {
             await api.delete(`/barbers/${deleteId}`);
-            toast.success('Barber dihapus');
+            toast.success('Staff dihapus');
             setDeleteId(null);
             loadBarbers(page);
         } catch {
-            toast.error('Gagal menghapus barber');
+            toast.error('Gagal menghapus staff');
         }
     };
 
     return (
-        <Box className="min-h-screen bg-gray-50 pb-24">
+        <AppPageShell variant="withBottomNav">
             <PageHeader
-                title={`Tim Barber (${total})`}
+                title={`Tim Staff (${total})`}
                 right={
                     <Box className="flex items-center">
                         <IconButton color="inherit" onClick={openAdd}>
@@ -164,17 +166,17 @@ export default function BarbersPage() {
             {loading ? (
                 <Box className="flex justify-center mt-12"><CircularProgress /></Box>
             ) : (
-                <Box className="p-4 max-w-lg mx-auto">
+                <PageContainer>
                     {barbers.length === 0 ? (
                         <Card>
                             <CardContent className="text-center py-12">
                                 <PersonIcon sx={{ fontSize: 72, color: 'text.disabled' }} />
-                                <Typography variant="h6" color="text.secondary" className="mt-2">Belum ada barber</Typography>
+                                <Typography variant="h6" color="text.secondary" className="mt-2">Belum ada staff</Typography>
                                 <Typography variant="body2" color="text.disabled" className="mb-4">
-                                    Tambahkan barber untuk memulai
+                                    Tambahkan staff untuk memulai
                                 </Typography>
                                 <Button variant="contained" onClick={openAdd} startIcon={<AddIcon />}>
-                                    Tambah Barber Pertama
+                                    Tambah Staff Pertama
                                 </Button>
                             </CardContent>
                         </Card>
@@ -194,7 +196,7 @@ export default function BarbersPage() {
 
                                             <Box className="flex-1 min-w-0">
                                                 <Box className="flex items-center gap-2 flex-wrap">
-                                                    <Typography fontWeight={700} variant="h6">{b.name}</Typography>
+                                                    <Typography fontWeight={500} variant="h6">{b.name}</Typography>
                                                     {!b.isActive && (
                                                         <Chip label="Nonaktif" size="small" color="default" />
                                                     )}
@@ -246,12 +248,12 @@ export default function BarbersPage() {
                         )}
                         </>
                     )}
-                </Box>
+                </PageContainer>
             )}
 
             {/* Add / Edit Dialog */}
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
-                <DialogTitle fontWeight={700}>{editId ? 'Edit Barber' : 'Tambah Barber'}</DialogTitle>
+                <DialogTitle fontWeight={500}>{editId ? 'Edit Barber' : 'Tambah Barber'}</DialogTitle>
                 <DialogContent>
                     <Box className="flex flex-col gap-4 pt-2">
                         {/* Photo upload area */}
@@ -314,12 +316,12 @@ export default function BarbersPage() {
                         />
                         <TextField
                             fullWidth
-                            label="No. HP / WA (opsional — untuk akun login barber)"
+                            label="No. HP / WA (opsional — untuk akun login staff)"
                             value={form.phone}
                             onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
                             inputMode="tel"
                             placeholder="08xx xxxx xxxx"
-                            helperText={editId ? 'Kosongkan jika tidak ingin mengubah HP' : 'Jika diisi, barber bisa login via OTP WA'}
+                            helperText={editId ? 'Kosongkan jika tidak ingin mengubah HP' : 'Jika diisi, staff bisa login via OTP WA'}
                         />
                     </Box>
                 </DialogContent>
@@ -333,7 +335,7 @@ export default function BarbersPage() {
 
             {/* Delete Confirm */}
             <Dialog open={!!deleteId} onClose={() => setDeleteId(null)} maxWidth="xs" fullWidth>
-                <DialogTitle fontWeight={700}>Hapus Barber?</DialogTitle>
+                <DialogTitle fontWeight={500}>Hapus Barber?</DialogTitle>
                 <DialogContent>
                     <Typography color="text.secondary">Data barber akan dihapus permanen.</Typography>
                 </DialogContent>
@@ -344,6 +346,6 @@ export default function BarbersPage() {
             </Dialog>
 
             <TenantAdminBottomNav />
-        </Box>
+        </AppPageShell>
     );
 }

@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import StoreIcon from '@mui/icons-material/Store';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
@@ -16,6 +16,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 
 interface TenantReportItem {
   tenantId: string;
@@ -109,7 +111,7 @@ export default function AdminReportPage() {
             {label}
           </Typography>
         </Box>
-        <Typography variant="h6" fontWeight={800} sx={{ color, lineHeight: 1.2 }}>
+        <Typography variant="h6" fontWeight={600} sx={{ color, lineHeight: 1.2 }}>
           {value}
         </Typography>
         {sub && (
@@ -120,14 +122,14 @@ export default function AdminReportPage() {
   );
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-10">
+    <AppPageShell variant="reportFooter">
       <PageHeader title="Laporan Semua Tenant" back />
 
-      <Box className="p-4 max-w-3xl mx-auto">
+      <PageContainer maxWidth="md">
         {/* Filter */}
         <Card className="mb-4">
           <CardContent>
-            <Typography variant="subtitle2" fontWeight={700} mb={2}>
+            <Typography variant="subtitle2" fontWeight={500} mb={2}>
               Filter Periode
             </Typography>
             <Box className="flex gap-2 flex-wrap mb-3">
@@ -211,7 +213,7 @@ export default function AdminReportPage() {
             <Box className="flex gap-3 flex-wrap mb-5">
               <SummaryCard
                 icon={<StoreIcon />}
-                label="Total Barbershop"
+                label="Total Tenants"
                 value={String(report.summary.totalTenants)}
                 sub={`${report.summary.activeTenants} aktif`}
                 color="primary.main"
@@ -221,8 +223,8 @@ export default function AdminReportPage() {
             <Divider className="mb-4" />
 
             {/* Per-tenant list */}
-            <Typography variant="h6" fontWeight={700} mb={2}>
-              Detail per Barbershop
+            <Typography variant="h6" fontWeight={500} mb={2}>
+              Detail per Tenant
             </Typography>
 
             {report.tenants.length === 0 ? (
@@ -243,7 +245,7 @@ export default function AdminReportPage() {
                         </Avatar>
                         <Box className="flex-1">
                           <Box className="flex items-center gap-2">
-                            <Typography fontWeight={700}>{t.tenantName}</Typography>
+                            <Typography fontWeight={500}>{t.tenantName}</Typography>
                             <Chip
                               label={t.isActive ? 'Aktif' : 'Nonaktif'}
                               color={t.isActive ? 'success' : 'default'}
@@ -251,7 +253,7 @@ export default function AdminReportPage() {
                             />
                           </Box>
                         </Box>
-                        <Typography variant="h6" fontWeight={800} color="success.main">
+                        <Typography variant="h6" fontWeight={600} color="success.main">
                           {formatRp(t.totalRevenue)}
                         </Typography>
                       </Box>
@@ -267,7 +269,7 @@ export default function AdminReportPage() {
                               <Typography variant="caption" color="text.secondary" display="block">
                                 Transaksi
                               </Typography>
-                              <Typography fontWeight={700}>{t.totalTransactions}</Typography>
+                              <Typography fontWeight={500}>{t.totalTransactions}</Typography>
                             </Box>
                           </Box>
                         </Grid>
@@ -279,7 +281,7 @@ export default function AdminReportPage() {
                               <Typography variant="caption" color="text.secondary" display="block">
                                 Tunai
                               </Typography>
-                              <Typography fontWeight={700}>{formatRp(t.cashRevenue)}</Typography>
+                              <Typography fontWeight={500}>{formatRp(t.cashRevenue)}</Typography>
                             </Box>
                           </Box>
                         </Grid>
@@ -291,19 +293,31 @@ export default function AdminReportPage() {
                               <Typography variant="caption" color="text.secondary" display="block">
                                 QRIS
                               </Typography>
-                              <Typography fontWeight={700}>{formatRp(t.qrisRevenue)}</Typography>
+                              <Typography fontWeight={500}>{formatRp(t.qrisRevenue)}</Typography>
                             </Box>
                           </Box>
                         </Grid>
 
-                        <Grid item xs={4} sm={4}>
+                        <Grid item xs={6} sm={4}>
                           <Box className="flex items-center gap-1">
                             <ContentCutIcon sx={{ fontSize: 16, color: 'secondary.main' }} />
                             <Box>
                               <Typography variant="caption" color="text.secondary" display="block">
                                 Layanan
                               </Typography>
-                              <Typography fontWeight={700}>{t.totalServices}</Typography>
+                              <Typography fontWeight={500}>{t.totalServices}</Typography>
+                            </Box>
+                          </Box>
+                        </Grid>
+
+                        <Grid item xs={6} sm={4}>
+                          <Box className="flex items-center gap-1">
+                            <PeopleIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                Customer
+                              </Typography>
+                              <Typography fontWeight={500}>{t.totalCustomers}</Typography>
                             </Box>
                           </Box>
                         </Grid>
@@ -315,22 +329,12 @@ export default function AdminReportPage() {
                               <Typography variant="caption" color="text.secondary" display="block">
                                 Barber
                               </Typography>
-                              <Typography fontWeight={700}>{t.totalBarbers}</Typography>
+                              <Typography fontWeight={500}>{t.totalBarbers}</Typography>
                             </Box>
                           </Box>
                         </Grid>
 
-                        <Grid item xs={4} sm={4}>
-                          <Box className="flex items-center gap-1">
-                            <PeopleIcon sx={{ fontSize: 16, color: 'warning.main' }} />
-                            <Box>
-                              <Typography variant="caption" color="text.secondary" display="block">
-                                Customer
-                              </Typography>
-                              <Typography fontWeight={700}>{t.totalCustomers}</Typography>
-                            </Box>
-                          </Box>
-                        </Grid>
+                        
                       </Grid>
                     </CardContent>
                   </Card>
@@ -339,7 +343,7 @@ export default function AdminReportPage() {
             )}
           </>
         ) : null}
-      </Box>
-    </Box>
+      </PageContainer>
+    </AppPageShell>
   );
 }

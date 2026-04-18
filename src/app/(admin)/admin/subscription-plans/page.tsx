@@ -12,6 +12,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 
 interface Plan {
   _id: string;
@@ -89,7 +91,7 @@ export default function SubscriptionPlansPage() {
   };
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-8">
+    <AppPageShell variant="adminFooter">
       <PageHeader
         title="Konfigurasi Paket"
         back
@@ -100,7 +102,7 @@ export default function SubscriptionPlansPage() {
         }
       />
 
-      <Box className="p-4 max-w-lg mx-auto">
+      <PageContainer>
         <Typography variant="body2" color="text.secondary" mb={3}>
           Atur harga dan batas transaksi untuk setiap paket berlangganan.
           Perubahan akan diterapkan saat penghitungan tagihan berikutnya.
@@ -116,7 +118,7 @@ export default function SubscriptionPlansPage() {
                   <Box className="flex items-start justify-between">
                     <Box>
                       <Box className="flex items-center gap-2 mb-1">
-                        <Typography variant="h6" fontWeight={700}>{p.displayName}</Typography>
+                        <Typography variant="h6" fontWeight={500}>{p.displayName}</Typography>
                         <Chip
                           label={p.isActive ? 'Aktif' : 'Nonaktif'}
                           color={p.isActive ? 'success' : 'default'}
@@ -128,7 +130,7 @@ export default function SubscriptionPlansPage() {
                         {p.minTransactions}
                         {p.maxTransactions != null ? ` – ${p.maxTransactions}` : '+'} /bulan
                       </Typography>
-                      <Typography variant="body2" color={p.pricePerMonth === 0 ? 'success.main' : 'primary.main'} fontWeight={700}>
+                      <Typography variant="body2" color={p.pricePerMonth === 0 ? 'success.main' : 'primary.main'} fontWeight={500}>
                         {p.pricePerMonth === 0 ? 'Gratis' : `Rp ${p.pricePerMonth.toLocaleString('id-ID')} / bulan`}
                       </Typography>
                     </Box>
@@ -141,11 +143,11 @@ export default function SubscriptionPlansPage() {
             ))}
           </Box>
         )}
-      </Box>
+      </PageContainer>
 
       {/* Edit Dialog */}
       <Dialog open={dialog.open} onClose={() => setDialog({ open: false, plan: null })} fullWidth maxWidth="xs">
-        <DialogTitle fontWeight={700}>
+        <DialogTitle fontWeight={500}>
           Edit Paket — {dialog.plan?.name}
         </DialogTitle>
         <DialogContent>
@@ -186,6 +188,6 @@ export default function SubscriptionPlansPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </AppPageShell>
   );
 }

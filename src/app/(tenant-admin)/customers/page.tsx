@@ -9,10 +9,13 @@ import SearchIcon from '@mui/icons-material/Search';
 import PhoneIcon from '@mui/icons-material/Phone';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LogoutIcon from '@mui/icons-material/Logout';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface Customer {
@@ -26,7 +29,7 @@ interface Customer {
 const PAGE_SIZE = 20;
 
 export default function CustomersPage() {
-  const { user, isLoading, loadFromStorage } = useAuthStore();
+  const { user, isLoading, loadFromStorage, logout } = useAuthStore();
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
@@ -84,10 +87,19 @@ export default function CustomersPage() {
     name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
-      <PageHeader title={`Pelanggan (${total})`} />
+    <AppPageShell variant="withBottomNav">
+      <PageHeader title={`Pelanggan (${total})`}
 
-      <Box className="p-4 max-w-lg mx-auto">
+        right={
+          <Box className="flex items-center">
+            <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>
+              <LogoutIcon />
+            </IconButton>
+          </Box>
+        }
+      />
+
+      <PageContainer>
         <Box className="flex gap-2 mb-4">
           <TextField
             fullWidth
@@ -134,7 +146,7 @@ export default function CustomersPage() {
                     </Avatar>
                     <Box className="flex-1">
                       <Box className="flex items-center gap-2">
-                        <Typography fontWeight={700}>{c.name}</Typography>
+                        <Typography fontWeight={500}>{c.name}</Typography>
                         {!c.isActive && <Chip label="Nonaktif" size="small" color="error" />}
                       </Box>
                       <Box className="flex items-center gap-1">
@@ -176,9 +188,9 @@ export default function CustomersPage() {
             )}
           </>
         )}
-      </Box>
+      </PageContainer>
 
       <TenantAdminBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }

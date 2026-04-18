@@ -17,7 +17,10 @@ import { compressImage } from '@/lib/imageUtils';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import AppPageShell from '@/components/layout/AppPageShell';
+import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
+import { defaultBrandPalette } from '@/lib/uiStyleConfig';
 
 interface TenantTheme {
   primaryColor: string;
@@ -27,10 +30,10 @@ interface TenantTheme {
 }
 
 const DEFAULT_THEME: TenantTheme = {
-  primaryColor: '#8B3A2A',
-  accentColor: '#2C3A47',
-  bgColor: '#F0EDE8',
-  paperColor: '#FFFFFF',
+  primaryColor: defaultBrandPalette.primary,
+  accentColor: defaultBrandPalette.secondary,
+  bgColor: defaultBrandPalette.background,
+  paperColor: defaultBrandPalette.paper,
 };
 
 interface TenantSettings {
@@ -95,14 +98,14 @@ export default function SettingsPage() {
       setQrisImage(t.qrisImageBase64 || '');
       setTheme(t.theme ?? DEFAULT_THEME);
     } catch {
-      toast.error('Gagal memuat data barbershop');
+      toast.error('Gagal memuat data tenant');
     } finally {
       setLoading(false);
     }
   }, [user]);
 
   const handleSave = async () => {
-    if (!form.name.trim()) { toast.error('Nama barbershop wajib diisi'); return; }
+    if (!form.name.trim()) { toast.error('Nama Tenant wajib diisi'); return; }
 
     const lat = form.gpsLat ? parseFloat(form.gpsLat) : null;
     const lng = form.gpsLng ? parseFloat(form.gpsLng) : null;
@@ -201,24 +204,24 @@ export default function SettingsPage() {
     : 0;
 
   return (
-    <Box className="min-h-screen bg-gray-50 pb-24">
-      <PageHeader title="Pengaturan Barbershop" back />
+    <AppPageShell variant="withBottomNav">
+      <PageHeader title="Pengaturan Tenant" back />
 
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
-        <Box className="p-4 max-w-lg mx-auto flex flex-col gap-4">
+        <PageContainer sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
-          {/* Info Barbershop */}
+          {/* Info Tenant */}
           <Card>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} className="mb-3">
-                Informasi Barbershop
+              <Typography variant="subtitle1" fontWeight={500} className="mb-3">
+                Informasi Umum
               </Typography>
-              <Box className="flex flex-col gap-3">
+              <Box className="flex flex-col gap-3 mt-3">
                 <TextField
                   fullWidth
-                  label="Nama Barbershop *"
+                  label="Nama Tenant *"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
@@ -248,7 +251,7 @@ export default function SettingsPage() {
               <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                 <Box display="flex" alignItems="center" gap={1}>
                   <QrCodeIcon color="primary" />
-                  <Typography variant="subtitle1" fontWeight={700}>
+                  <Typography variant="subtitle1" fontWeight={500}>
                     Gambar QRIS Pembayaran
                   </Typography>
                 </Box>
@@ -358,7 +361,7 @@ export default function SettingsPage() {
           <Card>
             <CardContent>
               <Box className="flex items-center justify-between mb-3">
-                <Typography variant="subtitle1" fontWeight={700}>
+                <Typography variant="subtitle1" fontWeight={500}>
                   Lokasi GPS
                 </Typography>
                 <Button
@@ -368,7 +371,7 @@ export default function SettingsPage() {
                   onClick={detectLocation}
                   disabled={detecting}
                 >
-                  {detecting ? 'Mendeteksi...' : 'Deteksi Otomatis'}
+                  {detecting ? 'Mendeteksi...' : 'Deteksi'}
                 </Button>
               </Box>
 
@@ -432,7 +435,7 @@ export default function SettingsPage() {
           {/* Theme Customization */}
           <Card>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} className="mb-1">
+              <Typography variant="subtitle1" fontWeight={500} className="mb-1">
                 Tema Warna
               </Typography>
               <Typography variant="caption" color="text.secondary" className="mb-3 block">
@@ -487,7 +490,7 @@ export default function SettingsPage() {
             <Card className="bg-gray-50">
               <CardContent className="py-3">
                 <Typography variant="body2" color="text.secondary">
-                  ID Barbershop: <span className="font-mono">{tenant._id}</span>
+                  ID Tenant: <span className="font-mono">{tenant._id}</span>
                 </Typography>
               </CardContent>
             </Card>
@@ -503,10 +506,10 @@ export default function SettingsPage() {
           >
             {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
           </Button>
-        </Box>
+        </PageContainer>
       )}
 
       <TenantAdminBottomNav />
-    </Box>
+    </AppPageShell>
   );
 }
