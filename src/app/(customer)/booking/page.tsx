@@ -1139,7 +1139,7 @@ function BookingContent() {
 
           <TextField
             fullWidth multiline rows={3} label="Catatan (opsional)"
-            placeholder="Contoh: potong pendek bagian samping"
+            placeholder={bookingLabels.bookingNotesPlaceholder}
             value={notes} onChange={(e) => setNotes(e.target.value)}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
             InputProps={{

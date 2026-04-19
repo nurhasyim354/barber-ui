@@ -46,6 +46,8 @@ export interface TenantUiLabels {
   editStaffTitle: string;
   /** Placeholder spesialisasi */
   specialtyPlaceholder: string;
+  /** Placeholder catatan booking pelanggan (opsional) */
+  bookingNotesPlaceholder: string;
   /** Label field nama */
   staffNameFieldLabel: string;
   /** Konfirmasi hapus */
@@ -67,6 +69,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     addStaffTitle: 'Tambah Barber',
     editStaffTitle: 'Edit Barber',
     specialtyPlaceholder: 'Contoh: Fade, Undercut, Classic Cut',
+    bookingNotesPlaceholder: 'Contoh: potong pendek bagian samping',
     staffNameFieldLabel: 'Nama Barber *',
     deleteStaffTitle: 'Hapus Barber?',
     assigneeReceiptLabel: 'Barber',
@@ -83,6 +86,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     addStaffTitle: 'Tambah Dokter',
     editStaffTitle: 'Edit Dokter',
     specialtyPlaceholder: 'Contoh: Umum, Anak, Jantung',
+    bookingNotesPlaceholder: 'Contoh: keluhan singkat, alergi obat (jika ada)',
     staffNameFieldLabel: 'Nama Dokter *',
     deleteStaffTitle: 'Hapus Dokter?',
     assigneeReceiptLabel: 'Dokter',
@@ -99,6 +103,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     addStaffTitle: 'Tambah Mekanik',
     editStaffTitle: 'Edit Mekanik',
     specialtyPlaceholder: 'Contoh: Tune-up, Listrik, CVT',
+    bookingNotesPlaceholder: 'Contoh: suara mesin kasar, oli rembes',
     staffNameFieldLabel: 'Nama Mekanik *',
     deleteStaffTitle: 'Hapus Mekanik?',
     assigneeReceiptLabel: 'Mekanik',
@@ -115,6 +120,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     addStaffTitle: 'Tambah Terapis',
     editStaffTitle: 'Edit Terapis',
     specialtyPlaceholder: 'Contoh: Facial, Massage, Hair spa',
+    bookingNotesPlaceholder: 'Contoh: tekanan pijat ringan, kulit sensitif',
     staffNameFieldLabel: 'Nama Terapis *',
     deleteStaffTitle: 'Hapus Terapis?',
     assigneeReceiptLabel: 'Terapis',
@@ -131,6 +137,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     addStaffTitle: 'Tambah Staff',
     editStaffTitle: 'Edit Staff',
     specialtyPlaceholder: 'Contoh: Konsultasi, Editing, Instalasi',
+    bookingNotesPlaceholder: 'Contoh: detail singkat kebutuhan, preferensi jadwal',
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',

@@ -16,6 +16,9 @@ import {
   Slider,
   Chip,
   useTheme,
+  Menu,
+  MenuItem,
+  Divider,
 } from '@mui/material';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
@@ -25,6 +28,12 @@ import HandymanIcon from '@mui/icons-material/Handyman';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import ReplayIcon from '@mui/icons-material/Replay';
+import InsightsIcon from '@mui/icons-material/Insights';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import {
   BUSINESS_VERTICALS,
   MARKETING_FEATURES,
@@ -32,6 +41,7 @@ import {
   type BusinessVerticalId,
   projectRevenue,
 } from '@/lib/marketingLanding';
+import { TUTORIAL_PAGES, audienceLabel } from '@/lib/tutorialContent';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 
 const verticalIcons: Record<BusinessVerticalId, React.ReactNode> = {
@@ -42,6 +52,29 @@ const verticalIcons: Record<BusinessVerticalId, React.ReactNode> = {
   jasa_umum: <HandymanIcon sx={{ fontSize: 40 }} />,
 };
 
+const TENANT_BENEFITS: { icon: React.ReactNode; title: string; body: string }[] = [
+  {
+    icon: <ScheduleIcon color="primary" />,
+    title: 'Lebih sedikit tanya jawab di depan',
+    body: 'Nomor antrian dan estimasi tunggu terlihat di HP pelanggan — staff fokus melayani, bukan menjelaskan berulang.',
+  },
+  {
+    icon: <AccountBalanceWalletOutlinedIcon color="primary" />,
+    title: 'Pendapatan tercatat rapi',
+    body: 'Tunai maupun QRIS masuk ke sistem yang sama; Anda bisa cek omzet per hari, per layanan, atau per staff tanpa rekap manual.',
+  },
+  {
+    icon: <ReplayIcon color="primary" />,
+    title: 'Pelanggan lebih mudah kembali',
+    body: 'Pengingat WhatsApp dan riwayat kunjungan memudahkan mereka booking lagi — potensi repeat order tanpa promosi besar-besaran.',
+  },
+  {
+    icon: <InsightsIcon color="primary" />,
+    title: 'Keputusan dari angka nyata',
+    body: 'Lihat layanan yang paling laku, jam sibuk, dan performa outlet — cocok untuk menaikkan harga wajar atau menambah slot.',
+  },
+];
+
 function fmtRp(n: number) {
   return `Rp ${n.toLocaleString('id-ID')}`;
 }
@@ -50,6 +83,8 @@ export default function HomeMarketing() {
   const theme = useTheme();
   const [vertical, setVertical] = useState<BusinessVertical>(BUSINESS_VERTICALS[1]);
   const [revenueSlider, setRevenueSlider] = useState(35); // juta Rp
+  const [tutorialAnchor, setTutorialAnchor] = useState<null | HTMLElement>(null);
+  const closeTutorialMenu = () => setTutorialAnchor(null);
 
   const baseRp = useMemo(() => revenueSlider * 1_000_000, [revenueSlider]);
   const projection = useMemo(() => projectRevenue(baseRp, vertical), [baseRp, vertical]);
@@ -59,13 +94,65 @@ export default function HomeMarketing() {
       <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
         <Toolbar sx={{ maxWidth: 1200, mx: 'auto', width: '100%' }}>
           <Typography variant="h6" fontWeight={800} color="primary" sx={{ flexGrow: 1 }}>
-            BookingOutlet
+            Booking App
           </Typography>
+          <Button
+            id="tutorial-menu-button"
+            color="inherit"
+            onClick={(e) => setTutorialAnchor(e.currentTarget)}
+            startIcon={<MenuBookIcon />}
+            endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 18 }} />}
+            sx={{ mr: 0.5, display: { xs: 'none', sm: 'inline-flex' } }}
+          >
+            Tutorial
+          </Button>
+          <Button
+            color="inherit"
+            onClick={(e) => setTutorialAnchor(e.currentTarget)}
+            aria-label="Menu tutorial"
+            sx={{ mr: 0.5, display: { xs: 'inline-flex', sm: 'none' } }}
+          >
+            <MenuBookIcon />
+          </Button>
+          <Menu
+            anchorEl={tutorialAnchor}
+            open={Boolean(tutorialAnchor)}
+            onClose={closeTutorialMenu}
+            MenuListProps={{ 'aria-labelledby': 'tutorial-menu-button' }}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            PaperProps={{ sx: { maxHeight: 420, minWidth: 280 } }}
+          >
+            <MenuItem component={Link} href="/tutorial" onClick={closeTutorialMenu}>
+              <Typography variant="body2" fontWeight={700}>
+                Semua panduan
+              </Typography>
+            </MenuItem>
+            <Divider />
+            {TUTORIAL_PAGES.map((p) => (
+              <MenuItem
+                key={p.slug}
+                component={Link}
+                href={`/tutorial/${p.slug}`}
+                onClick={closeTutorialMenu}
+                sx={{ alignItems: 'flex-start', py: 1.25 }}
+              >
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    {p.title}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {audienceLabel(p.audience)} · ±{p.readMinutes} menit
+                  </Typography>
+                </Box>
+              </MenuItem>
+            ))}
+          </Menu>
           <Button component={Link} href="/login" color="inherit">
             Masuk
           </Button>
           <Button component={Link} href={`/daftar?bisnis=${vertical.id}`} variant="contained" sx={{ ml: 1 }}>
-            Daftar tenant
+            Daftar
           </Button>
         </Toolbar>
       </AppBar>
@@ -81,14 +168,12 @@ export default function HomeMarketing() {
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px }}>
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={7}>
-              <Chip label="Multi-tenant · Mobile-first" size="small" sx={{ mb: 2 }} color="primary" variant="outlined" />
               <Typography variant="h3" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.85rem', sm: '2.5rem', md: '3rem' }, lineHeight: 1.15 }}>
-                Antrian rapi, pendapatan lebih terukur — untuk klinik, barbershop, bengkel, dan bisnis servis lainnya.
+                Antrian rapi, pendapatan lebih terukur.
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mt: 2, maxWidth: 560 }}>
-                Satu aplikasi untuk booking pelanggan, mengelola staff, kasir, QRIS, dan laporan — termasuk pengingat WA agar
-                pelanggan kembali dan tampilan hasil layanan terakhir di HP mereka. Pilih jenis bisnis Anda, lihat simulasi
-                potensi kenaikan omzet, lalu ajukan pembukaan outlet.
+                Booking, staff, kasir, laporan, dan pengingat WA dalam satu tempat. Pilih jenis bisnis, cek simulasi omzet,
+                lalu daftarkan outlet Anda.
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
                 <Button component={Link} href={`/daftar?bisnis=${vertical.id}`} variant="contained" size="large">
@@ -116,6 +201,47 @@ export default function HomeMarketing() {
                 </CardContent>
               </Card>
             </Grid>
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* Kenapa harus daftar? */}
+      <Box sx={{ bgcolor: (t) => (t.palette.mode === 'light' ? 'grey.50' : 'grey.900'), py: { xs: 6, md: 8 } }}>
+        <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px }}>
+          <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+            Kenapa harus daftar?
+          </Typography>
+          <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ mb: 4, maxWidth: 640, mx: 'auto' }}>
+            Yang Anda dapat bukan sekadar aplikasi booking — alur kerja outlet jadi lebih ringan dan hasil finansial lebih mudah dibaca.
+          </Typography>
+          <Grid container spacing={2}>
+            {TENANT_BENEFITS.map((b) => (
+              <Grid item xs={12} sm={6} key={b.title}>
+                <Card
+                  variant="outlined"
+                  sx={{
+                    height: '100%',
+                    borderRadius: 2,
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                  }}
+                >
+                  <CardContent sx={{ p: 2.5 }}>
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                      <Box sx={{ mt: 0.25 }}>{b.icon}</Box>
+                      <Box>
+                        <Typography fontWeight={700} gutterBottom>
+                          {b.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {b.body}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
           </Grid>
         </Container>
       </Box>
