@@ -6,8 +6,9 @@ import ThemeRegistry from '@/components/ThemeRegistry';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Booking App',
-  description: 'Aplikasi Booking',
+  title: 'BookingOutlet — Antrian & booking multi-outlet',
+  description:
+    'Platform booking dan antrian untuk klinik, barbershop, bengkel, dan bisnis servis. Daftar tenant, kelola outlet, kasir, dan laporan.',
 };
 
 export const viewport = {

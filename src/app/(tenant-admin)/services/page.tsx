@@ -17,6 +17,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 interface Service {
   _id: string;
@@ -31,6 +32,7 @@ const defaultForm = { name: '', description: '', price: '', durationMinutes: '30
 
 export default function ServicesPage() {
   const { user, isLoading, loadFromStorage, logout } = useAuthStore();
+  const ui = getTenantUiLabels(user?.tenantType);
   const router = useRouter();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +127,7 @@ export default function ServicesPage() {
 
   return (
     <AppPageShell variant="withBottomNav">
-      <PageHeader title="Kelola Layanan"
+      <PageHeader title={`Kelola ${ui.navServices}`}
       
       right={
                     <Box className="flex items-center">

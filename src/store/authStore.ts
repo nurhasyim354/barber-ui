@@ -8,6 +8,8 @@ export interface AuthUser {
   role: 'super_admin' | 'tenant_admin' | 'customer' | 'barber';
   tenantId?: string | null;
   barberId?: string | null;
+  /** Dari tenant aktif — untuk salinan UI per vertikal */
+  tenantType?: string | null;
 }
 
 interface AuthState {

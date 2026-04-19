@@ -21,6 +21,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 interface Barber {
     _id: string;
@@ -90,16 +91,18 @@ export default function BarbersPage() {
         setDialogOpen(true);
     };
 
+    const ui = getTenantUiLabels(user?.tenantType);
+
     const handleSave = async () => {
         if (!form.name.trim()) { toast.error('Nama wajib diisi'); return; }
         setSaving(true);
         try {
             if (editId) {
                 await api.patch(`/barbers/${editId}`, { ...form, isActive: true });
-                toast.success('Barber diupdate');
+                toast.success(`${ui.staffSingular} diupdate`);
             } else {
                 await api.post('/barbers', form);
-                toast.success('Barber berhasil ditambahkan');
+                toast.success(`${ui.staffSingular} berhasil ditambahkan`);
             }
             setDialogOpen(false);
             loadBarbers(page);
@@ -150,7 +153,7 @@ export default function BarbersPage() {
     return (
         <AppPageShell variant="withBottomNav">
             <PageHeader
-                title={`Tim Staff (${total})`}
+                title={`${ui.staffTeamTitle} (${total})`}
                 right={
                     <Box className="flex items-center">
                         <IconButton color="inherit" onClick={openAdd}>
@@ -253,7 +256,7 @@ export default function BarbersPage() {
 
             {/* Add / Edit Dialog */}
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
-                <DialogTitle fontWeight={500}>{editId ? 'Edit Barber' : 'Tambah Barber'}</DialogTitle>
+                <DialogTitle fontWeight={500}>{editId ? ui.editStaffTitle : ui.addStaffTitle}</DialogTitle>
                 <DialogContent>
                     <Box className="flex flex-col gap-4 pt-2">
                         {/* Photo upload area */}
@@ -303,7 +306,7 @@ export default function BarbersPage() {
 
                         <TextField
                             fullWidth
-                            label="Nama Barber *"
+                            label={ui.staffNameFieldLabel}
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
                         />
@@ -312,7 +315,7 @@ export default function BarbersPage() {
                             label="Spesialisasi (opsional)"
                             value={form.specialty}
                             onChange={(e) => setForm({ ...form, specialty: e.target.value })}
-                            placeholder="Contoh: Fade, Undercut, Classic Cut"
+                            placeholder={ui.specialtyPlaceholder}
                         />
                         <TextField
                             fullWidth
@@ -335,9 +338,9 @@ export default function BarbersPage() {
 
             {/* Delete Confirm */}
             <Dialog open={!!deleteId} onClose={() => setDeleteId(null)} maxWidth="xs" fullWidth>
-                <DialogTitle fontWeight={500}>Hapus Barber?</DialogTitle>
+                <DialogTitle fontWeight={500}>{ui.deleteStaffTitle}</DialogTitle>
                 <DialogContent>
-                    <Typography color="text.secondary">Data barber akan dihapus permanen.</Typography>
+                    <Typography color="text.secondary">Data {ui.staffSingular.toLowerCase()} akan dihapus permanen.</Typography>
                 </DialogContent>
                 <DialogActions className="p-4 gap-2">
                     <Button onClick={() => setDeleteId(null)} variant="outlined" fullWidth>Batal</Button>

@@ -26,6 +26,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 interface Booking {
   _id: string;
@@ -149,6 +150,7 @@ function buildReceipt(data: ReceiptData): string {
 
 export default function PosPage() {
   const { user, isLoading, loadFromStorage, logout } = useAuthStore();
+  const ui = getTenantUiLabels(user?.tenantType);
   const router = useRouter();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -237,7 +239,7 @@ export default function PosPage() {
     setSavingBarber(true);
     try {
       await api.patch(`/bookings/${booking._id}/barber`, { barberId: selectedBarberId });
-      toast.success('Barber berhasil diubah');
+      toast.success(`Penugasan ${ui.staffSingular} berhasil diubah`);
       setBarberDialog({ open: false, booking: null });
       loadBookings();
     } catch {
@@ -343,6 +345,7 @@ export default function PosPage() {
   const printReceiptBrowser = () => {
     if (!receiptData) return;
     const { booking, payment, shopName } = receiptData;
+    const assigneeLabel = ui.assigneeReceiptLabel;
     const date = new Date(payment.paidAt).toLocaleString('id-ID', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
@@ -382,7 +385,7 @@ export default function PosPage() {
         <div class="divider"></div>
         <div class="center bold spacer">${booking.serviceName}</div>
         <div>Pelanggan : ${booking.customerName}</div>
-        ${booking.barberName ? `<div>Barber    : ${booking.barberName}</div>` : ''}
+        ${booking.barberName ? `<div>${assigneeLabel}    : ${booking.barberName}</div>` : ''}
         ${booking.notes ? `<div>Catatan   : ${booking.notes}</div>` : ''}
         <div class="divider"></div>
         <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
@@ -632,7 +635,7 @@ export default function PosPage() {
                   </Typography>
                   {payDialog.booking.barberName && (
                     <Typography variant="body2" color="text.secondary">
-                      Barber: {payDialog.booking.barberName}
+                      {ui.assigneeReceiptLabel}: {payDialog.booking.barberName}
                     </Typography>
                   )}
                 </Box>
@@ -809,7 +812,7 @@ export default function PosPage() {
                 </Typography>
                 {receiptData.booking.barberName && (
                   <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                    Barber: {receiptData.booking.barberName}
+                    {ui.assigneeReceiptLabel}: {receiptData.booking.barberName}
                   </Typography>
                 )}
                 <Divider className="my-1" />
@@ -920,14 +923,14 @@ export default function PosPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Change Barber Dialog */}
+      {/* Ganti penugasan staff */}
       <Dialog
         open={barberDialog.open}
         onClose={() => setBarberDialog({ open: false, booking: null })}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle fontWeight={500}>Ganti Staff</DialogTitle>
+        <DialogTitle fontWeight={500}>Ganti {ui.staffSingular}</DialogTitle>
         <DialogContent sx={{ pt: 0 }}>
           {barberDialog.booking && (
             <Typography variant="body2" color="text.secondary" mb={1}>

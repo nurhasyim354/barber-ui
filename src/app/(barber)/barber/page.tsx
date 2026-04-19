@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, Chip,
@@ -26,6 +26,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { BarberBottomNav } from '@/components/layout/BottomNav';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 interface Booking {
   _id: string;
@@ -52,6 +53,7 @@ interface Tenant {
   _id: string;
   name: string;
   address?: string;
+  tenantType?: string;
 }
 
 interface Payment {
@@ -156,6 +158,11 @@ export default function BarberPage() {
 
   const lastBookingRef = useRef<Booking | null>(null);
 
+  const ui = useMemo(
+    () => getTenantUiLabels(user?.tenantType ?? currentTenant?.tenantType),
+    [user?.tenantType, currentTenant?.tenantType],
+  );
+
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
   useEffect(() => {
@@ -194,7 +201,8 @@ export default function BarberPage() {
     try {
       const res = await api.post('/auth/switch-tenant', { tenantId: tenant._id });
       setAuth(res.data.user, res.data.token);
-      setCurrentTenant(tenant);
+      const tRes = await api.get(`/tenants/${tenant._id}`);
+      setCurrentTenant(tRes.data);
       setTenantDialogOpen(false);
       loadBookings(tenant._id);
     } catch {
@@ -341,6 +349,7 @@ export default function BarberPage() {
   const printReceiptBrowser = () => {
     if (!receiptData) return;
     const { booking, payment, shopName } = receiptData;
+    const assigneeLabel = ui.assigneeReceiptLabel;
     const date = new Date(payment.paidAt).toLocaleString('id-ID', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
@@ -360,7 +369,7 @@ export default function BarberPage() {
       <div class="divider"></div>
       <div class="center bold spacer">${booking.serviceName}</div>
       <div>Pelanggan : ${booking.customerName}</div>
-      ${booking.barberName ? `<div>Barber    : ${booking.barberName}</div>` : ''}
+      ${booking.barberName ? `<div>${assigneeLabel}    : ${booking.barberName}</div>` : ''}
       ${booking.notes ? `<div>Catatan   : ${booking.notes}</div>` : ''}
       <div class="divider"></div>
       <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
@@ -465,7 +474,7 @@ export default function BarberPage() {
                 </Avatar>
                 <Box className="flex-1">
                   <Typography fontWeight={500}>{user?.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">Barber · {currentTenant?.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{ui.staffSingular} · {currentTenant?.name}</Typography>
                 </Box>
                 <FormControlLabel
                   control={
@@ -518,7 +527,7 @@ export default function BarberPage() {
                           {mine ? (
                             <Chip label="Antrian Saya" size="small" color="primary" variant="outlined" />
                           ) : (
-                            <Chip label={b.barberName ? `Staff: ${b.barberName}` : 'Belum ada staff'} size="small" color="default" variant="outlined" />
+                            <Chip label={b.barberName ? `${ui.navStaff}: ${b.barberName}` : `Belum ada ${ui.staffSingular.toLowerCase()}`} size="small" color="default" variant="outlined" />
                           )}
                         </Box>
                         <Typography fontWeight={600}>{b.customerName}</Typography>
@@ -736,7 +745,7 @@ export default function BarberPage() {
                 </Typography>
                 {receiptData.booking.barberName && (
                   <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                    Barber: {receiptData.booking.barberName}
+                    {ui.assigneeReceiptLabel}: {receiptData.booking.barberName}
                   </Typography>
                 )}
                 <Divider className="my-1" />

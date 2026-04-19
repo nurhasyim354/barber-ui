@@ -2,9 +2,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Box, Card, CardContent, Typography, Chip, CircularProgress, Avatar, Pagination,
+  Box, Card, CardContent, Typography, Chip, CircularProgress, Avatar, Pagination, Alert,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -12,15 +14,40 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 interface Booking {
   _id: string;
+  tenantId?: string;
   serviceName: string;
   servicePrice: number;
   queueNumber: number;
   status: string;
   date: string;
   notes?: string;
+  barberName?: string | null;
+}
+
+interface LastDoneVisit {
+  _id: string;
+  serviceName: string;
+  servicePrice: number;
+  queueNumber: number;
+  barberName: string | null;
+  date: string;
+}
+
+interface HaircutPhoto {
+  _id: string;
+  photos: string[];
+  barberName?: string | null;
+  createdAt: string;
+}
+
+interface TenantPublic {
+  name: string;
+  customerReturnReminderDays?: number;
+  tenantType?: string;
 }
 
 const statusConfig: Record<string, { label: string; color: 'warning' | 'info' | 'success' | 'error' | 'default' }> = {
@@ -40,6 +67,9 @@ export default function HistoryPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [lastDone, setLastDone] = useState<LastDoneVisit | null>(null);
+  const [lastPhotos, setLastPhotos] = useState<HaircutPhoto | null>(null);
+  const [tenantInfo, setTenantInfo] = useState<TenantPublic | null>(null);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
   useEffect(() => {
@@ -52,30 +82,96 @@ export default function HistoryPage() {
     setLoading(true);
     try {
       const res = await api.get(`/bookings/history?page=${p}&limit=${PAGE_SIZE}`);
-      setHistory(res.data.data);
+      const rows: Booking[] = res.data.data;
+      setHistory(rows);
       setTotal(res.data.total);
       setTotalPages(res.data.totalPages);
       setPage(p);
+
+      const tid = user?.tenantId ?? rows.find((b) => b.tenantId)?.tenantId ?? null;
+      if (tid) {
+        try {
+          const [doneRes, photoRes, tRes] = await Promise.all([
+            api.get(`/bookings/my-last-done?tenantId=${tid}`),
+            api.get(`/haircut-photos/my-last?tenantId=${tid}`),
+            api.get(`/tenants/${tid}`),
+          ]);
+          setLastDone(doneRes.data ?? null);
+          setLastPhotos(photoRes.data ?? null);
+          setTenantInfo({
+            name: tRes.data.name,
+            customerReturnReminderDays: tRes.data.customerReturnReminderDays,
+            tenantType: tRes.data.tenantType,
+          });
+        } catch {
+          setLastDone(null);
+          setLastPhotos(null);
+          setTenantInfo(null);
+        }
+      } else {
+        setLastDone(null);
+        setLastPhotos(null);
+        setTenantInfo(null);
+      }
     } catch {
       toast.error('Gagal memuat riwayat');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('id-ID', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     });
 
+  const historyTitle = getTenantUiLabels(tenantInfo?.tenantType ?? user?.tenantType).historyPageTitle;
+
   return (
     <AppPageShell variant="withBottomNav">
-      <PageHeader title={`Riwayat Layanan${total > 0 ? ` (${total})` : ''}`} />
+      <PageHeader title={`${historyTitle}${total > 0 ? ` (${total})` : ''}`} />
 
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
         <PageContainer>
+          {(lastDone || (lastPhotos && lastPhotos.photos.length > 0)) && (
+            <Card sx={{ mb: 3, borderRadius: 2 }}>
+              <CardContent>
+                <Typography variant="subtitle2" fontWeight={800} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <PhotoLibraryIcon fontSize="small" color="primary" />
+                  Terakhir di {tenantInfo?.name ?? 'outlet'}
+                </Typography>
+                {lastDone && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    <strong>{lastDone.serviceName}</strong>
+                    {' · '}
+                    {new Date(lastDone.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {lastDone.barberName ? ` · ${lastDone.barberName}` : ''}
+                  </Typography>
+                )}
+                {lastPhotos && lastPhotos.photos.length > 0 && (
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {lastPhotos.photos.map((src, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={src}
+                        alt={`foto-${i + 1}`}
+                        style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                {tenantInfo && (tenantInfo.customerReturnReminderDays ?? 0) > 0 && (
+                  <Alert severity="info" icon={<NotificationsActiveIcon />} sx={{ mt: 2 }}>
+                    Pengingat WhatsApp ±{tenantInfo.customerReturnReminderDays} hari setelah kunjungan selesai dapat dikirim oleh outlet.
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {history.length === 0 ? (
             <Box className="text-center py-16">
               <ContentCutIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
@@ -133,7 +229,7 @@ export default function HistoryPage() {
         </PageContainer>
       )}
 
-      <CustomerBottomNav />
+      <CustomerBottomNav tenantType={tenantInfo?.tenantType ?? user?.tenantType} />
     </AppPageShell>
   );
 }

@@ -212,7 +212,7 @@ export default function DashboardPage() {
               onClick={() => router.push('/reports')}
               sx={{ py: 1.5 }}
             >
-              Laporan Barber
+              Laporan Staff
             </Button>
             <Button
               variant="outlined"

@@ -6,7 +6,7 @@ import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Avatar, Divider, LinearProgress, Checkbox,
-  InputAdornment,
+  InputAdornment, Alert,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -20,16 +20,27 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import LockIcon from '@mui/icons-material/Lock';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import NoteAltIcon from '@mui/icons-material/NoteAlt';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface TenantInfo { _id: string; name: string; address: string; theme?: { primaryColor?: string } | null; }
+interface TenantInfo {
+  _id: string;
+  name: string;
+  address: string;
+  theme?: { primaryColor?: string } | null;
+  /** 0 = reminder WA mati; dari GET /tenants/:id publik */
+  customerReturnReminderDays?: number;
+  tenantType?: string;
+}
 
 interface HaircutPhoto {
   _id: string;
@@ -72,6 +83,15 @@ interface BookingResult {
   serviceName: string;
   barberName: string | null;
   servicePrice: number;
+}
+
+interface LastDoneVisit {
+  _id: string;
+  serviceName: string;
+  servicePrice: number;
+  queueNumber: number;
+  barberName: string | null;
+  date: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -129,6 +149,7 @@ function BookingContent() {
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
   const [lastHaircut, setLastHaircut] = useState<HaircutPhoto | null>(null);
+  const [lastDoneVisit, setLastDoneVisit] = useState<LastDoneVisit | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [barbersLoading, setBarbersLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -171,22 +192,30 @@ function BookingContent() {
     }
     setPageLoading(true);
     try {
-      const [svcRes, histRes] = await Promise.all([
+      const [svcRes, histRes, tenantRes] = await Promise.all([
         api.get(`/tenants/${effectiveTenantId}/services`),
         api.get('/bookings/history?limit=100'),
+        api.get(`/tenants/${effectiveTenantId}`),
       ]);
       setServices(svcRes.data);
+      setTenant(tenantRes.data);
       const historyItems: (ActiveBooking & { tenantId?: string })[] = histRes.data?.data ?? [];
       const active = historyItems.find(
         (b) => b.status === 'waiting' || b.status === 'in_progress',
       );
       if (active) setActiveBooking(active);
 
-      // Ambil foto  terakhir customer di tenant ini
       try {
-        const photoRes = await api.get(`/haircut-photos/my-last?tenantId=${effectiveTenantId}`);
+        const [photoRes, doneRes] = await Promise.all([
+          api.get(`/haircut-photos/my-last?tenantId=${effectiveTenantId}`),
+          api.get(`/bookings/my-last-done?tenantId=${effectiveTenantId}`),
+        ]);
         setLastHaircut(photoRes.data ?? null);
-      } catch { /* abaikan jika gagal */ }
+        setLastDoneVisit(doneRes.data ?? null);
+      } catch {
+        setLastHaircut(null);
+        setLastDoneVisit(null);
+      }
 
       // Derive visited tenants from booking history for multi-tenant selector
       if (!isQrFlow) {
@@ -550,6 +579,8 @@ function BookingContent() {
     );
   }
 
+  const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
+
   // ── Authenticated Booking Flow ────────────────────────────────────────────
   return (
     <Box
@@ -560,7 +591,7 @@ function BookingContent() {
       }}
     >
       <PageHeader
-        title="💈 Booking"
+        title={bookingLabels.bookingPageTitle}
         back={bookStep === 'barber'}
         right={
           bookStep === 'barber' ? (
@@ -670,6 +701,65 @@ function BookingContent() {
                 />
               </CardContent>
             </Card>
+          )}
+
+          {/* Kunjungan terakhir + foto hasil layanan + info reminder */}
+          {!activeBooking && (lastDoneVisit || (lastHaircut && lastHaircut.photos.length > 0)) && (
+            <Card sx={{ mb: 3, borderRadius: 3, border: 1, borderColor: 'divider' }}>
+              <CardContent>
+                <Typography variant="subtitle2" fontWeight={800} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <PhotoLibraryIcon fontSize="small" color="primary" />
+                  Kunjungan & hasil layanan terakhir
+                </Typography>
+                {lastDoneVisit && (
+                  <Box sx={{ mb: lastHaircut?.photos?.length ? 1.5 : 0 }}>
+                    <Typography fontWeight={700}>{lastDoneVisit.serviceName}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(lastDoneVisit.date).toLocaleDateString('id-ID', {
+                        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                      })}
+                      {lastDoneVisit.barberName ? ` · ${lastDoneVisit.barberName}` : ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Rp {lastDoneVisit.servicePrice.toLocaleString('id-ID')} · antrian #{lastDoneVisit.queueNumber}
+                    </Typography>
+                  </Box>
+                )}
+                {lastHaircut && lastHaircut.photos.length > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Foto dokumentasi terakhir
+                      {' · '}
+                      {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
+                      {lastHaircut.photos.map((src, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={src}
+                          alt={`Hasil-${i + 1}`}
+                          style={{
+                            height: 88, width: 88, objectFit: 'cover', borderRadius: 12, flexShrink: 0,
+                            border: '1px solid rgba(0,0,0,0.08)',
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {tenant && (tenant.customerReturnReminderDays ?? 0) > 0 && (
+            <Alert severity="info" icon={<NotificationsActiveIcon />} sx={{ mb: 3, borderRadius: 2 }}>
+              <Typography variant="body2" fontWeight={600}>Pengingat kunjungan berikutnya</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {tenant.name} dapat mengirim pesan WhatsApp sekitar{' '}
+                <strong>{tenant.customerReturnReminderDays} hari</strong> setelah layanan selesai, mengingatkan Anda untuk booking lagi.
+              </Typography>
+            </Alert>
           )}
 
           {/* Step 1: Select Services */}
@@ -1018,7 +1108,7 @@ function BookingContent() {
             )}
           </Box>
 
-          {/* Foto  terakhir customer */}
+          {/* Foto dokumentasi (ringkas di dialog konfirmasi) */}
           {lastHaircut && lastHaircut.photos.length > 0 && (
             <Box
               sx={{
@@ -1028,7 +1118,7 @@ function BookingContent() {
               }}
             >
               <Typography variant="overline" display="block" sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'text.secondary', mb: 1 }}>
-                Foto  Terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                Hasil layanan terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
                 {lastHaircut.photos.map((src, i) => (
@@ -1078,7 +1168,7 @@ function BookingContent() {
         </DialogActions>
       </Dialog>
 
-      <CustomerBottomNav />
+      <CustomerBottomNav tenantType={tenant?.tenantType ?? user?.tenantType} />
     </Box>
   );
 }

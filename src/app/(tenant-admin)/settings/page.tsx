@@ -44,6 +44,8 @@ interface TenantSettings {
   location?: { lat: number; lng: number } | null;
   qrisImageBase64?: string | null;
   theme?: TenantTheme | null;
+  /** 0 = nonaktif; kosong/null di DB = default server (21) */
+  customerReturnReminderDays?: number | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -70,6 +72,7 @@ export default function SettingsPage() {
   const [qrisImage, setQrisImage] = useState<string | null>(null);
   const [qrisUploading, setQrisUploading] = useState(false);
   const [theme, setTheme] = useState<TenantTheme>(DEFAULT_THEME);
+  const [customerReturnReminderDays, setCustomerReturnReminderDays] = useState(21);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -97,6 +100,10 @@ export default function SettingsPage() {
       });
       setQrisImage(t.qrisImageBase64 || '');
       setTheme(t.theme ?? DEFAULT_THEME);
+      const rd = t.customerReturnReminderDays;
+      if (rd === 0) setCustomerReturnReminderDays(0);
+      else if (rd == null || Number.isNaN(Number(rd))) setCustomerReturnReminderDays(21);
+      else setCustomerReturnReminderDays(Math.min(90, Math.max(1, Number(rd))));
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -125,6 +132,7 @@ export default function SettingsPage() {
         gpsLng: lng,
         qrisImageBase64: qrisImage ?? undefined,
         theme,
+        customerReturnReminderDays,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -242,6 +250,27 @@ export default function SettingsPage() {
                   placeholder="08xxxxxxxxxx"
                 />
               </Box>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={500} className="mb-2">
+                Pengingat pelanggan (WhatsApp)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Setelah layanan selesai & dibayar, sistem menjadwalkan pesan undangan booking lagi ke nomor WA pelanggan.
+                Isi 0 untuk menonaktifkan.
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                label="Hari setelah kunjungan selesai"
+                value={customerReturnReminderDays}
+                onChange={(e) => setCustomerReturnReminderDays(Math.min(90, Math.max(0, Number(e.target.value) || 0)))}
+                inputProps={{ min: 0, max: 90 }}
+                helperText="Mis. 21 = sekitar tiga minggu setelah transaksi selesai. Membutuhkan WA_API_KEY di server."
+              />
             </CardContent>
           </Card>
 
