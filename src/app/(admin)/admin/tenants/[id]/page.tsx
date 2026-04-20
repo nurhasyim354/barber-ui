@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, TextField, Button, CircularProgress,
   FormControl, InputLabel, Select, MenuItem, Alert, Divider,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import toast from 'react-hot-toast';
@@ -35,6 +36,7 @@ interface TenantDetail {
   serviceCount: number;
   adminName?: string;
   adminPhone?: string;
+  waMessagingEnabled?: boolean | null;
 }
 
 export default function AdminTenantDetailPage() {
@@ -55,6 +57,7 @@ export default function AdminTenantDetailPage() {
     pendingAdminPhone: '',
     pendingAdminName: '',
     registrationNote: '',
+    waMessagingEnabled: true,
   });
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
@@ -80,6 +83,7 @@ export default function AdminTenantDetailPage() {
         pendingAdminPhone: t.pendingAdminPhone || '',
         pendingAdminName: t.pendingAdminName || '',
         registrationNote: t.registrationNote || '',
+        waMessagingEnabled: t.waMessagingEnabled !== false,
       });
     } catch {
       toast.error('Gagal memuat tenant');
@@ -107,6 +111,7 @@ export default function AdminTenantDetailPage() {
         pendingAdminPhone: form.pendingAdminPhone.trim() || null,
         pendingAdminName: form.pendingAdminName.trim() || null,
         registrationNote: form.registrationNote.trim() || null,
+        waMessagingEnabled: form.waMessagingEnabled,
       });
       toast.success('Tenant diperbarui');
       await load();
@@ -182,6 +187,19 @@ export default function AdminTenantDetailPage() {
                 ))}
               </Select>
             </FormControl>
+
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={form.waMessagingEnabled}
+                  onChange={(e) => setForm({ ...form, waMessagingEnabled: e.target.checked })}
+                />
+              )}
+              label="WhatsApp untuk outlet ini (OTP pelanggan, pengingat)"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: -1 }}>
+              Jika platform mematikan WA secara global, pesan tetap tidak terkirim. Nonaktifkan di sini hanya untuk outlet ini.
+            </Typography>
 
             <Divider />
 
