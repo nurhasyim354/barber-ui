@@ -151,9 +151,6 @@ export default function HomeMarketing() {
           <Button component={Link} href="/login" color="inherit">
             Masuk
           </Button>
-          <Button component={Link} href={`/daftar?bisnis=${vertical.id}`} variant="contained" sx={{ ml: 1 }}>
-            Daftar
-          </Button>
         </Toolbar>
       </AppBar>
 
@@ -169,7 +166,7 @@ export default function HomeMarketing() {
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={7}>
               <Typography variant="h3" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.85rem', sm: '2.5rem', md: '3rem' }, lineHeight: 1.15 }}>
-                Antrian rapi, pendapatan lebih terukur.
+                Antrian rapi, pendapatan lebih terukur
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mt: 2, maxWidth: 560 }}>
                 Booking, staff, kasir, laporan, dan pengingat WA dalam satu tempat. Pilih jenis bisnis, cek simulasi omzet,
@@ -177,7 +174,7 @@ export default function HomeMarketing() {
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
                 <Button component={Link} href={`/daftar?bisnis=${vertical.id}`} variant="contained" size="large">
-                  Daftar jadi tenant
+                  Pakai untuk bisnis saya
                 </Button>
                 <Button component={Link} href="/login" variant="outlined" size="large">
                   Sudah punya akun
@@ -192,7 +189,7 @@ export default function HomeMarketing() {
                     <Typography fontWeight={700}>Alur singkat</Typography>
                   </Stack>
                   <Typography variant="body2" color="text.secondary" component="ol" sx={{ pl: 2, m: 0, '& li': { mb: 1 } }}>
-                    <li>Pelanggan scan QR atau buka link booking outlet Anda.</li>
+                    <li>Pelanggan scan QR atau buka link booking di medsos atau outlet Anda.</li>
                     <li>Mereka pilih layanan & (opsional) staff — dapat nomor antrian.</li>
                     <li>Di kasir: status layanan, bayar tunai/QRIS, cetak nota.</li>
                     <li>Setelah selesai: opsional foto hasil; pengingat WhatsApp bisa mengajak booking lagi.</li>
@@ -209,7 +206,7 @@ export default function HomeMarketing() {
       <Box sx={{ bgcolor: (t) => (t.palette.mode === 'light' ? 'grey.50' : 'grey.900'), py: { xs: 6, md: 8 } }}>
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px }}>
           <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
-            Kenapa harus daftar?
+            Kenapa harus pakai?
           </Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ mb: 4, maxWidth: 640, mx: 'auto' }}>
             Yang Anda dapat bukan sekadar aplikasi booking — alur kerja outlet jadi lebih ringan dan hasil finansial lebih mudah dibaca.

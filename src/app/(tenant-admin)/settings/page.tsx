@@ -269,7 +269,7 @@ export default function SettingsPage() {
                 value={customerReturnReminderDays}
                 onChange={(e) => setCustomerReturnReminderDays(Math.min(90, Math.max(0, Number(e.target.value) || 0)))}
                 inputProps={{ min: 0, max: 90 }}
-                helperText="Mis. 21 = sekitar tiga minggu setelah transaksi selesai. Membutuhkan WA_API_KEY di server."
+                helperText="Mis. 21 = sekitar tiga minggu setelah transaksi selesai."
               />
             </CardContent>
           </Card>

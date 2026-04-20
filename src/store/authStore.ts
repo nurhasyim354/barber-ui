@@ -5,9 +5,9 @@ export interface AuthUser {
   _id: string;
   phone: string;
   name: string;
-  role: 'super_admin' | 'tenant_admin' | 'customer' | 'barber';
+  role: 'super_admin' | 'tenant_admin' | 'customer' | 'staff';
   tenantId?: string | null;
-  barberId?: string | null;
+  staffId?: string | null;
   /** Dari tenant aktif — untuk salinan UI per vertikal */
   tenantType?: string | null;
 }

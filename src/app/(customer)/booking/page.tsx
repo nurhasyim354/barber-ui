@@ -42,10 +42,10 @@ interface TenantInfo {
   tenantType?: string;
 }
 
-interface HaircutPhoto {
+interface ServicePhotoDoc {
   _id: string;
   photos: string[];
-  barberName?: string | null;
+  staffName?: string | null;
   createdAt: string;
 }
 
@@ -57,10 +57,10 @@ interface Service {
   durationMinutes: number;
 }
 
-// Shape matches BarberQueueInfo returned by GET /tenants/:id/barbers/queue
-interface Barber {
-  barberId: string;
-  barberName: string;
+// StaffQueueInfo dari GET /tenants/:id/staff/queue
+interface StaffQueueRow {
+  staffId: string;
+  staffName: string;
   photoUrl: string | null;
   rating: number;
   totalReviews: number;
@@ -71,7 +71,7 @@ interface Barber {
 interface ActiveBooking {
   _id: string;
   serviceName: string;
-  barberName?: string;
+  staffName?: string;
   queueNumber: number;
   status: string;
   date: string;
@@ -81,7 +81,7 @@ interface BookingResult {
   _id: string;
   queueNumber: number;
   serviceName: string;
-  barberName: string | null;
+  staffName: string | null;
   servicePrice: number;
 }
 
@@ -90,7 +90,7 @@ interface LastDoneVisit {
   serviceName: string;
   servicePrice: number;
   queueNumber: number;
-  barberName: string | null;
+  staffName: string | null;
   date: string;
 }
 
@@ -140,18 +140,18 @@ function BookingContent() {
 
   // ── State: booking flow ────────────────────────────────────────────────────
   const [services, setServices] = useState<Service[]>([]);
-  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [staffQueue, setStaffQueue] = useState<StaffQueueRow[]>([]);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
-  const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<StaffQueueRow | null>(null);
   const [notes, setNotes] = useState('');
-  const [bookStep, setBookStep] = useState<'service' | 'barber'>('service');
+  const [bookStep, setBookStep] = useState<'service' | 'staff'>('service');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
-  const [lastHaircut, setLastHaircut] = useState<HaircutPhoto | null>(null);
+  const [lastHaircut, setLastHaircut] = useState<ServicePhotoDoc | null>(null);
   const [lastDoneVisit, setLastDoneVisit] = useState<LastDoneVisit | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
-  const [barbersLoading, setBarbersLoading] = useState(false);
+  const [staffQueueLoading, setStaffQueueLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ function BookingContent() {
 
       try {
         const [photoRes, doneRes] = await Promise.all([
-          api.get(`/haircut-photos/my-last?tenantId=${effectiveTenantId}`),
+          api.get(`/service-photos/my-last?tenantId=${effectiveTenantId}`),
           api.get(`/bookings/my-last-done?tenantId=${effectiveTenantId}`),
         ]);
         setLastHaircut(photoRes.data ?? null);
@@ -300,15 +300,15 @@ function BookingContent() {
     });
   };
 
-  const handleGoToBarber = () => {
+  const handleGoToStaff = () => {
     if (selectedServices.length === 0) { toast.error('Pilih minimal satu layanan'); return; }
-    setSelectedBarber(null);
-    setBookStep('barber');
-    setBarbersLoading(true);
-    api.get(`/tenants/${effectiveTenantId}/barbers/queue`)
-      .then((r) => setBarbers(r.data))
+    setSelectedStaff(null);
+    setBookStep('staff');
+    setStaffQueueLoading(true);
+    api.get(`/tenants/${effectiveTenantId}/staff/queue`)
+      .then((r) => setStaffQueue(r.data))
       .catch(() => toast.error('Gagal memuat daftar staff'))
-      .finally(() => setBarbersLoading(false));
+      .finally(() => setStaffQueueLoading(false));
   };
 
   const handleBook = async () => {
@@ -318,7 +318,7 @@ function BookingContent() {
       const res = await api.post('/bookings', {
         tenantId: effectiveTenantId,
         serviceIds: selectedServices.map((s) => s._id),
-        barberId: selectedBarber?.barberId,
+        staffId: selectedStaff?.staffId,
         notes,
       });
       const result = Array.isArray(res.data) ? res.data[0] : res.data;
@@ -333,7 +333,7 @@ function BookingContent() {
         toast.success(`Booking berhasil! Nomor antrian Anda: #${result.queueNumber}`, { duration: 6000 });
         setBookStep('service');
         setSelectedServices([]);
-        setSelectedBarber(null);
+        setSelectedStaff(null);
         loadBookingData();
       }
     } catch (err: unknown) {
@@ -347,6 +347,7 @@ function BookingContent() {
 
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
 
   // ── Loading spinner ────────────────────────────────────────────────────────
   if (authLoading) {
@@ -549,10 +550,10 @@ function BookingContent() {
               <Typography variant="body2" color="text.secondary">Layanan</Typography>
               <Typography variant="body2" fontWeight={500}>{bookingResult.serviceName}</Typography>
             </Box>
-            {bookingResult.barberName && (
+            {bookingResult.staffName && (
               <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2" color="text.secondary">Barber</Typography>
-                <Typography variant="body2" fontWeight={500}>{bookingResult.barberName}</Typography>
+                <Typography variant="body2" color="text.secondary">{bookingLabels.staffSingular}</Typography>
+                <Typography variant="body2" fontWeight={500}>{bookingResult.staffName}</Typography>
               </Box>
             )}
             <Divider sx={{ my: 1.5, opacity: 0.5, borderColor: 'rgba(0,0,0,0.08)' }} />
@@ -570,7 +571,7 @@ function BookingContent() {
           Lihat Riwayat
         </Button>
         <Button variant="text" color="inherit" sx={{ color: 'text.secondary' }} onClick={() => {
-          setSelectedServices([]); setSelectedBarber(null);
+          setSelectedServices([]); setSelectedStaff(null);
           setNotes(''); setBookingResult(null); setBookStep('service');
         }}>
           Booking Lagi
@@ -578,8 +579,6 @@ function BookingContent() {
       </Box>
     );
   }
-
-  const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
 
   // ── Authenticated Booking Flow ────────────────────────────────────────────
   return (
@@ -592,9 +591,9 @@ function BookingContent() {
     >
       <PageHeader
         title={bookingLabels.bookingPageTitle}
-        back={bookStep === 'barber'}
+        back={bookStep === 'staff'}
         right={
-          bookStep === 'barber' ? (
+          bookStep === 'staff' ? (
             <Button color="inherit" size="small" startIcon={<ArrowBackIcon />}
               onClick={() => setBookStep('service')}
             >
@@ -688,9 +687,9 @@ function BookingContent() {
                   #{activeBooking.queueNumber}
                 </Typography>
                 <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{activeBooking.serviceName}</Typography>
-                {activeBooking.barberName && (
+                {activeBooking.staffName && (
                   <Typography variant="body2" color="text.secondary">
-                    Barber: {activeBooking.barberName}
+                    {bookingLabels.staffSingular}: {activeBooking.staffName}
                   </Typography>
                 )}
                 <Chip
@@ -718,7 +717,7 @@ function BookingContent() {
                       {new Date(lastDoneVisit.date).toLocaleDateString('id-ID', {
                         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
                       })}
-                      {lastDoneVisit.barberName ? ` · ${lastDoneVisit.barberName}` : ''}
+                      {lastDoneVisit.staffName ? ` · ${lastDoneVisit.staffName}` : ''}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Rp {lastDoneVisit.servicePrice.toLocaleString('id-ID')} · antrian #{lastDoneVisit.queueNumber}
@@ -889,7 +888,7 @@ function BookingContent() {
                     </Typography>
                   </Box>
                   <Button
-                    variant="contained" fullWidth onClick={handleGoToBarber}
+                    variant="contained" fullWidth onClick={handleGoToStaff}
                     sx={{ borderRadius: 2.5, py: 1.3, fontWeight: 700, letterSpacing: 0.3 }}
                   >
                     Pilih Staff →
@@ -905,8 +904,8 @@ function BookingContent() {
             </>
           )}
 
-          {/* Step 2: Select Barber */}
-          {bookStep === 'barber' && selectedServices.length > 0 && (
+          {/* Step 2: Select staff */}
+          {bookStep === 'staff' && selectedServices.length > 0 && (
             <>
               {/* Selected services summary */}
               <Card
@@ -944,24 +943,24 @@ function BookingContent() {
                     background: (t) => `linear-gradient(180deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`,
                   }}
                 />
-                <Typography variant="h6" fontWeight={600} letterSpacing={-0.3}>Pilih Barber</Typography>
+                <Typography variant="h6" fontWeight={600} letterSpacing={-0.3}>Pilih {bookingLabels.staffSingular}</Typography>
               </Box>
 
-              {barbersLoading ? (
+              {staffQueueLoading ? (
                 <Box sx={{ px: 1 }}>
                   <LinearProgress sx={{ borderRadius: 2, height: 3 }} />
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
                     Memuat daftar staff...
                   </Typography>
                 </Box>
-              ) : barbers.length === 0 ? (
+              ) : staffQueue.length === 0 ? (
                 <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
                   <CardContent sx={{ textAlign: 'center', py: 5 }}>
                     <PersonIcon sx={{ fontSize: 52, color: 'text.disabled' }} />
                     <Typography color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>Belum ada staff tersedia</Typography>
                     <Button
                       variant="outlined" sx={{ borderRadius: 2.5 }}
-                      onClick={() => { setSelectedBarber(null); setDialogOpen(true); }}
+                      onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
                     >
                       Booking Tanpa Pilih Staf
                     </Button>
@@ -969,12 +968,12 @@ function BookingContent() {
                 </Card>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {barbers.map((b) => {
-                    const sel = selectedBarber?.barberId === b.barberId;
+                  {staffQueue.map((b) => {
+                    const sel = selectedStaff?.staffId === b.staffId;
                     return (
                       <Card
-                        key={b.barberId}
-                        onClick={() => { setSelectedBarber(b); setDialogOpen(true); }}
+                        key={b.staffId}
+                        onClick={() => { setSelectedStaff(b); setDialogOpen(true); }}
                         sx={{
                           cursor: 'pointer', borderRadius: 3,
                           border: sel
@@ -1002,10 +1001,10 @@ function BookingContent() {
                                 transition: 'border 0.2s ease',
                               }}
                             >
-                              {!b.photoUrl && b.barberName.charAt(0).toUpperCase()}
+                              {!b.photoUrl && b.staffName.charAt(0).toUpperCase()}
                             </Avatar>
                             <Box flex={1}>
-                              <Typography fontWeight={500} fontSize="0.97rem">{b.barberName}</Typography>
+                              <Typography fontWeight={500} fontSize="0.97rem">{b.staffName}</Typography>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
                                 <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
                                 <Typography variant="body2" fontWeight={500}>
@@ -1038,7 +1037,7 @@ function BookingContent() {
                   })}
 
                   <Box
-                    onClick={() => { setSelectedBarber(null); setDialogOpen(true); }}
+                    onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
                     sx={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       py: 2, borderRadius: 3, cursor: 'pointer',
@@ -1093,15 +1092,15 @@ function BookingContent() {
               <Typography fontWeight={600} variant="body2">~{totalDuration} menit</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" color="text.secondary">Barber</Typography>
-              <Typography fontWeight={500} variant="body2">{selectedBarber?.barberName || 'Siapapun tersedia'}</Typography>
+              <Typography variant="body2" color="text.secondary">{bookingLabels.staffSingular}</Typography>
+              <Typography fontWeight={500} variant="body2">{selectedStaff?.staffName || 'Siapapun tersedia'}</Typography>
             </Box>
-            {selectedBarber && selectedBarber.estimatedWaitMinutes > 0 && (
+            {selectedStaff && selectedStaff.estimatedWaitMinutes > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
                 <Typography variant="body2" color="text.secondary">Est. tunggu</Typography>
                 <Chip
-                  label={waitLabel(selectedBarber.estimatedWaitMinutes)} size="small"
-                  color={waitColor(selectedBarber.estimatedWaitMinutes)}
+                  label={waitLabel(selectedStaff.estimatedWaitMinutes)} size="small"
+                  color={waitColor(selectedStaff.estimatedWaitMinutes)}
                   sx={{ fontWeight: 700, height: 22 }}
                 />
               </Box>

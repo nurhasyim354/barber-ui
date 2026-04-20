@@ -57,7 +57,7 @@ export default function BookingQrPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role === 'customer' || user.role === 'barber') {
+    if (user.role === 'customer' || user.role === 'staff') {
       router.replace('/booking');
     }
   }, [user, isLoading, router]);

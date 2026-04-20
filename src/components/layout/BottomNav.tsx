@@ -48,13 +48,13 @@ export function CustomerBottomNav({ tenantType }: { tenantType?: string | null }
   );
 }
 
-export function BarberBottomNav() {
+export function StaffBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, user } = useAuthStore();
   const L = getTenantUiLabels(user?.tenantType);
 
-  const routes = ['/barber', '/barber/history'];
+  const routes = ['/staff', '/staff/history'];
   const value = routes.findIndex((r) => pathname === r || pathname.startsWith(r + '/'));
 
   return (
@@ -62,8 +62,8 @@ export function BarberBottomNav() {
       <BottomNavigation
         value={value === -1 ? 0 : value}
         onChange={(_, v) => {
-          if (v === 0) router.push('/barber');
-          else if (v === 1) router.push('/barber/history');
+          if (v === 0) router.push('/staff');
+          else if (v === 1) router.push('/staff/history');
           else { logout(); router.push('/login'); }
         }}
         showLabels
@@ -89,7 +89,7 @@ export function TenantAdminBottomNav() {
   const { logout, user } = useAuthStore();
   const L = getTenantUiLabels(user?.tenantType);
 
-  const routes = ['/dashboard', '/pos', '/barbers', '/customers', '/services'];
+  const routes = ['/dashboard', '/pos', '/staff/manage', '/customers', '/services'];
   const value = routes.findIndex((r) => pathname.startsWith(r));
 
   return (

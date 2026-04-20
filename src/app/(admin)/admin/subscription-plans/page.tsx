@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, IconButton, Chip, Switch, FormControlLabel,
+  TextField, IconButton, Chip, Switch, FormControlLabel, Stack,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -23,6 +23,8 @@ interface Plan {
   maxTransactions: number | null;
   pricePerMonth: number;
   isActive: boolean;
+  /** Kosong = paket global (semua jenis tenant) */
+  tenantTypes?: string[] | null;
 }
 
 export default function SubscriptionPlansPage() {
@@ -104,15 +106,23 @@ export default function SubscriptionPlansPage() {
 
       <PageContainer>
         <Typography variant="body2" color="text.secondary" mb={3}>
-          Atur harga dan batas transaksi untuk setiap paket berlangganan.
-          Perubahan akan diterapkan saat penghitungan tagihan berikutnya.
+          Atur harga dan batas transaksi untuk setiap paket. Paket dengan <strong>jenis tenant</strong> tertentu hanya dipakai
+          outlet dengan <code>tenantType</code> yang sama; paket tanpa chip jenis berlaku untuk semua outlet (mode legacy).
+          Perubahan diterapkan saat penghitungan tagihan berikutnya.
         </Typography>
 
         {loading ? (
           <Box className="flex justify-center mt-8"><CircularProgress /></Box>
         ) : (
           <Box className="flex flex-col gap-3">
-            {plans.map((p) => (
+            {[...plans]
+              .sort((a, b) => {
+                const ka = (a.tenantTypes && a.tenantTypes[0]) || '';
+                const kb = (b.tenantTypes && b.tenantTypes[0]) || '';
+                if (ka !== kb) return ka.localeCompare(kb);
+                return a.minTransactions - b.minTransactions;
+              })
+              .map((p) => (
               <Card key={p._id} className={p.isActive ? '' : 'opacity-60'}>
                 <CardContent>
                   <Box className="flex items-start justify-between">
@@ -125,6 +135,15 @@ export default function SubscriptionPlansPage() {
                           size="small"
                         />
                       </Box>
+                      <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mb: 1 }}>
+                        {!p.tenantTypes?.length ? (
+                          <Chip label="Semua jenis tenant" size="small" variant="outlined" />
+                        ) : (
+                          p.tenantTypes.map((tt) => (
+                            <Chip key={tt} label={tt} size="small" variant="outlined" color="primary" />
+                          ))
+                        )}
+                      </Stack>
                       <Typography variant="body2" color="text.secondary">
                         <strong>Transaksi:</strong>{' '}
                         {p.minTransactions}

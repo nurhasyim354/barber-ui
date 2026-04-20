@@ -25,7 +25,7 @@ import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
-import { BarberBottomNav } from '@/components/layout/BottomNav';
+import { StaffBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 interface Booking {
@@ -37,15 +37,15 @@ interface Booking {
   queueNumber: number;
   status: string;
   notes?: string;
-  barberName?: string;
-  barberId?: string;
+  staffId?: string;
+  staffName?: string;
   date: string;
 }
 
-interface HaircutPhoto {
+interface ServicePhotoDoc {
   _id: string;
   photos: string[];
-  barberName?: string | null;
+  staffName?: string | null;
   createdAt: string;
 }
 
@@ -117,7 +117,7 @@ function buildReceipt(data: ReceiptData): string {
     booking.serviceName + LINE_FEED,
     BOLD_OFF, LEFT,
     `Pelanggan : ${booking.customerName}\n`,
-    booking.barberName ? `Staff    : ${booking.barberName}\n` : '',
+    booking.staffName ? `Staff    : ${booking.staffName}\n` : '',
     booking.notes ? `Catatan   : ${booking.notes}\n` : '',
     divider, CENTER, BOLD_ON,
     `TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}\n`,
@@ -131,7 +131,7 @@ function buildReceipt(data: ReceiptData): string {
   ].join('');
 }
 
-export default function BarberPage() {
+export default function StaffQueuePage() {
   const { user, isLoading, loadFromStorage, setAuth, token } = useAuthStore();
   const router = useRouter();
 
@@ -152,7 +152,7 @@ export default function BarberPage() {
   // Foto hasil 
   const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [lastHaircutDialog, setLastHaircutDialog] = useState<{ open: boolean; booking: Booking | null; data: HaircutPhoto | null; loading: boolean }>({
+  const [lastServicePhotoDialog, setLastServicePhotoDialog] = useState<{ open: boolean; booking: Booking | null; data: ServicePhotoDoc | null; loading: boolean }>({
     open: false, booking: null, data: null, loading: false,
   });
 
@@ -168,7 +168,7 @@ export default function BarberPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'barber') { router.replace('/'); return; }
+    if (user.role !== 'staff') { router.replace('/'); return; }
     if (!user.tenantId) {
       loadTenants();
       setTenantDialogOpen(true);
@@ -181,7 +181,7 @@ export default function BarberPage() {
   const loadTenants = useCallback(async () => {
     setTenantLoading(true);
     try {
-      const res = await api.get('/barbers/my-tenants');
+      const res = await api.get('/staff/my-tenants');
       setTenants(res.data);
     } catch {
       toast.error('Gagal memuat daftar salon');
@@ -211,10 +211,10 @@ export default function BarberPage() {
   };
 
   const handleToggleAvailability = async () => {
-    if (!user?.barberId) return;
+    if (!user?.staffId) return;
     setTogglingAvail(true);
     try {
-      const res = await api.patch(`/barbers/${user.barberId}/availability`);
+      const res = await api.patch(`/staff/${user.staffId}/availability`);
       setIsAvailable(res.data.isAvailable);
       toast.success(res.data.isAvailable ? 'Status: Tersedia' : 'Status: Tidak Tersedia');
     } catch {
@@ -252,7 +252,7 @@ export default function BarberPage() {
     setTakingId(booking._id);
     try {
       await api.patch(`/bookings/${booking._id}/assign`, {
-        barberId: user?.barberId || user?._id,
+        staffId: user?.staffId || user?._id,
       });
       toast.success(`Antrian #${booking.queueNumber} berhasil diambil`);
       loadBookings();
@@ -369,7 +369,7 @@ export default function BarberPage() {
       <div class="divider"></div>
       <div class="center bold spacer">${booking.serviceName}</div>
       <div>Pelanggan : ${booking.customerName}</div>
-      ${booking.barberName ? `<div>${assigneeLabel}    : ${booking.barberName}</div>` : ''}
+      ${booking.staffName ? `<div>${assigneeLabel}    : ${booking.staffName}</div>` : ''}
       ${booking.notes ? `<div>Catatan   : ${booking.notes}</div>` : ''}
       <div class="divider"></div>
       <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
@@ -401,7 +401,7 @@ export default function BarberPage() {
     if (uploadPhotos.length === 0) return;
     setUploadingPhotos(true);
     try {
-      await api.post(`/bookings/${bookingId}/haircut-photos`, { photos: uploadPhotos });
+      await api.post(`/bookings/${bookingId}/service-photos`, { photos: uploadPhotos });
       toast.success('Foto berhasil disimpan!');
       setUploadPhotos([]);
     } catch {
@@ -411,21 +411,21 @@ export default function BarberPage() {
     }
   };
 
-  const handleOpenLastHaircut = async (b: Booking) => {
-    setLastHaircutDialog({ open: true, booking: b, data: null, loading: true });
+  const handleOpenLastServicePhoto = async (b: Booking) => {
+    setLastServicePhotoDialog({ open: true, booking: b, data: null, loading: true });
     try {
-      const res = await api.get(`/bookings/${b._id}/last-haircut`);
-      setLastHaircutDialog((prev) => ({ ...prev, data: res.data, loading: false }));
+      const res = await api.get(`/bookings/${b._id}/last-service-photo`);
+      setLastServicePhotoDialog((prev) => ({ ...prev, data: res.data, loading: false }));
     } catch {
-      setLastHaircutDialog((prev) => ({ ...prev, loading: false }));
+      setLastServicePhotoDialog((prev) => ({ ...prev, loading: false }));
     }
   };
 
-  const myBarberId = user?.barberId || user?._id;
+  const myStaffId = user?.staffId || user?._id;
   const pendingBookings = bookings.filter((b) => b.status !== 'done' && b.status !== 'cancelled');
   const doneBookings = bookings.filter((b) => b.status === 'done');
 
-  const isMyQueue = (b: Booking) => b.barberId === myBarberId;
+  const isMyQueue = (b: Booking) => b.staffId === myStaffId;
 
   return (
     <AppPageShell variant="withBottomNav">
@@ -455,7 +455,7 @@ export default function BarberPage() {
         </PageContainer>
       ) : (
         <PageContainer>
-          {/* Info barber */}
+          {/* Info staff */}
           <Card
             className="mb-4"
             sx={{
@@ -481,7 +481,7 @@ export default function BarberPage() {
                     <Switch
                       checked={isAvailable}
                       onChange={handleToggleAvailability}
-                      disabled={togglingAvail || !user?.barberId}
+                      disabled={togglingAvail || !user?.staffId}
                       color="success"
                       size="small"
                     />
@@ -527,7 +527,7 @@ export default function BarberPage() {
                           {mine ? (
                             <Chip label="Antrian Saya" size="small" color="primary" variant="outlined" />
                           ) : (
-                            <Chip label={b.barberName ? `${ui.navStaff}: ${b.barberName}` : `Belum ada ${ui.staffSingular.toLowerCase()}`} size="small" color="default" variant="outlined" />
+                            <Chip label={b.staffName ? `${ui.navStaff}: ${b.staffName}` : `Belum ada ${ui.staffSingular.toLowerCase()}`} size="small" color="default" variant="outlined" />
                           )}
                         </Box>
                         <Typography fontWeight={600}>{b.customerName}</Typography>
@@ -581,7 +581,7 @@ export default function BarberPage() {
                           size="small"
                           color="info"
                           startIcon={<HistoryIcon />}
-                          onClick={() => handleOpenLastHaircut(b)}
+                          onClick={() => handleOpenLastServicePhoto(b)}
                         >
                           Foto Terakhir
                         </Button>
@@ -625,7 +625,7 @@ export default function BarberPage() {
                       <Box>
                         <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {b.serviceName}{b.barberName && ` · ${b.barberName}`}
+                          {b.serviceName}{b.staffName && ` · ${b.staffName}`}
                         </Typography>
                       </Box>
                       <Box className="text-right">
@@ -743,9 +743,9 @@ export default function BarberPage() {
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
                   Pelanggan: {receiptData.booking.customerName}
                 </Typography>
-                {receiptData.booking.barberName && (
+                {receiptData.booking.staffName && (
                   <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                    {ui.assigneeReceiptLabel}: {receiptData.booking.barberName}
+                    {ui.assigneeReceiptLabel}: {receiptData.booking.staffName}
                   </Typography>
                 )}
                 <Divider className="my-1" />
@@ -814,23 +814,23 @@ export default function BarberPage() {
 
       {/* Dialog Foto  Terakhir */}
       <Dialog
-        open={lastHaircutDialog.open}
-        onClose={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}
+        open={lastServicePhotoDialog.open}
+        onClose={() => setLastServicePhotoDialog({ open: false, booking: null, data: null, loading: false })}
         fullWidth maxWidth="xs"
       >
         <DialogTitle fontWeight={500}>
           <HistoryIcon sx={{ mr: 1, verticalAlign: 'middle', color: 'info.main' }} />
           Foto Terakhir
-          {lastHaircutDialog.booking && (
+          {lastServicePhotoDialog.booking && (
             <Typography variant="caption" display="block" color="text.secondary">
-              {lastHaircutDialog.booking.customerName}
+              {lastServicePhotoDialog.booking.customerName}
             </Typography>
           )}
         </DialogTitle>
         <DialogContent>
-          {lastHaircutDialog.loading ? (
+          {lastServicePhotoDialog.loading ? (
             <Box className="flex justify-center py-8"><CircularProgress /></Box>
-          ) : !lastHaircutDialog.data ? (
+          ) : !lastServicePhotoDialog.data ? (
             <Box className="text-center py-8">
               <CameraAltIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
               <Typography color="text.secondary" className="mt-2">
@@ -840,11 +840,11 @@ export default function BarberPage() {
           ) : (
             <Box>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                {new Date(lastHaircutDialog.data.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                {lastHaircutDialog.data.barberName && ` · ${lastHaircutDialog.data.barberName}`}
+                {new Date(lastServicePhotoDialog.data.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {lastServicePhotoDialog.data.staffName && ` · ${lastServicePhotoDialog.data.staffName}`}
               </Typography>
               <Box className="flex flex-col gap-2">
-                {lastHaircutDialog.data.photos.map((src, i) => (
+                {lastServicePhotoDialog.data.photos.map((src, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img key={i} src={src} alt={`foto-${i + 1}`}
                     style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }}
@@ -855,13 +855,13 @@ export default function BarberPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}>
+          <Button onClick={() => setLastServicePhotoDialog({ open: false, booking: null, data: null, loading: false })}>
             Tutup
           </Button>
         </DialogActions>
       </Dialog>
 
-      <BarberBottomNav />
+      <StaffBottomNav />
     </AppPageShell>
   );
 }

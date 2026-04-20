@@ -25,7 +25,7 @@ interface Booking {
   status: string;
   date: string;
   notes?: string;
-  barberName?: string | null;
+  staffName?: string | null;
 }
 
 interface LastDoneVisit {
@@ -33,14 +33,14 @@ interface LastDoneVisit {
   serviceName: string;
   servicePrice: number;
   queueNumber: number;
-  barberName: string | null;
+  staffName: string | null;
   date: string;
 }
 
-interface HaircutPhoto {
+interface ServicePhotoDoc {
   _id: string;
   photos: string[];
-  barberName?: string | null;
+  staffName?: string | null;
   createdAt: string;
 }
 
@@ -68,7 +68,7 @@ export default function HistoryPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [lastDone, setLastDone] = useState<LastDoneVisit | null>(null);
-  const [lastPhotos, setLastPhotos] = useState<HaircutPhoto | null>(null);
+  const [lastPhotos, setLastPhotos] = useState<ServicePhotoDoc | null>(null);
   const [tenantInfo, setTenantInfo] = useState<TenantPublic | null>(null);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
@@ -93,7 +93,7 @@ export default function HistoryPage() {
         try {
           const [doneRes, photoRes, tRes] = await Promise.all([
             api.get(`/bookings/my-last-done?tenantId=${tid}`),
-            api.get(`/haircut-photos/my-last?tenantId=${tid}`),
+            api.get(`/service-photos/my-last?tenantId=${tid}`),
             api.get(`/tenants/${tid}`),
           ]);
           setLastDone(doneRes.data ?? null);
@@ -147,7 +147,7 @@ export default function HistoryPage() {
                     <strong>{lastDone.serviceName}</strong>
                     {' · '}
                     {new Date(lastDone.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    {lastDone.barberName ? ` · ${lastDone.barberName}` : ''}
+                    {lastDone.staffName ? ` · ${lastDone.staffName}` : ''}
                   </Typography>
                 )}
                 {lastPhotos && lastPhotos.photos.length > 0 && (
