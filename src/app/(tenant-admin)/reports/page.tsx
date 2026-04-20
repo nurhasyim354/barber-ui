@@ -19,9 +19,9 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
-interface BarberReport {
-  barberId: string;
-  barberName: string;
+interface StaffRevenueRow {
+  staffId: string;
+  staffName: string;
   photoUrl?: string | null;
   totalRevenue: number;
   totalTransactions: number;
@@ -37,7 +37,7 @@ interface ReportSummary {
     qrisTotal: number;
     completedBookings: number;
   };
-  byBarber: BarberReport[];
+  byStaff: StaffRevenueRow[];
 }
 
 function toLocalDateStr(d: Date) {
@@ -73,7 +73,7 @@ export default function ReportsPage() {
     if (from > to) { toast.error('Tanggal awal tidak boleh setelah tanggal akhir'); return; }
     setLoading(true);
     try {
-      const res = await api.get(`/revenue/barbers?from=${from}&to=${to}`);
+      const res = await api.get(`/revenue/staff?from=${from}&to=${to}`);
       setReport(res.data);
     } catch {
       toast.error('Gagal memuat laporan');
@@ -93,15 +93,15 @@ export default function ReportsPage() {
     return null;
   };
 
-  const sorted = report?.byBarber
-    ? [...report.byBarber].sort((a, b) => b.totalRevenue - a.totalRevenue)
+  const sorted = report?.byStaff
+    ? [...report.byStaff].sort((a, b) => b.totalRevenue - a.totalRevenue)
     : [];
 
   const grandTotal = report?.summary.totalRevenue ?? 0;
 
   return (
     <AppPageShell variant="withBottomNav">
-      <PageHeader title="Laporan per Barber" back />
+      <PageHeader title="Laporan per Staff" back />
 
       <PageContainer>
 
@@ -202,10 +202,10 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
 
-            {/* Per-Barber Cards */}
+            {/* Per-staff cards */}
             <Typography variant="h6" fontWeight={500} className="mb-3 flex items-center gap-2">
               <EmojiEventsIcon color="warning" />
-              Peringkat Barber
+              Peringkat Staff
             </Typography>
 
             <Box className="flex flex-col gap-3">
@@ -214,7 +214,7 @@ export default function ReportsPage() {
                   grandTotal > 0 ? Math.round((b.totalRevenue / grandTotal) * 100) : 0;
 
                 return (
-                  <Card key={b.barberId || i} className={i === 0 ? 'border-2 border-yellow-400' : ''}>
+                  <Card key={b.staffId || i} className={i === 0 ? 'border-2 border-yellow-400' : ''}>
                     <CardContent>
                       <Box className="flex items-center gap-3">
                         <Box className="relative">
@@ -222,7 +222,7 @@ export default function ReportsPage() {
                             src={b.photoUrl ?? undefined}
                             sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: 22, fontWeight: 700 }}
                           >
-                            {!b.photoUrl && b.barberName.charAt(0).toUpperCase()}
+                            {!b.photoUrl && b.staffName.charAt(0).toUpperCase()}
                           </Avatar>
                           {medal(i) && (
                             <Box className="absolute -top-1 -right-1 text-base leading-none" sx={{ fontSize: 18 }}>
@@ -233,7 +233,7 @@ export default function ReportsPage() {
 
                         <Box className="flex-1 min-w-0">
                           <Box className="flex items-center gap-1 flex-wrap">
-                            <Typography fontWeight={500}>{b.barberName}</Typography>
+                            <Typography fontWeight={500}>{b.staffName}</Typography>
                             {i === 0 && <Chip label="Terbaik" size="small" color="warning" />}
                           </Box>
                           <Typography variant="caption" color="text.secondary">
@@ -275,13 +275,13 @@ export default function ReportsPage() {
                   Ringkasan
                 </Typography>
                 {sorted.map((b) => (
-                  <Box key={b.barberId || b.barberName} className="flex justify-between items-center py-2 border-b last:border-0">
+                  <Box key={b.staffId || b.staffName} className="flex justify-between items-center py-2 border-b last:border-0">
                     <Box className="flex items-center gap-2">
                       <Avatar src={b.photoUrl ?? undefined} sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: 12 }}>
-                        {!b.photoUrl && b.barberName.charAt(0)}
+                        {!b.photoUrl && b.staffName.charAt(0)}
                       </Avatar>
                       <Box>
-                        <Typography variant="body2" fontWeight={600}>{b.barberName}</Typography>
+                        <Typography variant="body2" fontWeight={600}>{b.staffName}</Typography>
                         <Typography variant="caption" color="text.secondary">
                           {b.completedBookings} selesai
                         </Typography>

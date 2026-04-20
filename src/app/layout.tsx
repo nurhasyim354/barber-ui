@@ -7,7 +7,8 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Booking App',
-  description: 'Aplikasi Booking',
+  description:
+    'Platform booking dan antrian untuk klinik, barbershop, bengkel, dan bisnis lainnya. Daftar tenant, kelola outlet, kasir, dan laporan.',
 };
 
 export const viewport = {

@@ -15,7 +15,7 @@ import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
-import { BarberBottomNav } from '@/components/layout/BottomNav';
+import { StaffBottomNav } from '@/components/layout/BottomNav';
 
 interface BookingHistory {
   _id: string;
@@ -26,7 +26,7 @@ interface BookingHistory {
   status: string;
   date: string;
   notes?: string;
-  barberName?: string;
+  staffName?: string;
 }
 
 const PAGE_SIZE = 20;
@@ -45,7 +45,7 @@ const statusLabel: Record<string, string> = {
   in_progress: 'Dilayani',
 };
 
-export default function BarberHistoryPage() {
+export default function StaffHistoryPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();
   const router = useRouter();
 
@@ -60,7 +60,7 @@ export default function BarberHistoryPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'barber' && user.role !== 'tenant_admin') {
+    if (user.role !== 'staff' && user.role !== 'tenant_admin') {
       router.replace('/');
       return;
     }
@@ -71,7 +71,7 @@ export default function BarberHistoryPage() {
   const loadHistory = useCallback(async (p: number) => {
     setLoading(true);
     try {
-      const res = await api.get(`/bookings/barber-history?page=${p}&limit=${PAGE_SIZE}`);
+      const res = await api.get(`/bookings/staff-history?page=${p}&limit=${PAGE_SIZE}`);
       setBookings(res.data.data);
       setTotal(res.data.total);
       setTotalPages(res.data.totalPages);
@@ -208,7 +208,7 @@ export default function BarberHistoryPage() {
         )}
       </PageContainer>
 
-      <BarberBottomNav />
+      <StaffBottomNav />
     </AppPageShell>
   );
 }

@@ -21,8 +21,9 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
-interface Barber {
+interface StaffMember {
     _id: string;
     name: string;
     photoUrl?: string;
@@ -37,11 +38,11 @@ interface Barber {
 const defaultForm = { name: '', photoUrl: '', specialty: '', phone: '' };
 const PAGE_SIZE = 20;
 
-export default function BarbersPage() {
+export default function StaffManagementPage() {
     const { user, isLoading, loadFromStorage, logout } = useAuthStore();
     const router = useRouter();
 
-    const [barbers, setBarbers] = useState<Barber[]>([]);
+    const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
     const [total, setTotal] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
     const [page, setPage] = useState(1);
@@ -60,14 +61,14 @@ export default function BarbersPage() {
         if (isLoading) return;
         if (!user) { router.replace('/login'); return; }
         if (user.role !== 'tenant_admin') { router.replace('/dashboard'); return; }
-        loadBarbers();
+        loadStaffPage();
     }, [user, isLoading]);
 
-    const loadBarbers = useCallback(async (p = 1) => {
+    const loadStaffPage = useCallback(async (p = 1) => {
         setLoading(true);
         try {
-            const res = await api.get(`/barbers?page=${p}&limit=${PAGE_SIZE}`);
-            setBarbers(res.data.data);
+            const res = await api.get(`/staff?page=${p}&limit=${PAGE_SIZE}`);
+            setStaffMembers(res.data.data);
             setTotal(res.data.total);
             setTotalPages(res.data.totalPages);
             setPage(p);
@@ -84,25 +85,27 @@ export default function BarbersPage() {
         setDialogOpen(true);
     };
 
-    const handleEdit = (b: Barber) => {
+    const handleEdit = (b: StaffMember) => {
         setForm({ name: b.name, photoUrl: b.photoUrl || '', specialty: b.specialty || '', phone: b.phone || '' });
         setEditId(b._id);
         setDialogOpen(true);
     };
+
+    const ui = getTenantUiLabels(user?.tenantType);
 
     const handleSave = async () => {
         if (!form.name.trim()) { toast.error('Nama wajib diisi'); return; }
         setSaving(true);
         try {
             if (editId) {
-                await api.patch(`/barbers/${editId}`, { ...form, isActive: true });
-                toast.success('Barber diupdate');
+                await api.patch(`/staff/${editId}`, { ...form, isActive: true });
+                toast.success(`${ui.staffSingular} diupdate`);
             } else {
-                await api.post('/barbers', form);
-                toast.success('Barber berhasil ditambahkan');
+                await api.post('/staff', form);
+                toast.success(`${ui.staffSingular} berhasil ditambahkan`);
             }
             setDialogOpen(false);
-            loadBarbers(page);
+            loadStaffPage(page);
         } catch {
             toast.error('Gagal menyimpan data staff');
         } finally {
@@ -110,11 +113,11 @@ export default function BarbersPage() {
         }
     };
 
-    const handleToggleActive = async (b: Barber) => {
+    const handleToggleActive = async (b: StaffMember) => {
         try {
-            await api.patch(`/barbers/${b._id}`, { isActive: !b.isActive });
+            await api.patch(`/staff/${b._id}`, { isActive: !b.isActive });
             toast.success(b.isActive ? 'Staff dinonaktifkan' : 'Staff diaktifkan');
-            loadBarbers(page);
+            loadStaffPage(page);
         } catch {
             toast.error('Gagal update status');
         }
@@ -138,10 +141,10 @@ export default function BarbersPage() {
     const handleDelete = async () => {
         if (!deleteId) return;
         try {
-            await api.delete(`/barbers/${deleteId}`);
+            await api.delete(`/staff/${deleteId}`);
             toast.success('Staff dihapus');
             setDeleteId(null);
-            loadBarbers(page);
+            loadStaffPage(page);
         } catch {
             toast.error('Gagal menghapus staff');
         }
@@ -150,7 +153,7 @@ export default function BarbersPage() {
     return (
         <AppPageShell variant="withBottomNav">
             <PageHeader
-                title={`Tim Staff (${total})`}
+                title={`${ui.staffTeamTitle} (${total})`}
                 right={
                     <Box className="flex items-center">
                         <IconButton color="inherit" onClick={openAdd}>
@@ -167,7 +170,7 @@ export default function BarbersPage() {
                 <Box className="flex justify-center mt-12"><CircularProgress /></Box>
             ) : (
                 <PageContainer>
-                    {barbers.length === 0 ? (
+                    {staffMembers.length === 0 ? (
                         <Card>
                             <CardContent className="text-center py-12">
                                 <PersonIcon sx={{ fontSize: 72, color: 'text.disabled' }} />
@@ -183,7 +186,7 @@ export default function BarbersPage() {
                     ) : (
                         <>
                         <Box className="flex flex-col gap-3">
-                            {barbers.map((b) => (
+                            {staffMembers.map((b) => (
                                 <Card key={b._id} className={!b.isActive ? 'opacity-60' : ''}>
                                     <CardContent>
                                         <Box className="flex items-center gap-3">
@@ -240,7 +243,7 @@ export default function BarbersPage() {
                                 <Pagination
                                     count={totalPages}
                                     page={page}
-                                    onChange={(_, v) => loadBarbers(v)}
+                                    onChange={(_, v) => loadStaffPage(v)}
                                     color="primary"
                                     size="small"
                                 />
@@ -253,7 +256,7 @@ export default function BarbersPage() {
 
             {/* Add / Edit Dialog */}
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
-                <DialogTitle fontWeight={500}>{editId ? 'Edit Barber' : 'Tambah Barber'}</DialogTitle>
+                <DialogTitle fontWeight={500}>{editId ? ui.editStaffTitle : ui.addStaffTitle}</DialogTitle>
                 <DialogContent>
                     <Box className="flex flex-col gap-4 pt-2">
                         {/* Photo upload area */}
@@ -303,7 +306,7 @@ export default function BarbersPage() {
 
                         <TextField
                             fullWidth
-                            label="Nama Barber *"
+                            label={ui.staffNameFieldLabel}
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
                         />
@@ -312,7 +315,7 @@ export default function BarbersPage() {
                             label="Spesialisasi (opsional)"
                             value={form.specialty}
                             onChange={(e) => setForm({ ...form, specialty: e.target.value })}
-                            placeholder="Contoh: Fade, Undercut, Classic Cut"
+                            placeholder={ui.specialtyPlaceholder}
                         />
                         <TextField
                             fullWidth
@@ -335,9 +338,9 @@ export default function BarbersPage() {
 
             {/* Delete Confirm */}
             <Dialog open={!!deleteId} onClose={() => setDeleteId(null)} maxWidth="xs" fullWidth>
-                <DialogTitle fontWeight={500}>Hapus Barber?</DialogTitle>
+                <DialogTitle fontWeight={500}>{ui.deleteStaffTitle}</DialogTitle>
                 <DialogContent>
-                    <Typography color="text.secondary">Data barber akan dihapus permanen.</Typography>
+                    <Typography color="text.secondary">Data {ui.staffSingular.toLowerCase()} akan dihapus permanen.</Typography>
                 </DialogContent>
                 <DialogActions className="p-4 gap-2">
                     <Button onClick={() => setDeleteId(null)} variant="outlined" fullWidth>Batal</Button>

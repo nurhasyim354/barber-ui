@@ -12,11 +12,13 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import PersonIcon from '@mui/icons-material/Person';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import { useAuthStore } from '@/store/authStore';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
-export function CustomerBottomNav() {
+export function CustomerBottomNav({ tenantType }: { tenantType?: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
+  const L = getTenantUiLabels(tenantType ?? user?.tenantType);
 
   const value = pathname.startsWith('/history') ? 1 : 0;
 
@@ -38,20 +40,21 @@ export function CustomerBottomNav() {
           '& .MuiBottomNavigationAction-root': { minWidth: { xs: 0, sm: 80 }, px: { xs: 0.5, sm: 1 } },
         }}
       >
-        <BottomNavigationAction label="Booking" icon={<ContentCutIcon />} />
-        <BottomNavigationAction label="Riwayat" icon={<HistoryIcon />} />
+        <BottomNavigationAction label={L.navCustomerBooking} icon={<ContentCutIcon />} />
+        <BottomNavigationAction label={L.navCustomerHistory} icon={<HistoryIcon />} />
         <BottomNavigationAction label="Keluar" icon={<LogoutIcon />} />
       </BottomNavigation>
     </Paper>
   );
 }
 
-export function BarberBottomNav() {
+export function StaffBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
+  const L = getTenantUiLabels(user?.tenantType);
 
-  const routes = ['/barber', '/barber/history'];
+  const routes = ['/staff', '/staff/history'];
   const value = routes.findIndex((r) => pathname === r || pathname.startsWith(r + '/'));
 
   return (
@@ -59,8 +62,8 @@ export function BarberBottomNav() {
       <BottomNavigation
         value={value === -1 ? 0 : value}
         onChange={(_, v) => {
-          if (v === 0) router.push('/barber');
-          else if (v === 1) router.push('/barber/history');
+          if (v === 0) router.push('/staff');
+          else if (v === 1) router.push('/staff/history');
           else { logout(); router.push('/login'); }
         }}
         showLabels
@@ -73,7 +76,7 @@ export function BarberBottomNav() {
         }}
       >
         <BottomNavigationAction label="Antrian" icon={<ListAltIcon />} />
-        <BottomNavigationAction label="Riwayat" icon={<HistoryIcon />} />
+        <BottomNavigationAction label={L.navCustomerHistory} icon={<HistoryIcon />} />
         <BottomNavigationAction label="Keluar" icon={<LogoutIcon />} />
       </BottomNavigation>
     </Paper>
@@ -83,9 +86,10 @@ export function BarberBottomNav() {
 export function TenantAdminBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
+  const L = getTenantUiLabels(user?.tenantType);
 
-  const routes = ['/dashboard', '/pos', '/barbers', '/customers', '/services'];
+  const routes = ['/dashboard', '/pos', '/staff/manage', '/customers', '/services'];
   const value = routes.findIndex((r) => pathname.startsWith(r));
 
   return (
@@ -108,9 +112,9 @@ export function TenantAdminBottomNav() {
       >
         <BottomNavigationAction label="Dashboard" icon={<DashboardIcon />} />
         <BottomNavigationAction label="POS" icon={<ReceiptIcon />} />
-        <BottomNavigationAction label="Barber" icon={<PersonIcon />} />
+        <BottomNavigationAction label={L.navStaff} icon={<PersonIcon />} />
         <BottomNavigationAction label="Pelanggan" icon={<PeopleIcon />} />
-        <BottomNavigationAction label="Layanan" icon={<ContentCutIcon />} />
+        <BottomNavigationAction label={L.navServices} icon={<ContentCutIcon />} />
       </BottomNavigation>
     </Paper>
   );

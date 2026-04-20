@@ -28,7 +28,7 @@ interface TenantReportItem {
   cashRevenue: number;
   qrisRevenue: number;
   totalServices: number;
-  totalBarbers: number;
+  totalStaff: number;
   totalCustomers: number;
 }
 
@@ -327,9 +327,9 @@ export default function AdminReportPage() {
                             <ContentCutIcon sx={{ fontSize: 16, color: 'primary.main' }} />
                             <Box>
                               <Typography variant="caption" color="text.secondary" display="block">
-                                Barber
+                                Staff
                               </Typography>
-                              <Typography fontWeight={500}>{t.totalBarbers}</Typography>
+                              <Typography fontWeight={500}>{t.totalStaff}</Typography>
                             </Box>
                           </Box>
                         </Grid>

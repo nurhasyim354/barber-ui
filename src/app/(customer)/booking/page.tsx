@@ -6,7 +6,7 @@ import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Avatar, Divider, LinearProgress, Checkbox,
-  InputAdornment,
+  InputAdornment, Alert,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -20,21 +20,32 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import LockIcon from '@mui/icons-material/Lock';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import NoteAltIcon from '@mui/icons-material/NoteAlt';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface TenantInfo { _id: string; name: string; address: string; theme?: { primaryColor?: string } | null; }
+interface TenantInfo {
+  _id: string;
+  name: string;
+  address: string;
+  theme?: { primaryColor?: string } | null;
+  /** 0 = reminder WA mati; dari GET /tenants/:id publik */
+  customerReturnReminderDays?: number;
+  tenantType?: string;
+}
 
-interface HaircutPhoto {
+interface ServicePhotoDoc {
   _id: string;
   photos: string[];
-  barberName?: string | null;
+  staffName?: string | null;
   createdAt: string;
 }
 
@@ -44,12 +55,13 @@ interface Service {
   description: string;
   price: number;
   durationMinutes: number;
+  photoUrl?: string | null;
 }
 
-// Shape matches BarberQueueInfo returned by GET /tenants/:id/barbers/queue
-interface Barber {
-  barberId: string;
-  barberName: string;
+// StaffQueueInfo dari GET /tenants/:id/staff/queue
+interface StaffQueueRow {
+  staffId: string;
+  staffName: string;
   photoUrl: string | null;
   rating: number;
   totalReviews: number;
@@ -60,7 +72,7 @@ interface Barber {
 interface ActiveBooking {
   _id: string;
   serviceName: string;
-  barberName?: string;
+  staffName?: string;
   queueNumber: number;
   status: string;
   date: string;
@@ -70,8 +82,17 @@ interface BookingResult {
   _id: string;
   queueNumber: number;
   serviceName: string;
-  barberName: string | null;
+  staffName: string | null;
   servicePrice: number;
+}
+
+interface LastDoneVisit {
+  _id: string;
+  serviceName: string;
+  servicePrice: number;
+  queueNumber: number;
+  staffName: string | null;
+  date: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -120,17 +141,18 @@ function BookingContent() {
 
   // ── State: booking flow ────────────────────────────────────────────────────
   const [services, setServices] = useState<Service[]>([]);
-  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [staffQueue, setStaffQueue] = useState<StaffQueueRow[]>([]);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
-  const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<StaffQueueRow | null>(null);
   const [notes, setNotes] = useState('');
-  const [bookStep, setBookStep] = useState<'service' | 'barber'>('service');
+  const [bookStep, setBookStep] = useState<'service' | 'staff'>('service');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
-  const [lastHaircut, setLastHaircut] = useState<HaircutPhoto | null>(null);
+  const [lastHaircut, setLastHaircut] = useState<ServicePhotoDoc | null>(null);
+  const [lastDoneVisit, setLastDoneVisit] = useState<LastDoneVisit | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
-  const [barbersLoading, setBarbersLoading] = useState(false);
+  const [staffQueueLoading, setStaffQueueLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -171,22 +193,30 @@ function BookingContent() {
     }
     setPageLoading(true);
     try {
-      const [svcRes, histRes] = await Promise.all([
+      const [svcRes, histRes, tenantRes] = await Promise.all([
         api.get(`/tenants/${effectiveTenantId}/services`),
         api.get('/bookings/history?limit=100'),
+        api.get(`/tenants/${effectiveTenantId}`),
       ]);
       setServices(svcRes.data);
+      setTenant(tenantRes.data);
       const historyItems: (ActiveBooking & { tenantId?: string })[] = histRes.data?.data ?? [];
       const active = historyItems.find(
         (b) => b.status === 'waiting' || b.status === 'in_progress',
       );
       if (active) setActiveBooking(active);
 
-      // Ambil foto  terakhir customer di tenant ini
       try {
-        const photoRes = await api.get(`/haircut-photos/my-last?tenantId=${effectiveTenantId}`);
+        const [photoRes, doneRes] = await Promise.all([
+          api.get(`/service-photos/my-last?tenantId=${effectiveTenantId}`),
+          api.get(`/bookings/my-last-done?tenantId=${effectiveTenantId}`),
+        ]);
         setLastHaircut(photoRes.data ?? null);
-      } catch { /* abaikan jika gagal */ }
+        setLastDoneVisit(doneRes.data ?? null);
+      } catch {
+        setLastHaircut(null);
+        setLastDoneVisit(null);
+      }
 
       // Derive visited tenants from booking history for multi-tenant selector
       if (!isQrFlow) {
@@ -271,15 +301,15 @@ function BookingContent() {
     });
   };
 
-  const handleGoToBarber = () => {
+  const handleGoToStaff = () => {
     if (selectedServices.length === 0) { toast.error('Pilih minimal satu layanan'); return; }
-    setSelectedBarber(null);
-    setBookStep('barber');
-    setBarbersLoading(true);
-    api.get(`/tenants/${effectiveTenantId}/barbers/queue`)
-      .then((r) => setBarbers(r.data))
+    setSelectedStaff(null);
+    setBookStep('staff');
+    setStaffQueueLoading(true);
+    api.get(`/tenants/${effectiveTenantId}/staff/queue`)
+      .then((r) => setStaffQueue(r.data))
       .catch(() => toast.error('Gagal memuat daftar staff'))
-      .finally(() => setBarbersLoading(false));
+      .finally(() => setStaffQueueLoading(false));
   };
 
   const handleBook = async () => {
@@ -289,7 +319,7 @@ function BookingContent() {
       const res = await api.post('/bookings', {
         tenantId: effectiveTenantId,
         serviceIds: selectedServices.map((s) => s._id),
-        barberId: selectedBarber?.barberId,
+        staffId: selectedStaff?.staffId,
         notes,
       });
       const result = Array.isArray(res.data) ? res.data[0] : res.data;
@@ -304,7 +334,7 @@ function BookingContent() {
         toast.success(`Booking berhasil! Nomor antrian Anda: #${result.queueNumber}`, { duration: 6000 });
         setBookStep('service');
         setSelectedServices([]);
-        setSelectedBarber(null);
+        setSelectedStaff(null);
         loadBookingData();
       }
     } catch (err: unknown) {
@@ -318,6 +348,7 @@ function BookingContent() {
 
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
 
   // ── Loading spinner ────────────────────────────────────────────────────────
   if (authLoading) {
@@ -520,10 +551,10 @@ function BookingContent() {
               <Typography variant="body2" color="text.secondary">Layanan</Typography>
               <Typography variant="body2" fontWeight={500}>{bookingResult.serviceName}</Typography>
             </Box>
-            {bookingResult.barberName && (
+            {bookingResult.staffName && (
               <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2" color="text.secondary">Barber</Typography>
-                <Typography variant="body2" fontWeight={500}>{bookingResult.barberName}</Typography>
+                <Typography variant="body2" color="text.secondary">{bookingLabels.staffSingular}</Typography>
+                <Typography variant="body2" fontWeight={500}>{bookingResult.staffName}</Typography>
               </Box>
             )}
             <Divider sx={{ my: 1.5, opacity: 0.5, borderColor: 'rgba(0,0,0,0.08)' }} />
@@ -541,7 +572,7 @@ function BookingContent() {
           Lihat Riwayat
         </Button>
         <Button variant="text" color="inherit" sx={{ color: 'text.secondary' }} onClick={() => {
-          setSelectedServices([]); setSelectedBarber(null);
+          setSelectedServices([]); setSelectedStaff(null);
           setNotes(''); setBookingResult(null); setBookStep('service');
         }}>
           Booking Lagi
@@ -560,10 +591,10 @@ function BookingContent() {
       }}
     >
       <PageHeader
-        title="💈 Booking"
-        back={bookStep === 'barber'}
+        title={bookingLabels.bookingPageTitle}
+        back={bookStep === 'staff'}
         right={
-          bookStep === 'barber' ? (
+          bookStep === 'staff' ? (
             <Button color="inherit" size="small" startIcon={<ArrowBackIcon />}
               onClick={() => setBookStep('service')}
             >
@@ -657,9 +688,9 @@ function BookingContent() {
                   #{activeBooking.queueNumber}
                 </Typography>
                 <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{activeBooking.serviceName}</Typography>
-                {activeBooking.barberName && (
+                {activeBooking.staffName && (
                   <Typography variant="body2" color="text.secondary">
-                    Barber: {activeBooking.barberName}
+                    {bookingLabels.staffSingular}: {activeBooking.staffName}
                   </Typography>
                 )}
                 <Chip
@@ -670,6 +701,65 @@ function BookingContent() {
                 />
               </CardContent>
             </Card>
+          )}
+
+          {/* Kunjungan terakhir + foto hasil layanan + info reminder */}
+          {!activeBooking && (lastDoneVisit || (lastHaircut && lastHaircut.photos.length > 0)) && (
+            <Card sx={{ mb: 3, borderRadius: 3, border: 1, borderColor: 'divider' }}>
+              <CardContent>
+                <Typography variant="subtitle2" fontWeight={800} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <PhotoLibraryIcon fontSize="small" color="primary" />
+                  Kunjungan & hasil layanan terakhir
+                </Typography>
+                {lastDoneVisit && (
+                  <Box sx={{ mb: lastHaircut?.photos?.length ? 1.5 : 0 }}>
+                    <Typography fontWeight={700}>{lastDoneVisit.serviceName}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(lastDoneVisit.date).toLocaleDateString('id-ID', {
+                        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                      })}
+                      {lastDoneVisit.staffName ? ` · ${lastDoneVisit.staffName}` : ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Rp {lastDoneVisit.servicePrice.toLocaleString('id-ID')} · antrian #{lastDoneVisit.queueNumber}
+                    </Typography>
+                  </Box>
+                )}
+                {lastHaircut && lastHaircut.photos.length > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Foto dokumentasi terakhir
+                      {' · '}
+                      {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
+                      {lastHaircut.photos.map((src, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={src}
+                          alt={`Hasil-${i + 1}`}
+                          style={{
+                            height: 88, width: 88, objectFit: 'cover', borderRadius: 12, flexShrink: 0,
+                            border: '1px solid rgba(0,0,0,0.08)',
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {tenant && (tenant.customerReturnReminderDays ?? 0) > 0 && (
+            <Alert severity="info" icon={<NotificationsActiveIcon />} sx={{ mb: 3, borderRadius: 2 }}>
+              <Typography variant="body2" fontWeight={600}>Pengingat kunjungan berikutnya</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {tenant.name} dapat mengirim pesan WhatsApp sekitar{' '}
+                <strong>{tenant.customerReturnReminderDays} hari</strong> setelah layanan selesai, mengingatkan Anda untuk booking lagi.
+              </Typography>
+            </Alert>
           )}
 
           {/* Step 1: Select Services */}
@@ -731,18 +821,30 @@ function BookingContent() {
                             onClick={(e) => e.stopPropagation()}
                           />
                           <Avatar
+                            src={svc.photoUrl || undefined}
+                            variant="rounded"
                             sx={{
-                              background: selected
-                                ? (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`
-                                : (t) => `linear-gradient(135deg, ${t.palette.primary.light}CC, ${t.palette.primary.main}88)`,
-                              width: 46, height: 46,
-                              boxShadow: selected
-                                ? (t) => `0 4px 12px ${t.palette.primary.main}44`
-                                : '0 2px 6px rgba(0,0,0,0.12)',
+                              width: 52,
+                              height: 52,
+                              flexShrink: 0,
+                              ...(svc.photoUrl
+                                ? {
+                                    boxShadow: selected
+                                      ? (t) => `0 4px 14px ${t.palette.primary.main}40`
+                                      : '0 2px 8px rgba(0,0,0,0.12)',
+                                  }
+                                : {
+                                    background: selected
+                                      ? (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`
+                                      : (t) => `linear-gradient(135deg, ${t.palette.primary.light}CC, ${t.palette.primary.main}88)`,
+                                    boxShadow: selected
+                                      ? (t) => `0 4px 12px ${t.palette.primary.main}44`
+                                      : '0 2px 6px rgba(0,0,0,0.12)',
+                                  }),
                               transition: 'all 0.2s ease',
                             }}
                           >
-                            <ContentCutIcon sx={{ color: 'white', fontSize: 20 }} />
+                            {!svc.photoUrl && <ContentCutIcon sx={{ color: 'white', fontSize: 22 }} />}
                           </Avatar>
                           <Box flex={1} minWidth={0}>
                             <Typography fontWeight={400} noWrap>{svc.name}</Typography>
@@ -784,9 +886,18 @@ function BookingContent() {
                     Layanan Dipilih ({selectedServices.length})
                   </Typography>
                   {selectedServices.map((s) => (
-                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                      <Typography variant="body2">{s.name}</Typography>
-                      <Typography variant="body2" fontWeight={500}>Rp {s.price.toLocaleString('id-ID')}</Typography>
+                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Avatar
+                          src={s.photoUrl || undefined}
+                          variant="rounded"
+                          sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: 'primary.light' }}
+                        >
+                          {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16 }} />}
+                        </Avatar>
+                        <Typography variant="body2" noWrap>{s.name}</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight={500} sx={{ flexShrink: 0 }}>Rp {s.price.toLocaleString('id-ID')}</Typography>
                     </Box>
                   ))}
                   <Divider sx={{ my: 1.5, opacity: 0.4, borderColor: 'rgba(0,0,0,0.12)' }} />
@@ -799,7 +910,7 @@ function BookingContent() {
                     </Typography>
                   </Box>
                   <Button
-                    variant="contained" fullWidth onClick={handleGoToBarber}
+                    variant="contained" fullWidth onClick={handleGoToStaff}
                     sx={{ borderRadius: 2.5, py: 1.3, fontWeight: 700, letterSpacing: 0.3 }}
                   >
                     Pilih Staff →
@@ -815,8 +926,8 @@ function BookingContent() {
             </>
           )}
 
-          {/* Step 2: Select Barber */}
-          {bookStep === 'barber' && selectedServices.length > 0 && (
+          {/* Step 2: Select staff */}
+          {bookStep === 'staff' && selectedServices.length > 0 && (
             <>
               {/* Selected services summary */}
               <Card
@@ -832,9 +943,18 @@ function BookingContent() {
                     Layanan dipilih ({selectedServices.length})
                   </Typography>
                   {selectedServices.map((s) => (
-                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                      <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
-                      <Typography variant="body2" fontWeight={600} color="primary">
+                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5, gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Avatar
+                          src={s.photoUrl || undefined}
+                          variant="rounded"
+                          sx={{ width: 28, height: 28, flexShrink: 0, bgcolor: 'primary.light' }}
+                        >
+                          {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 14 }} />}
+                        </Avatar>
+                        <Typography variant="body2" fontWeight={600} noWrap>{s.name}</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
                         Rp {s.price.toLocaleString('id-ID')}
                       </Typography>
                     </Box>
@@ -854,24 +974,24 @@ function BookingContent() {
                     background: (t) => `linear-gradient(180deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`,
                   }}
                 />
-                <Typography variant="h6" fontWeight={600} letterSpacing={-0.3}>Pilih Barber</Typography>
+                <Typography variant="h6" fontWeight={600} letterSpacing={-0.3}>Pilih {bookingLabels.staffSingular}</Typography>
               </Box>
 
-              {barbersLoading ? (
+              {staffQueueLoading ? (
                 <Box sx={{ px: 1 }}>
                   <LinearProgress sx={{ borderRadius: 2, height: 3 }} />
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
                     Memuat daftar staff...
                   </Typography>
                 </Box>
-              ) : barbers.length === 0 ? (
+              ) : staffQueue.length === 0 ? (
                 <Card sx={{ borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
                   <CardContent sx={{ textAlign: 'center', py: 5 }}>
                     <PersonIcon sx={{ fontSize: 52, color: 'text.disabled' }} />
                     <Typography color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>Belum ada staff tersedia</Typography>
                     <Button
                       variant="outlined" sx={{ borderRadius: 2.5 }}
-                      onClick={() => { setSelectedBarber(null); setDialogOpen(true); }}
+                      onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
                     >
                       Booking Tanpa Pilih Staf
                     </Button>
@@ -879,12 +999,12 @@ function BookingContent() {
                 </Card>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {barbers.map((b) => {
-                    const sel = selectedBarber?.barberId === b.barberId;
+                  {staffQueue.map((b) => {
+                    const sel = selectedStaff?.staffId === b.staffId;
                     return (
                       <Card
-                        key={b.barberId}
-                        onClick={() => { setSelectedBarber(b); setDialogOpen(true); }}
+                        key={b.staffId}
+                        onClick={() => { setSelectedStaff(b); setDialogOpen(true); }}
                         sx={{
                           cursor: 'pointer', borderRadius: 3,
                           border: sel
@@ -912,10 +1032,10 @@ function BookingContent() {
                                 transition: 'border 0.2s ease',
                               }}
                             >
-                              {!b.photoUrl && b.barberName.charAt(0).toUpperCase()}
+                              {!b.photoUrl && b.staffName.charAt(0).toUpperCase()}
                             </Avatar>
                             <Box flex={1}>
-                              <Typography fontWeight={500} fontSize="0.97rem">{b.barberName}</Typography>
+                              <Typography fontWeight={500} fontSize="0.97rem">{b.staffName}</Typography>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
                                 <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
                                 <Typography variant="body2" fontWeight={500}>
@@ -948,7 +1068,7 @@ function BookingContent() {
                   })}
 
                   <Box
-                    onClick={() => { setSelectedBarber(null); setDialogOpen(true); }}
+                    onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
                     sx={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       py: 2, borderRadius: 3, cursor: 'pointer',
@@ -986,9 +1106,18 @@ function BookingContent() {
               Layanan
             </Typography>
             {selectedServices.map((s) => (
-              <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
-                <Typography variant="body2" fontWeight={500} color="primary">
+              <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                  <Avatar
+                    src={s.photoUrl || undefined}
+                    variant="rounded"
+                    sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: 'primary.light' }}
+                  >
+                    {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16 }} />}
+                  </Avatar>
+                  <Typography variant="body2" fontWeight={600} noWrap>{s.name}</Typography>
+                </Box>
+                <Typography variant="body2" fontWeight={500} color="primary" sx={{ flexShrink: 0 }}>
                   Rp {s.price.toLocaleString('id-ID')}
                 </Typography>
               </Box>
@@ -1003,22 +1132,22 @@ function BookingContent() {
               <Typography fontWeight={600} variant="body2">~{totalDuration} menit</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" color="text.secondary">Barber</Typography>
-              <Typography fontWeight={500} variant="body2">{selectedBarber?.barberName || 'Siapapun tersedia'}</Typography>
+              <Typography variant="body2" color="text.secondary">{bookingLabels.staffSingular}</Typography>
+              <Typography fontWeight={500} variant="body2">{selectedStaff?.staffName || 'Siapapun tersedia'}</Typography>
             </Box>
-            {selectedBarber && selectedBarber.estimatedWaitMinutes > 0 && (
+            {selectedStaff && selectedStaff.estimatedWaitMinutes > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
                 <Typography variant="body2" color="text.secondary">Est. tunggu</Typography>
                 <Chip
-                  label={waitLabel(selectedBarber.estimatedWaitMinutes)} size="small"
-                  color={waitColor(selectedBarber.estimatedWaitMinutes)}
+                  label={waitLabel(selectedStaff.estimatedWaitMinutes)} size="small"
+                  color={waitColor(selectedStaff.estimatedWaitMinutes)}
                   sx={{ fontWeight: 700, height: 22 }}
                 />
               </Box>
             )}
           </Box>
 
-          {/* Foto  terakhir customer */}
+          {/* Foto dokumentasi (ringkas di dialog konfirmasi) */}
           {lastHaircut && lastHaircut.photos.length > 0 && (
             <Box
               sx={{
@@ -1028,7 +1157,7 @@ function BookingContent() {
               }}
             >
               <Typography variant="overline" display="block" sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'text.secondary', mb: 1 }}>
-                Foto  Terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                Hasil layanan terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
                 {lastHaircut.photos.map((src, i) => (
@@ -1049,7 +1178,7 @@ function BookingContent() {
 
           <TextField
             fullWidth multiline rows={3} label="Catatan (opsional)"
-            placeholder="Contoh: potong pendek bagian samping"
+            placeholder={bookingLabels.bookingNotesPlaceholder}
             value={notes} onChange={(e) => setNotes(e.target.value)}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
             InputProps={{
@@ -1078,7 +1207,7 @@ function BookingContent() {
         </DialogActions>
       </Dialog>
 
-      <CustomerBottomNav />
+      <CustomerBottomNav tenantType={tenant?.tenantType ?? user?.tenantType} />
     </Box>
   );
 }

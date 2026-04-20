@@ -16,6 +16,7 @@ import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import QRCode from 'react-qr-code';
 import toast from 'react-hot-toast';
+import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
@@ -26,6 +27,7 @@ export default function BookingQrPage() {
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [origin, setOrigin] = useState('');
+  const [tenantName, setTenantName] = useState('');
   const qrContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,11 +35,29 @@ export default function BookingQrPage() {
     setOrigin(window.location.origin);
   }, [loadFromStorage]);
 
+  useEffect(() => {
+    const tenantId = user?.tenantId;
+    if (!tenantId) {
+      setTenantName('');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(`/tenants/${tenantId}`);
+        if (!cancelled) setTenantName(res.data?.name?.trim() || '');
+      } catch {
+        if (!cancelled) setTenantName('');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.tenantId]);
+
   // Auth guard
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role === 'customer' || user.role === 'barber') {
+    if (user.role === 'customer' || user.role === 'staff') {
       router.replace('/booking');
     }
   }, [user, isLoading, router]);
@@ -103,9 +123,14 @@ export default function BookingQrPage() {
           <ArrowBackIcon />
         </IconButton>
         <QrCode2Icon sx={{ fontSize: 26, color: 'primary.main' }} />
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="h6" fontWeight={500} lineHeight={1.2}>QR Booking</Typography>
-          <Typography variant="caption" color="text.secondary">
+          {tenantName ? (
+            <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap sx={{ mt: 0.25 }}>
+              {tenantName}
+            </Typography>
+          ) : null}
+          <Typography variant="caption" color="text.secondary" display="block">
             Tampilkan ke pelanggan untuk scan
           </Typography>
         </Box>
@@ -129,14 +154,27 @@ export default function BookingQrPage() {
               mb: 3,
             }}
           >
+            {tenantName ? (
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                textAlign="center"
+                sx={{ mb: 2, px: 0.5, lineHeight: 1.35, color: 'text.primary' }}
+              >
+                {tenantName}
+              </Typography>
+            ) : null}
             <Box sx={{ width: '100%', maxWidth: 220, mx: 'auto', '& svg': { width: '100% !important', height: 'auto !important' } }}>
               <QRCode value={qrUrl} size={220} level="M" style={{ display: 'block' }} />
             </Box>
           </Box>
 
-          
-          <Typography variant="body2" color="text.secondary" mb={3}>
-            Scan untuk booking sekarang
+          <Typography variant="body2" color="text.secondary" mb={3} textAlign="center">
+            {tenantName ? (
+              <>Scan untuk booking di <strong>{tenantName}</strong></>
+            ) : (
+              'Scan untuk booking sekarang'
+            )}
           </Typography>
 
           {/* Action buttons */}

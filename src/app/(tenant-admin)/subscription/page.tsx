@@ -26,6 +26,7 @@ interface Plan {
   minTransactions: number;
   maxTransactions: number | null;
   pricePerMonth: number;
+  tenantTypes?: string[] | null;
 }
 
 interface Billing {
@@ -139,6 +140,13 @@ export default function SubscriptionPage() {
           <Box className="flex justify-center mt-12"><CircularProgress /></Box>
         ) : (
           <>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Tier dan harga mengikuti <strong>jenis bisnis</strong> outlet Anda
+              {user?.tenantType ? (
+                <> (<code>{user.tenantType}</code>)</>
+              ) : null}
+              . Transaksi dihitung dari pembayaran lunas per bulan.
+            </Alert>
             {/* Current Billing Card */}
             {billing && (
               <Card className="mb-4" sx={{
@@ -217,7 +225,7 @@ export default function SubscriptionPage() {
             <Card className="mb-4">
               <CardContent>
                 <Typography variant="subtitle1" fontWeight={500} mb={2}>Paket Berlangganan</Typography>
-                {plans.map((p) => (
+                {[...plans].sort((a, b) => a.minTransactions - b.minTransactions).map((p) => (
                   <Box key={p._id} className="flex justify-between items-center py-2 border-b last:border-0">
                     <Box>
                       <Typography fontWeight={600}>{p.displayName}</Typography>

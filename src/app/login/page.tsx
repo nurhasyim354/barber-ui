@@ -10,6 +10,7 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import LockIcon from '@mui/icons-material/Lock';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore, AuthUser } from '@/store/authStore';
@@ -35,7 +36,7 @@ export default function LoginPage() {
     if (user) {
       if (user.role === 'super_admin') router.replace('/admin/tenants');
       else if (user.role === 'tenant_admin') router.replace('/dashboard');
-      else if (user.role === 'barber') router.replace('/barber');
+      else if (user.role === 'staff') router.replace('/staff');
       else router.replace('/booking');
     }
   }, [user, router]);
@@ -114,12 +115,28 @@ export default function LoginPage() {
   return (
       <Box
         sx={{
+          position: 'relative',
           minHeight: '100svh', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', p: 2,
           background: (t) =>
             `linear-gradient(160deg, ${t.palette.primary.light}22 0%, ${t.palette.background.default} 55%, ${t.palette.background.paper} 100%)`,
         }}
       >
+      <Button
+        variant="text"
+        color="inherit"
+        startIcon={<ArrowBackIcon />}
+        onClick={() => router.push('/')}
+        sx={{
+          position: 'absolute',
+          top: { xs: 8, sm: 16 },
+          left: { xs: 8, sm: 16 },
+          color: 'text.secondary',
+          '&:hover': { bgcolor: 'action.hover' },
+        }}
+      >
+        Kembali ke beranda
+      </Button>
       <Box sx={{ mb: 5, textAlign: 'center' }}>
         <Box
           sx={{

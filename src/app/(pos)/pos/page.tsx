@@ -26,6 +26,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
+import { getTenantUiLabels } from '@/lib/tenantLabels';
 
 interface Booking {
   _id: string;
@@ -36,19 +37,19 @@ interface Booking {
   queueNumber: number;
   status: string;
   notes?: string;
-  barberId?: string;
-  barberName?: string;
+  staffId?: string;
+  staffName?: string;
   date: string;
 }
 
-interface HaircutPhoto {
+interface ServicePhotoDoc {
   _id: string;
   photos: string[];
-  barberName?: string | null;
+  staffName?: string | null;
   createdAt: string;
 }
 
-interface BarberOption {
+interface StaffOption {
   _id: string;
   name: string;
   photoUrl?: string | null;
@@ -124,7 +125,7 @@ function buildReceipt(data: ReceiptData): string {
     BOLD_OFF,
     LEFT,
     `Pelanggan : ${booking.customerName}\n`,
-    booking.barberName ? `Staff    : ${booking.barberName}\n` : '',
+    booking.staffName ? `Staff    : ${booking.staffName}\n` : '',
     booking.notes ? `Catatan   : ${booking.notes}\n` : '',
     divider,
     CENTER,
@@ -149,6 +150,7 @@ function buildReceipt(data: ReceiptData): string {
 
 export default function PosPage() {
   const { user, isLoading, loadFromStorage, logout } = useAuthStore();
+  const ui = getTenantUiLabels(user?.tenantType);
   const router = useRouter();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -162,18 +164,18 @@ export default function PosPage() {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
 
-  const [barberDialog, setBarberDialog] = useState<{ open: boolean; booking: Booking | null }>({
+  const [staffAssignDialog, setStaffAssignDialog] = useState<{ open: boolean; booking: Booking | null }>({
     open: false, booking: null,
   });
-  const [barbers, setBarbers] = useState<BarberOption[]>([]);
-  const [barbersLoaded, setBarbersLoaded] = useState(false);
-  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
-  const [savingBarber, setSavingBarber] = useState(false);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [staffOptionsLoaded, setStaffOptionsLoaded] = useState(false);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [savingStaffAssign, setSavingStaffAssign] = useState(false);
 
   // Foto hasil 
   const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [lastHaircutDialog, setLastHaircutDialog] = useState<{ open: boolean; booking: Booking | null; data: HaircutPhoto | null; loading: boolean }>({
+  const [lastServicePhotoDialog, setLastServicePhotoDialog] = useState<{ open: boolean; booking: Booking | null; data: ServicePhotoDoc | null; loading: boolean }>({
     open: false, booking: null, data: null, loading: false,
   });
 
@@ -217,33 +219,33 @@ export default function PosPage() {
     }
   };
 
-  const handleOpenBarberDialog = async (b: Booking) => {
-    setSelectedBarberId(b.barberId ?? null);
-    setBarberDialog({ open: true, booking: b });
-    if (!barbersLoaded && user?.tenantId) {
+  const handleOpenStaffAssignDialog = async (b: Booking) => {
+    setSelectedStaffId(b.staffId ?? null);
+    setStaffAssignDialog({ open: true, booking: b });
+    if (!staffOptionsLoaded && user?.tenantId) {
       try {
-        const res = await api.get(`/tenants/${user.tenantId}/barbers`);
-        setBarbers(res.data);
-        setBarbersLoaded(true);
+        const res = await api.get(`/tenants/${user.tenantId}/staff`);
+        setStaffOptions(res.data);
+        setStaffOptionsLoaded(true);
       } catch {
         toast.error('Gagal memuat daftar staff');
       }
     }
   };
 
-  const handleSaveBarber = async () => {
-    const booking = barberDialog.booking;
+  const handleSaveStaffAssign = async () => {
+    const booking = staffAssignDialog.booking;
     if (!booking) return;
-    setSavingBarber(true);
+    setSavingStaffAssign(true);
     try {
-      await api.patch(`/bookings/${booking._id}/barber`, { barberId: selectedBarberId });
-      toast.success('Barber berhasil diubah');
-      setBarberDialog({ open: false, booking: null });
+      await api.patch(`/bookings/${booking._id}/staff`, { staffId: selectedStaffId });
+      toast.success(`Penugasan ${ui.staffSingular} berhasil diubah`);
+      setStaffAssignDialog({ open: false, booking: null });
       loadBookings();
     } catch {
       toast.error('Gagal mengubah staff');
     } finally {
-      setSavingBarber(false);
+      setSavingStaffAssign(false);
     }
   };
 
@@ -343,6 +345,7 @@ export default function PosPage() {
   const printReceiptBrowser = () => {
     if (!receiptData) return;
     const { booking, payment, shopName } = receiptData;
+    const assigneeLabel = ui.assigneeReceiptLabel;
     const date = new Date(payment.paidAt).toLocaleString('id-ID', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
@@ -382,7 +385,7 @@ export default function PosPage() {
         <div class="divider"></div>
         <div class="center bold spacer">${booking.serviceName}</div>
         <div>Pelanggan : ${booking.customerName}</div>
-        ${booking.barberName ? `<div>Barber    : ${booking.barberName}</div>` : ''}
+        ${booking.staffName ? `<div>${assigneeLabel}    : ${booking.staffName}</div>` : ''}
         ${booking.notes ? `<div>Catatan   : ${booking.notes}</div>` : ''}
         <div class="divider"></div>
         <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
@@ -423,7 +426,7 @@ export default function PosPage() {
     if (uploadPhotos.length === 0) return;
     setUploadingPhotos(true);
     try {
-      await api.post(`/bookings/${bookingId}/haircut-photos`, { photos: uploadPhotos });
+      await api.post(`/bookings/${bookingId}/service-photos`, { photos: uploadPhotos });
       toast.success('Foto berhasil disimpan!');
       setUploadPhotos([]);
     } catch {
@@ -433,13 +436,13 @@ export default function PosPage() {
     }
   };
 
-  const handleOpenLastHaircut = async (b: Booking) => {
-    setLastHaircutDialog({ open: true, booking: b, data: null, loading: true });
+  const handleOpenLastServicePhoto = async (b: Booking) => {
+    setLastServicePhotoDialog({ open: true, booking: b, data: null, loading: true });
     try {
-      const res = await api.get(`/bookings/${b._id}/last-haircut`);
-      setLastHaircutDialog((prev) => ({ ...prev, data: res.data, loading: false }));
+      const res = await api.get(`/bookings/${b._id}/last-service-photo`);
+      setLastServicePhotoDialog((prev) => ({ ...prev, data: res.data, loading: false }));
     } catch {
-      setLastHaircutDialog((prev) => ({ ...prev, loading: false }));
+      setLastServicePhotoDialog((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -487,9 +490,9 @@ export default function PosPage() {
                       <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
                       <Typography fontWeight={600}>{b.customerName}</Typography>
                       <Typography variant="body2" color="text.secondary">{b.serviceName}</Typography>
-                      {b.barberName && (
+                      {b.staffName && (
                         <Typography variant="body2" color="text.secondary">
-                        dengan  {b.barberName}
+                        dengan  {b.staffName}
                         </Typography>
                       )}
                       {b.notes && (
@@ -544,7 +547,7 @@ export default function PosPage() {
                         size="small"
                         color="info"
                         startIcon={<HistoryIcon />}
-                        onClick={() => handleOpenLastHaircut(b)}
+                        onClick={() => handleOpenLastServicePhoto(b)}
                       >
                         Foto Terakhir
                       </Button>
@@ -562,7 +565,7 @@ export default function PosPage() {
                       size="small"
                       color="secondary"
                       startIcon={<SwapHorizIcon />}
-                      onClick={() => handleOpenBarberDialog(b)}
+                      onClick={() => handleOpenStaffAssignDialog(b)}
                     >
                       Ganti Staff
                     </Button>
@@ -593,7 +596,7 @@ export default function PosPage() {
                         <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
                         <Typography variant="body2" color="text.secondary">
                           {b.serviceName}
-                          {b.barberName && ` · ${b.barberName}`}
+                          {b.staffName && ` · ${b.staffName}`}
                         </Typography>
                       </Box>
                       <Box className="text-right">
@@ -630,9 +633,9 @@ export default function PosPage() {
                   <Typography color="text.secondary">
                     {payDialog.booking.customerName} — {payDialog.booking.serviceName}
                   </Typography>
-                  {payDialog.booking.barberName && (
+                  {payDialog.booking.staffName && (
                     <Typography variant="body2" color="text.secondary">
-                      Barber: {payDialog.booking.barberName}
+                      {ui.assigneeReceiptLabel}: {payDialog.booking.staffName}
                     </Typography>
                   )}
                 </Box>
@@ -807,9 +810,9 @@ export default function PosPage() {
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
                   Pelanggan: {receiptData.booking.customerName}
                 </Typography>
-                {receiptData.booking.barberName && (
+                {receiptData.booking.staffName && (
                   <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                    Barber: {receiptData.booking.barberName}
+                    {ui.assigneeReceiptLabel}: {receiptData.booking.staffName}
                   </Typography>
                 )}
                 <Divider className="my-1" />
@@ -920,25 +923,25 @@ export default function PosPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Change Barber Dialog */}
+      {/* Ganti penugasan staff */}
       <Dialog
-        open={barberDialog.open}
-        onClose={() => setBarberDialog({ open: false, booking: null })}
+        open={staffAssignDialog.open}
+        onClose={() => setStaffAssignDialog({ open: false, booking: null })}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle fontWeight={500}>Ganti Staff</DialogTitle>
+        <DialogTitle fontWeight={500}>Ganti {ui.staffSingular}</DialogTitle>
         <DialogContent sx={{ pt: 0 }}>
-          {barberDialog.booking && (
+          {staffAssignDialog.booking && (
             <Typography variant="body2" color="text.secondary" mb={1}>
-              Booking #{barberDialog.booking.queueNumber} — {barberDialog.booking.customerName}
+              Booking #{staffAssignDialog.booking.queueNumber} — {staffAssignDialog.booking.customerName}
             </Typography>
           )}
           <List disablePadding>
-            {/* Opsi tanpa barber */}
+            {/* Opsi tanpa staff */}
             <ListItemButton
-              onClick={() => setSelectedBarberId(null)}
-              selected={selectedBarberId === null}
+              onClick={() => setSelectedStaffId(null)}
+              selected={selectedStaffId === null}
               sx={{ borderRadius: 1, mb: 0.5 }}
             >
               <ListItemAvatar>
@@ -947,27 +950,27 @@ export default function PosPage() {
                 </Avatar>
               </ListItemAvatar>
               <ListItemText primary="Tanpa Staff" />
-              <Radio checked={selectedBarberId === null} size="small" />
+              <Radio checked={selectedStaffId === null} size="small" />
             </ListItemButton>
 
-            {barbers.map((barber) => (
+            {staffOptions.map((s) => (
               <ListItemButton
-                key={barber._id}
-                onClick={() => setSelectedBarberId(barber._id)}
-                selected={selectedBarberId === barber._id}
+                key={s._id}
+                onClick={() => setSelectedStaffId(s._id)}
+                selected={selectedStaffId === s._id}
                 sx={{ borderRadius: 1, mb: 0.5 }}
               >
                 <ListItemAvatar>
-                  <Avatar src={barber.photoUrl ?? undefined} alt={barber.name}>
-                    {barber.name[0]}
+                  <Avatar src={s.photoUrl ?? undefined} alt={s.name}>
+                    {s.name[0]}
                   </Avatar>
                 </ListItemAvatar>
-                <ListItemText primary={barber.name} />
-                <Radio checked={selectedBarberId === barber._id} size="small" />
+                <ListItemText primary={s.name} />
+                <Radio checked={selectedStaffId === s._id} size="small" />
               </ListItemButton>
             ))}
 
-            {!barbersLoaded && (
+            {!staffOptionsLoaded && (
               <Box className="flex justify-center py-4">
                 <CircularProgress size={24} />
               </Box>
@@ -975,14 +978,14 @@ export default function PosPage() {
           </List>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBarberDialog({ open: false, booking: null })} color="inherit">
+          <Button onClick={() => setStaffAssignDialog({ open: false, booking: null })} color="inherit">
             Batal
           </Button>
           <Button
             variant="contained"
-            onClick={handleSaveBarber}
-            disabled={savingBarber}
-            startIcon={savingBarber ? <CircularProgress size={16} color="inherit" /> : undefined}
+            onClick={handleSaveStaffAssign}
+            disabled={savingStaffAssign}
+            startIcon={savingStaffAssign ? <CircularProgress size={16} color="inherit" /> : undefined}
           >
             Simpan
           </Button>
@@ -991,24 +994,24 @@ export default function PosPage() {
 
       {/* Dialog Foto  Terakhir */}
       <Dialog
-        open={lastHaircutDialog.open}
-        onClose={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}
+        open={lastServicePhotoDialog.open}
+        onClose={() => setLastServicePhotoDialog({ open: false, booking: null, data: null, loading: false })}
         fullWidth
         maxWidth="xs"
       >
         <DialogTitle fontWeight={500}>
           <HistoryIcon sx={{ mr: 1, verticalAlign: 'middle', color: 'info.main' }} />
           Foto Terakhir
-          {lastHaircutDialog.booking && (
+          {lastServicePhotoDialog.booking && (
             <Typography variant="caption" display="block" color="text.secondary">
-              {lastHaircutDialog.booking.customerName}
+              {lastServicePhotoDialog.booking.customerName}
             </Typography>
           )}
         </DialogTitle>
         <DialogContent>
-          {lastHaircutDialog.loading ? (
+          {lastServicePhotoDialog.loading ? (
             <Box className="flex justify-center py-8"><CircularProgress /></Box>
-          ) : !lastHaircutDialog.data ? (
+          ) : !lastServicePhotoDialog.data ? (
             <Box className="text-center py-8">
               <CameraAltIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
               <Typography color="text.secondary" className="mt-2">
@@ -1018,11 +1021,11 @@ export default function PosPage() {
           ) : (
             <Box>
               <Typography variant="caption" color="text.secondary" display="block" className="mb-2">
-                {new Date(lastHaircutDialog.data.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                {lastHaircutDialog.data.barberName && ` · ${lastHaircutDialog.data.barberName}`}
+                {new Date(lastServicePhotoDialog.data.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {lastServicePhotoDialog.data.staffName && ` · ${lastServicePhotoDialog.data.staffName}`}
               </Typography>
               <Box className="flex gap-2 flex-wrap">
-                {lastHaircutDialog.data.photos.map((src, i) => (
+                {lastServicePhotoDialog.data.photos.map((src, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     key={i}
@@ -1036,7 +1039,7 @@ export default function PosPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setLastHaircutDialog({ open: false, booking: null, data: null, loading: false })}>
+          <Button onClick={() => setLastServicePhotoDialog({ open: false, booking: null, data: null, loading: false })}>
             Tutup
           </Button>
         </DialogActions>
