@@ -46,6 +46,8 @@ interface TenantSettings {
   theme?: TenantTheme | null;
   /** 0 = nonaktif; kosong/null di DB = default server (21) */
   customerReturnReminderDays?: number | null;
+  /** Menit sebelum perkiraan dilayani — WA pengingat (0 = nonaktif). Hanya jika ETA > 2 jam. */
+  customerAppointmentReminderMinutes?: number | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -73,6 +75,7 @@ export default function SettingsPage() {
   const [qrisUploading, setQrisUploading] = useState(false);
   const [theme, setTheme] = useState<TenantTheme>(DEFAULT_THEME);
   const [customerReturnReminderDays, setCustomerReturnReminderDays] = useState(21);
+  const [customerAppointmentReminderMinutes, setCustomerAppointmentReminderMinutes] = useState(0);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -104,6 +107,9 @@ export default function SettingsPage() {
       if (rd === 0) setCustomerReturnReminderDays(0);
       else if (rd == null || Number.isNaN(Number(rd))) setCustomerReturnReminderDays(21);
       else setCustomerReturnReminderDays(Math.min(90, Math.max(1, Number(rd))));
+      const am = t.customerAppointmentReminderMinutes;
+      if (am == null || Number.isNaN(Number(am))) setCustomerAppointmentReminderMinutes(0);
+      else setCustomerAppointmentReminderMinutes(Math.min(180, Math.max(0, Number(am))));
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -133,6 +139,7 @@ export default function SettingsPage() {
         qrisImageBase64: qrisImage ?? undefined,
         theme,
         customerReturnReminderDays,
+        customerAppointmentReminderMinutes,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -270,6 +277,17 @@ export default function SettingsPage() {
                 onChange={(e) => setCustomerReturnReminderDays(Math.min(90, Math.max(0, Number(e.target.value) || 0)))}
                 inputProps={{ min: 0, max: 90 }}
                 helperText="Mis. 21 = sekitar tiga minggu setelah transaksi selesai."
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="Menit sebelum perkiraan dilayani (WA)"
+                value={customerAppointmentReminderMinutes}
+                onChange={(e) =>
+                  setCustomerAppointmentReminderMinutes(Math.min(180, Math.max(0, Number(e.target.value) || 0)))}
+                inputProps={{ min: 0, max: 180 }}
+                sx={{ mt: 2 }}
+                helperText="0 = nonaktif. Contoh: 30 = kirim WA ~30 menit sebelum perkiraan giliran. Hanya dijadwalkan jika estimasi dilayani lebih dari 2 jam dari saat booking diperbarui; membutuhkan staff sudah ditugaskan."
               />
             </CardContent>
           </Card>

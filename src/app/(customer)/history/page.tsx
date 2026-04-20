@@ -5,6 +5,7 @@ import {
   Box, Card, CardContent, Typography, Chip, CircularProgress, Avatar, Pagination, Alert,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import toast from 'react-hot-toast';
@@ -26,6 +27,9 @@ interface Booking {
   date: string;
   notes?: string;
   staffName?: string | null;
+  staffId?: string | null;
+  /** ISO — dari API untuk booking menunggu hari ini yang sudah ditugaskan staff */
+  estimatedServedAt?: string | null;
 }
 
 interface LastDoneVisit {
@@ -125,6 +129,15 @@ export default function HistoryPage() {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     });
 
+  const formatEstimatedServe = (iso: string) =>
+    new Date(iso).toLocaleString('id-ID', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
   const historyTitle = getTenantUiLabels(tenantInfo?.tenantType ?? user?.tenantType).historyPageTitle;
 
   return (
@@ -184,6 +197,8 @@ export default function HistoryPage() {
               <Box className="flex flex-col gap-3 mb-4">
                 {history.map((b) => {
                   const cfg = statusConfig[b.status] || { label: b.status, color: 'default' as const };
+                  const showEta = b.status === 'waiting' && b.estimatedServedAt;
+                  const waitingNoStaff = b.status === 'waiting' && !b.staffId;
                   return (
                     <Card key={b._id}>
                       <CardContent className="flex items-start gap-3">
@@ -198,6 +213,35 @@ export default function HistoryPage() {
                           <Typography variant="body2" color="text.secondary">
                             {formatDate(b.date)}
                           </Typography>
+                          {b.staffName && (
+                            <Typography variant="body2" color="text.secondary" className="mt-0.5">
+                              Staff: {b.staffName}
+                            </Typography>
+                          )}
+                          {showEta && (
+                            <Box
+                              className="mt-2 flex items-start gap-1 rounded-lg px-2 py-1.5"
+                              sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}
+                            >
+                              <AccessTimeIcon sx={{ fontSize: 18, color: 'primary.main', mt: 0.15 }} />
+                              <Box>
+                                <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.3}>
+                                  Perkiraan waktu dilayani
+                                </Typography>
+                                <Typography variant="body2" fontWeight={600} color="primary">
+                                  {formatEstimatedServe(b.estimatedServedAt!)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                                  Berdasarkan rata-rata durasi staff dan antrian saat ini
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+                          {waitingNoStaff && (
+                            <Typography variant="caption" color="text.secondary" className="mt-1.5" display="block">
+                              Estimasi akan tersedia setelah outlet menugaskan staff.
+                            </Typography>
+                          )}
                           {b.notes && (
                             <Typography variant="body2" className="mt-1 italic text-gray-500">
                               &quot;{b.notes}&quot;

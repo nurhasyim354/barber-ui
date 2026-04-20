@@ -71,11 +71,14 @@ interface StaffQueueRow {
 
 interface ActiveBooking {
   _id: string;
+  tenantId?: string;
   serviceName: string;
   staffName?: string;
+  staffId?: string | null;
   queueNumber: number;
   status: string;
   date: string;
+  estimatedServedAt?: string | null;
 }
 
 interface BookingResult {
@@ -109,6 +112,15 @@ const statusColor = (s: string) =>
   s === 'waiting' ? 'warning' : s === 'in_progress' ? 'info' : s === 'done' ? 'success' : 'default';
 const statusLabel = (s: string) =>
   s === 'waiting' ? 'Menunggu' : s === 'in_progress' ? 'Sedang dilayani' : s === 'done' ? 'Selesai' : s;
+
+const formatEstimatedServe = (iso: string) =>
+  new Date(iso).toLocaleString('id-ID', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 // ── Main content ──────────────────────────────────────────────────────────────
 
@@ -200,11 +212,14 @@ function BookingContent() {
       ]);
       setServices(svcRes.data);
       setTenant(tenantRes.data);
-      const historyItems: (ActiveBooking & { tenantId?: string })[] = histRes.data?.data ?? [];
+      const historyItems: ActiveBooking[] = histRes.data?.data ?? [];
       const active = historyItems.find(
-        (b) => b.status === 'waiting' || b.status === 'in_progress',
+        (b) =>
+          (!effectiveTenantId || b.tenantId === effectiveTenantId) &&
+          (b.status === 'waiting' || b.status === 'in_progress'),
       );
       if (active) setActiveBooking(active);
+      else setActiveBooking(null);
 
       try {
         const [photoRes, doneRes] = await Promise.all([
@@ -327,8 +342,9 @@ function BookingContent() {
       setNotes('');
 
       if (isQrFlow) {
-        // QR flow: show dedicated confirmed screen
+        // QR flow: show dedicated confirmed screen (+ ETA dari riwayat setelah reload)
         setBookingResult(result);
+        void loadBookingData();
       } else {
         // Regular flow: show queue number + reload
         toast.success(`Booking berhasil! Nomor antrian Anda: #${result.queueNumber}`, { duration: 6000 });
@@ -562,6 +578,43 @@ function BookingContent() {
               <Typography variant="body2" color="text.secondary">Status</Typography>
               <Chip label="Menunggu" size="small" color="warning" sx={{ fontWeight: 700 }} />
             </Box>
+            {activeBooking &&
+              bookingResult &&
+              activeBooking._id === bookingResult._id &&
+              activeBooking.estimatedServedAt && (
+              <Box
+                sx={{
+                  mt: 2,
+                  pt: 2,
+                  borderTop: 1,
+                  borderColor: 'divider',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1,
+                }}
+              >
+                <AccessTimeIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.1 }} />
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Perkiraan waktu dilayani
+                  </Typography>
+                  <Typography variant="body1" fontWeight={700} color="primary">
+                    {formatEstimatedServe(activeBooking.estimatedServedAt)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.35 }}>
+                    Berdasarkan rata-rata durasi staff dan antrian saat ini
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+            {activeBooking &&
+              bookingResult &&
+              activeBooking._id === bookingResult._id &&
+              !activeBooking.staffId && (
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+                Estimasi akan tersedia setelah outlet menugaskan staff.
+              </Typography>
+            )}
           </CardContent>
         </Card>
 
@@ -699,6 +752,39 @@ function BookingContent() {
                   size="small"
                   sx={{ mt: 1.5, fontWeight: 700 }}
                 />
+                {activeBooking.status === 'waiting' && activeBooking.estimatedServedAt && (
+                  <Box
+                    sx={{
+                      mt: 2,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 1,
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: 'background.paper',
+                      border: 1,
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <AccessTimeIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.1 }} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.35}>
+                        Perkiraan waktu dilayani
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700} color="primary">
+                        {formatEstimatedServe(activeBooking.estimatedServedAt)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.35 }}>
+                        Berdasarkan rata-rata durasi staff dan antrian saat ini
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+                {activeBooking.status === 'waiting' && !activeBooking.staffId && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+                    Estimasi akan tersedia setelah outlet menugaskan staff.
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           )}

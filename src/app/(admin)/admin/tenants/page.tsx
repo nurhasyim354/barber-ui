@@ -15,6 +15,7 @@ import CreditCardIcon from '@mui/icons-material/CreditCard';
 import PersonIcon from '@mui/icons-material/Person';
 import PhoneIcon from '@mui/icons-material/Phone';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ChatIcon from '@mui/icons-material/Chat';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -141,6 +142,9 @@ export default function AdminTenantsPage() {
         title="Kelola Tenant"
         right={
           <Box className="flex items-center">
+            <IconButton color="inherit" onClick={() => router.push('/admin/platform')} title="WhatsApp platform">
+              <ChatIcon />
+            </IconButton>
             <IconButton color="inherit" onClick={() => router.push('/admin/subscriptions')} title="Tagihan">
               <CreditCardIcon />
             </IconButton>

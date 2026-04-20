@@ -250,7 +250,7 @@ export default function LoginPage() {
               <Typography variant="h6" className="mb-2 text-center">
                 Masukkan Kode OTP
               </Typography>
-              <Typography variant="body2" color="text.secondary" className="mb-6 text-center">
+              <Typography variant="body2" color="text.secondary" className="mb-8 text-center mt-2">
                 Kode 6 digit telah dikirim ke WA {phone}
               </Typography>
 
@@ -269,7 +269,7 @@ export default function LoginPage() {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ mb: 3 }}
+                sx={{ mb: 3, mt: 2 }}
               />
 
               <Button
