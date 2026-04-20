@@ -55,6 +55,7 @@ interface Service {
   description: string;
   price: number;
   durationMinutes: number;
+  photoUrl?: string | null;
 }
 
 // StaffQueueInfo dari GET /tenants/:id/staff/queue
@@ -820,18 +821,30 @@ function BookingContent() {
                             onClick={(e) => e.stopPropagation()}
                           />
                           <Avatar
+                            src={svc.photoUrl || undefined}
+                            variant="rounded"
                             sx={{
-                              background: selected
-                                ? (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`
-                                : (t) => `linear-gradient(135deg, ${t.palette.primary.light}CC, ${t.palette.primary.main}88)`,
-                              width: 46, height: 46,
-                              boxShadow: selected
-                                ? (t) => `0 4px 12px ${t.palette.primary.main}44`
-                                : '0 2px 6px rgba(0,0,0,0.12)',
+                              width: 52,
+                              height: 52,
+                              flexShrink: 0,
+                              ...(svc.photoUrl
+                                ? {
+                                    boxShadow: selected
+                                      ? (t) => `0 4px 14px ${t.palette.primary.main}40`
+                                      : '0 2px 8px rgba(0,0,0,0.12)',
+                                  }
+                                : {
+                                    background: selected
+                                      ? (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`
+                                      : (t) => `linear-gradient(135deg, ${t.palette.primary.light}CC, ${t.palette.primary.main}88)`,
+                                    boxShadow: selected
+                                      ? (t) => `0 4px 12px ${t.palette.primary.main}44`
+                                      : '0 2px 6px rgba(0,0,0,0.12)',
+                                  }),
                               transition: 'all 0.2s ease',
                             }}
                           >
-                            <ContentCutIcon sx={{ color: 'white', fontSize: 20 }} />
+                            {!svc.photoUrl && <ContentCutIcon sx={{ color: 'white', fontSize: 22 }} />}
                           </Avatar>
                           <Box flex={1} minWidth={0}>
                             <Typography fontWeight={400} noWrap>{svc.name}</Typography>
@@ -873,9 +886,18 @@ function BookingContent() {
                     Layanan Dipilih ({selectedServices.length})
                   </Typography>
                   {selectedServices.map((s) => (
-                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                      <Typography variant="body2">{s.name}</Typography>
-                      <Typography variant="body2" fontWeight={500}>Rp {s.price.toLocaleString('id-ID')}</Typography>
+                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Avatar
+                          src={s.photoUrl || undefined}
+                          variant="rounded"
+                          sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: 'primary.light' }}
+                        >
+                          {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16 }} />}
+                        </Avatar>
+                        <Typography variant="body2" noWrap>{s.name}</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight={500} sx={{ flexShrink: 0 }}>Rp {s.price.toLocaleString('id-ID')}</Typography>
                     </Box>
                   ))}
                   <Divider sx={{ my: 1.5, opacity: 0.4, borderColor: 'rgba(0,0,0,0.12)' }} />
@@ -921,9 +943,18 @@ function BookingContent() {
                     Layanan dipilih ({selectedServices.length})
                   </Typography>
                   {selectedServices.map((s) => (
-                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                      <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
-                      <Typography variant="body2" fontWeight={600} color="primary">
+                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5, gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Avatar
+                          src={s.photoUrl || undefined}
+                          variant="rounded"
+                          sx={{ width: 28, height: 28, flexShrink: 0, bgcolor: 'primary.light' }}
+                        >
+                          {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 14 }} />}
+                        </Avatar>
+                        <Typography variant="body2" fontWeight={600} noWrap>{s.name}</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
                         Rp {s.price.toLocaleString('id-ID')}
                       </Typography>
                     </Box>
@@ -1075,9 +1106,18 @@ function BookingContent() {
               Layanan
             </Typography>
             {selectedServices.map((s) => (
-              <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                <Typography variant="body2" fontWeight={600}>{s.name}</Typography>
-                <Typography variant="body2" fontWeight={500} color="primary">
+              <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                  <Avatar
+                    src={s.photoUrl || undefined}
+                    variant="rounded"
+                    sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: 'primary.light' }}
+                  >
+                    {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16 }} />}
+                  </Avatar>
+                  <Typography variant="body2" fontWeight={600} noWrap>{s.name}</Typography>
+                </Box>
+                <Typography variant="body2" fontWeight={500} color="primary" sx={{ flexShrink: 0 }}>
                   Rp {s.price.toLocaleString('id-ID')}
                 </Typography>
               </Box>
