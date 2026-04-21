@@ -8,6 +8,8 @@ export interface AuthUser {
   role: 'super_admin' | 'tenant_admin' | 'customer' | 'staff';
   tenantId?: string | null;
   staffId?: string | null;
+  /** Dari JWT — tagihan langganan outlet melewati jatuh tempo (tenant admin & staff) */
+  isOverdue?: boolean;
   /** Dari tenant aktif — untuk salinan UI per vertikal */
   tenantType?: string | null;
 }

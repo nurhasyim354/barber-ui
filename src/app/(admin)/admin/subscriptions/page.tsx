@@ -144,6 +144,7 @@ export default function AdminSubscriptionsPage() {
     <AppPageShell variant="adminFooter">
       <PageHeader
         title="Tagihan Langganan"
+        back
         right={
           <Box className="flex items-center">
             <IconButton color="inherit" onClick={() => router.push('/admin/subscription-plans')} title="Konfigurasi Paket">

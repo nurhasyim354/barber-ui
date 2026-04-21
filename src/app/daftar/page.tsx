@@ -31,6 +31,8 @@ function DaftarForm() {
   const [outletName, setOutletName] = useState('');
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
+  const [referralName, setReferralName] = useState('');
+  const [referralPhone, setReferralPhone] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,11 +52,18 @@ function DaftarForm() {
         phone,
         businessType,
         message: message.trim() || undefined,
+        referralName: referralName.trim() || undefined,
+        referralPhone: (() => {
+          const digits = referralPhone.replace(/\D/g, '');
+          return digits.length >= 9 ? digits : undefined;
+        })(),
       });
       toast.success('Pengajuan berhasil dikirim. Tim akan meninjau dan mengaktifkan outlet Anda.');
       setOutletName('');
       setContactName('');
       setPhone('');
+      setReferralName('');
+      setReferralPhone('');
       setMessage('');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -107,6 +116,21 @@ function DaftarForm() {
             required
             inputMode="tel"
             helperText="Aktifkan WhatsApp untuk komunikasi aktivasi"
+          />
+          <TextField
+            label="Nama referral (opsional)"
+            value={referralName}
+            onChange={(e) => setReferralName(e.target.value)}
+            fullWidth
+            placeholder="Mis. nama mitra / sales"
+          />
+          <TextField
+            label="HP referral (opsional)"
+            value={referralPhone}
+            onChange={(e) => setReferralPhone(e.target.value.replace(/\D/g, ''))}
+            fullWidth
+            inputMode="tel"
+            helperText="Isi jika ada orang yang mengarahkan Anda mendaftar"
           />
           <TextField
             label="Catatan (opsional)"

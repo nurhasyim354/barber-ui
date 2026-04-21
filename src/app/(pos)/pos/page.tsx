@@ -5,7 +5,7 @@ import {
   Box, Card, CardContent, Typography, Button, Chip,
   CircularProgress, Dialog, DialogTitle, DialogContent,
   DialogActions, Divider, IconButton, List, ListItemButton,
-  ListItemAvatar, Avatar, ListItemText, Radio,
+  ListItemAvatar, Avatar, ListItemText, Radio, Alert,
 } from '@mui/material';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -250,6 +250,10 @@ export default function PosPage() {
   };
 
   const handleOpenPayDialog = (b: Booking) => {
+    if (user?.isOverdue) {
+      toast.error('Tagihan langganan outlet overdue. Buka halaman Tagihan & Langganan untuk melunasi.');
+      return;
+    }
     lastBookingRef.current = b;
     setPayStep('select');
     setPayDialog({ open: true, booking: b });
@@ -448,6 +452,7 @@ export default function PosPage() {
 
   const pendingBookings = bookings.filter((b) => b.status !== 'done' && b.status !== 'cancelled');
   const doneBookings = bookings.filter((b) => b.status === 'done');
+  const paymentBlocked = Boolean(user?.isOverdue);
 
   return (
     <AppPageShell variant="withBottomNav">
@@ -469,6 +474,19 @@ export default function PosPage() {
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
         <PageContainer>
+          {paymentBlocked && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2, borderRadius: 2 }}
+              action={
+                <Button color="inherit" size="small" onClick={() => router.push('/subscription')}>
+                  Tagihan
+                </Button>
+              }
+            >
+              Tagihan berlangganan outlet melewati jatuh tempo. Pembayaran layanan dinonaktifkan sampai tagihan dilunasi.
+            </Alert>
+          )}
           <Typography variant="h6" fontWeight={500} className="mb-3">
             Antrian Hari Ini ({pendingBookings.length})
           </Typography>
@@ -557,6 +575,7 @@ export default function PosPage() {
                       size="small"
                       startIcon={<PaymentsIcon />}
                       onClick={() => handleOpenPayDialog(b)}
+                      disabled={paymentBlocked}
                     >
                       Bayar
                     </Button>

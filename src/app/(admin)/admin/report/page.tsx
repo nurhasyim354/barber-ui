@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, CircularProgress,
-  TextField, Button, Chip, Avatar, Divider, Grid,
+  TextField, Button, Chip, Avatar, Divider, Grid, Alert,
 } from '@mui/material';
 import StoreIcon from '@mui/icons-material/Store';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -12,6 +12,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import PersonPinIcon from '@mui/icons-material/PersonPin';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -43,6 +44,24 @@ interface AdminReport {
   tenants: TenantReportItem[];
 }
 
+interface ReferralReportRow {
+  referralName: string | null;
+  referralPhone: string | null;
+  count: number;
+  outlets: { name: string; phone: string; pendingAdminName: string | null; createdAt: string }[];
+}
+
+interface ReferralReport {
+  month: string;
+  totalRegistrations: number;
+  byReferral: ReferralReportRow[];
+}
+
+function currentMonthStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function toIsoDate(d: Date) {
   return d.toISOString().split('T')[0];
 }
@@ -63,12 +82,32 @@ export default function AdminReportPage() {
   const [report, setReport] = useState<AdminReport | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [refMonth, setRefMonth] = useState(currentMonthStr());
+  const [refReport, setRefReport] = useState<ReferralReport | null>(null);
+  const [refLoading, setRefLoading] = useState(false);
+
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
+  const loadReferralReport = useCallback(async (month: string) => {
+    setRefLoading(true);
+    try {
+      const res = await api.get(`/admin/tenant-registrations/referral-report?month=${encodeURIComponent(month)}`);
+      setRefReport(res.data as ReferralReport);
+    } catch {
+      toast.error('Gagal memuat laporan referral');
+      setRefReport(null);
+    } finally {
+      setRefLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
     if (user.role !== 'super_admin') { router.replace('/login'); return; }
     loadReport(from, to);
+    const m = currentMonthStr();
+    setRefMonth(m);
+    void loadReferralReport(m);
   }, [user, isLoading]);
 
   const loadReport = useCallback(async (f: string, t: string) => {
@@ -181,6 +220,68 @@ export default function AdminReportPage() {
                 Tampilkan
               </Button>
             </Box>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-4">
+          <CardContent>
+            <Box className="flex items-center gap-2 mb-2">
+              <PersonPinIcon color="primary" />
+              <Typography variant="subtitle1" fontWeight={600}>
+                Registrasi tenant per referral (per bulan)
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Menghitung dokumen tenant yang dibuat di bulan kalender yang dipilih (termasuk menunggu persetujuan dan
+              yang sudah aktif), dikelompokkan menurut nama &amp; HP referral di form pendaftaran.
+            </Typography>
+            <Box className="flex flex-wrap gap-2 items-end mb-2">
+              <TextField
+                label="Bulan"
+                type="month"
+                size="small"
+                value={refMonth}
+                onChange={(e) => setRefMonth(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <Button variant="contained" size="small" onClick={() => void loadReferralReport(refMonth)} disabled={refLoading}>
+                Muat laporan
+              </Button>
+            </Box>
+            {refLoading ? (
+              <Box className="flex justify-center py-4">
+                <CircularProgress size={28} />
+              </Box>
+            ) : refReport ? (
+              <>
+                <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                  Total pendaftaran di bulan ini: <strong>{refReport.totalRegistrations}</strong>
+                </Alert>
+                {refReport.byReferral.length === 0 ? (
+                  <Typography color="text.secondary">Tidak ada pendaftaran di bulan ini.</Typography>
+                ) : (
+                  <Box className="flex flex-col gap-2">
+                    {refReport.byReferral.map((r, idx) => (
+                      <Card key={idx} variant="outlined">
+                        <CardContent className="py-3">
+                          <Box className="flex justify-between items-start gap-2 mb-1">
+                            <Typography fontWeight={600}>
+                              {r.referralName || r.referralPhone
+                                ? [r.referralName || '—', r.referralPhone || '—'].filter(Boolean).join(' · ')
+                                : 'Tanpa referral'}
+                            </Typography>
+                            <Chip label={`${r.count} outlet`} size="small" color="primary" variant="outlined" />
+                          </Box>
+                          <Typography variant="caption" color="text.secondary" component="div">
+                            {r.outlets.map((o) => o.name).join(', ')}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Box>
+                )}
+              </>
+            ) : null}
           </CardContent>
         </Card>
 

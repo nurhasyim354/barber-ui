@@ -40,6 +40,8 @@ interface TenantInfo {
   /** 0 = reminder WA mati; dari GET /tenants/:id publik */
   customerReturnReminderDays?: number;
   tenantType?: string;
+  /** true jika ada tagihan langganan outlet yang overdue */
+  subscriptionOverdue?: boolean;
 }
 
 interface ServicePhotoDoc {
@@ -310,6 +312,7 @@ function BookingContent() {
   // ── Booking actions ────────────────────────────────────────────────────────
   const toggleService = (svc: Service) => {
     if (activeBooking) return;
+    if (tenant?.subscriptionOverdue) return;
     setSelectedServices((prev) => {
       const exists = prev.find((s) => s._id === svc._id);
       return exists ? prev.filter((s) => s._id !== svc._id) : [...prev, svc];
@@ -317,6 +320,10 @@ function BookingContent() {
   };
 
   const handleGoToStaff = () => {
+    if (tenant?.subscriptionOverdue) {
+      toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
+      return;
+    }
     if (selectedServices.length === 0) { toast.error('Pilih minimal satu layanan'); return; }
     setSelectedStaff(null);
     setBookStep('staff');
@@ -328,6 +335,10 @@ function BookingContent() {
   };
 
   const handleBook = async () => {
+    if (tenant?.subscriptionOverdue) {
+      toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
+      return;
+    }
     if (selectedServices.length === 0) return;
     setSubmitting(true);
     try {
@@ -698,7 +709,11 @@ function BookingContent() {
                 <Typography fontWeight={500}>{t.name}</Typography>
                 {t.address && <Typography variant="caption" color="text.secondary">{t.address}</Typography>}
               </Box>
-              {effectiveTenantId === t._id && <Chip label="Aktif" size="small" color="primary" />}
+              {t.subscriptionOverdue ? (
+                <Chip label="Tidak aktif" size="small" color="error" />
+              ) : effectiveTenantId === t._id ? (
+                <Chip label="Aktif" size="small" color="primary" />
+              ) : null}
             </Box>
           ))}
         </DialogContent>
@@ -848,6 +863,15 @@ function BookingContent() {
             </Alert>
           )}
 
+          {tenant?.subscriptionOverdue && (
+            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+              <Typography variant="body2" fontWeight={600}>Outlet tidak aktif sementara</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {tenant.name} tidak dapat menerima booking baru karena ada tagihan berlangganan yang melewati jatuh tempo.
+              </Typography>
+            </Alert>
+          )}
+
           {/* Step 1: Select Services */}
           {bookStep === 'service' && (
             <>
@@ -885,7 +909,7 @@ function BookingContent() {
                         key={svc._id}
                         onClick={() => toggleService(svc)}
                         sx={{
-                          cursor: activeBooking ? 'default' : 'pointer',
+                          cursor: activeBooking || tenant?.subscriptionOverdue ? 'default' : 'pointer',
                           borderRadius: 3,
                           border: selected
                             ? (t) => `1.5px solid ${t.palette.primary.main}`
@@ -896,14 +920,14 @@ function BookingContent() {
                           boxShadow: selected
                             ? (t) => `0 6px 24px ${t.palette.primary.main}24, 0 2px 6px rgba(0,0,0,0.06)`
                             : '0 2px 10px rgba(0,0,0,0.06)',
-                          opacity: activeBooking ? 0.55 : 1,
+                          opacity: activeBooking || tenant?.subscriptionOverdue ? 0.55 : 1,
                           transition: 'all 0.2s ease',
                         }}
                       >
                         <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '14px !important' }}>
                           <Checkbox
                             checked={selected} color="primary" sx={{ p: 0 }}
-                            disabled={!!activeBooking} onChange={() => toggleService(svc)}
+                            disabled={!!activeBooking || !!tenant?.subscriptionOverdue} onChange={() => toggleService(svc)}
                             onClick={(e) => e.stopPropagation()}
                           />
                           <Avatar
@@ -997,6 +1021,7 @@ function BookingContent() {
                   </Box>
                   <Button
                     variant="contained" fullWidth onClick={handleGoToStaff}
+                    disabled={!!tenant?.subscriptionOverdue}
                     sx={{ borderRadius: 2.5, py: 1.3, fontWeight: 700, letterSpacing: 0.3 }}
                   >
                     Pilih Staff →
@@ -1077,6 +1102,7 @@ function BookingContent() {
                     <Typography color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>Belum ada staff tersedia</Typography>
                     <Button
                       variant="outlined" sx={{ borderRadius: 2.5 }}
+                      disabled={!!tenant?.subscriptionOverdue}
                       onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
                     >
                       Booking Tanpa Pilih Staf
@@ -1284,7 +1310,7 @@ function BookingContent() {
             Batal
           </Button>
           <Button
-            onClick={handleBook} variant="contained" fullWidth disabled={submitting}
+            onClick={handleBook} variant="contained" fullWidth disabled={submitting || !!tenant?.subscriptionOverdue}
             startIcon={submitting ? undefined : <CheckCircleIcon />}
             sx={{ borderRadius: 2.5, py: 1.2, fontWeight: 700 }}
           >

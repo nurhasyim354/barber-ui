@@ -11,13 +11,16 @@ import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import ErrorIcon from '@mui/icons-material/Error';
 import StarIcon from '@mui/icons-material/Star';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import ChatIcon from '@mui/icons-material/Chat';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
-import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
+import { StaffBottomNav, TenantAdminBottomNav } from '@/components/layout/BottomNav';
 
 interface Plan {
   _id: string;
@@ -40,6 +43,15 @@ interface Billing {
   paymentRef?: string | null;
   paidAt?: string | null;
   adminNotes?: string | null;
+}
+
+interface PaymentInstructions {
+  bankName: string | null;
+  bankAccount: string | null;
+  accountHolder: string | null;
+  qrisImageBase64: string | null;
+  supportWhatsAppDisplay: string | null;
+  supportWhatsAppHref: string | null;
 }
 
 const statusChip: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
@@ -65,6 +77,7 @@ export default function SubscriptionPage() {
   const router = useRouter();
 
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [paymentInstructions, setPaymentInstructions] = useState<PaymentInstructions | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [history, setHistory] = useState<Billing[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -81,7 +94,7 @@ export default function SubscriptionPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'tenant_admin') { router.replace('/dashboard'); return; }
+    if (user.role !== 'tenant_admin' && user.role !== 'staff') { router.replace('/'); return; }
     loadCurrent();
     loadHistory(1);
   }, [user, isLoading]);
@@ -92,6 +105,7 @@ export default function SubscriptionPage() {
       const res = await api.get('/subscription/current');
       setBilling(res.data.billing);
       setPlans(res.data.plans);
+      setPaymentInstructions(res.data.paymentInstructions ?? null);
     } catch {
       toast.error('Gagal memuat info langganan');
     } finally {
@@ -147,6 +161,102 @@ export default function SubscriptionPage() {
               ) : null}
               . Transaksi dihitung dari pembayaran lunas per bulan.
             </Alert>
+
+            {paymentInstructions?.supportWhatsAppHref && paymentInstructions.supportWhatsAppDisplay && (
+              <Alert
+                severity="success"
+                icon={<ChatIcon />}
+                sx={{ mb: 2, borderRadius: 2 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    href={paymentInstructions.supportWhatsAppHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Chat WhatsApp
+                  </Button>
+                }
+              >
+                <Typography variant="body2" fontWeight={600} component="span" display="block" gutterBottom>
+                  Bantuan WhatsApp
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Hubungi admin platform: <strong>{paymentInstructions.supportWhatsAppDisplay}</strong>
+                </Typography>
+              </Alert>
+            )}
+
+            <Card className="mb-4" variant="outlined">
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} mb={2}>
+                  Cara pembayaran langganan
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  Anda dapat membayar dengan <strong>transfer bank</strong> atau <strong>QRIS</strong>. Setelah itu
+                  kirim nomor referensi lewat tombol &quot;Kirim Bukti / Referensi Pembayaran&quot; agar tim mengonfirmasi.
+                </Typography>
+
+                <Box mb={3}>
+                  <Box className="flex items-center gap-1 mb-1">
+                    <AccountBalanceIcon fontSize="small" color="primary" />
+                    <Typography fontWeight={600}>Transfer bank</Typography>
+                  </Box>
+                  {paymentInstructions &&
+                  (paymentInstructions.bankName ||
+                    paymentInstructions.bankAccount ||
+                    paymentInstructions.accountHolder) ? (
+                    <>
+                      {paymentInstructions.bankName && (
+                        <Typography variant="body2">
+                          Bank: <strong>{paymentInstructions.bankName}</strong>
+                        </Typography>
+                      )}
+                      {paymentInstructions.bankAccount && (
+                        <Typography variant="body2">
+                          No. rekening: <strong>{paymentInstructions.bankAccount}</strong>
+                        </Typography>
+                      )}
+                      {paymentInstructions.accountHolder && (
+                        <Typography variant="body2">
+                          Atas nama: <strong>{paymentInstructions.accountHolder}</strong>
+                        </Typography>
+                      )}
+                    </>
+                  ) : (
+                    <Alert severity="info" sx={{ py: 0.5 }}>
+                      Data rekening tujuan belum diisi di pengaturan platform. Silakan hubungi admin untuk nomor rekening
+                      resmi.
+                    </Alert>
+                  )}
+                </Box>
+
+                <Box>
+                  <Box className="flex items-center gap-1 mb-1">
+                    <QrCode2Icon fontSize="small" color="primary" />
+                    <Typography fontWeight={600}>QRIS</Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    Scan kode QRIS dari aplikasi e-wallet atau mobile banking (menu bayar dengan QR).
+                  </Typography>
+                  {paymentInstructions?.qrisImageBase64 ? (
+                    <Box className="flex justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={paymentInstructions.qrisImageBase64}
+                        alt="QRIS pembayaran langganan"
+                        className="max-w-[220px] w-full h-auto rounded border border-gray-200"
+                      />
+                    </Box>
+                  ) : (
+                    <Alert severity="info" sx={{ py: 0.5 }}>
+                      Gambar QRIS belum diunggah. Hubungi admin platform atau gunakan transfer bank jika tersedia.
+                    </Alert>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
             {/* Current Billing Card */}
             {billing && (
               <Card className="mb-4" sx={{
@@ -324,7 +434,7 @@ export default function SubscriptionPage() {
         </DialogActions>
       </Dialog>
 
-      <TenantAdminBottomNav />
+      {user?.role === 'staff' ? <StaffBottomNav /> : <TenantAdminBottomNav />}
     </AppPageShell>
   );
 }
