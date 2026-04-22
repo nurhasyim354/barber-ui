@@ -43,7 +43,10 @@ function DaftarForm() {
   }, [bisnisParam]);
 
   const handleSubmit = async () => {
-    if (!outletName.trim() || !contactName.trim() || phone.length < 9) return;
+    if (!outletName.trim() || !contactName.trim() || phone.replace(/\D/g, '').length < 9) {
+      toast.error('Isi nama outlet, nama PIC, dan nomor WA PIC yang valid');
+      return;
+    }
     setSubmitting(true);
     try {
       await api.post('/public/tenant-registrations', {
@@ -58,7 +61,7 @@ function DaftarForm() {
           return digits.length >= 9 ? digits : undefined;
         })(),
       });
-      toast.success('Pengajuan berhasil dikirim. Tim akan meninjau dan mengaktifkan outlet Anda.');
+      toast.success('Outlet berhasil dibuat dan aktif. Silakan masuk dengan nomor WA PIC melalui halaman login.');
       setOutletName('');
       setContactName('');
       setPhone('');
@@ -83,12 +86,12 @@ function DaftarForm() {
         Daftar sebagai tenant
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Data dikirim ke server sebagai pengajuan tenant. Setelah disetujui super admin, Anda akan dapat masuk dengan OTP
-        WhatsApp menggunakan nomor PIC di bawah.
+        Outlet langsung aktif setelah formulir terkirim. <strong>Nama PIC</strong> dan <strong>nomor WhatsApp PIC</strong>{' '}
+        wajib diisi — gunakan nomor yang sama untuk masuk dengan OTP.
       </Typography>
 
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Status awal: <strong>menunggu persetujuan</strong>. Gunakan nomor WA yang sama saat login setelah outlet diaktifkan.
+      <Alert severity="success" sx={{ mb: 2 }}>
+        Setelah daftar, Anda bisa langsung ke halaman <strong>Masuk</strong> dan login dengan OTP ke nomor PIC.
       </Alert>
 
       <Card variant="outlined">
@@ -106,16 +109,28 @@ function DaftarForm() {
               </MenuItem>
             ))}
           </TextField>
-          <TextField label="Nama outlet / usaha" value={outletName} onChange={(e) => setOutletName(e.target.value)} fullWidth required />
-          <TextField label="Nama PIC" value={contactName} onChange={(e) => setContactName(e.target.value)} fullWidth required />
           <TextField
-            label="Nomor WhatsApp"
+            label="Nama outlet / usaha (wajib)"
+            value={outletName}
+            onChange={(e) => setOutletName(e.target.value)}
+            fullWidth
+            required
+          />
+          <TextField
+            label="Nama PIC (wajib)"
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            fullWidth
+            required
+          />
+          <TextField
+            label="Nomor WhatsApp PIC (wajib)"
             value={phone}
             onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
             fullWidth
             required
             inputMode="tel"
-            helperText="Aktifkan WhatsApp untuk komunikasi aktivasi"
+            helperText="Nomor ini dipakai untuk OTP login sebagai admin outlet"
           />
           <TextField
             label="Nama referral (opsional)"
