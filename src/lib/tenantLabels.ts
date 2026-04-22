@@ -1,7 +1,7 @@
 /**
  * Label UI per jenis tenant — diselaraskan dengan `tenantType` di API & marketing vertikal.
  */
-export const TENANT_TYPES = ['klinik', 'barbershop', 'bengkel_motor', 'spa_kecantikan', 'jasa_umum'] as const;
+export const TENANT_TYPES = ['klinik', 'barbershop', 'bengkel_motor', 'spa_kecantikan', 'carwash', 'ppob', 'jasa_umum'] as const;
 export type TenantType = (typeof TENANT_TYPES)[number];
 
 export const DEFAULT_TENANT_TYPE: TenantType = 'barbershop';
@@ -20,6 +20,8 @@ export const TENANT_TYPE_OPTIONS: { value: TenantType; label: string }[] = [
   { value: 'klinik', label: 'Klinik / praktik' },
   { value: 'bengkel_motor', label: 'Bengkel motor' },
   { value: 'spa_kecantikan', label: 'Spa & kecantikan' },
+  { value: 'carwash', label: 'Carwash & Salon Mobil/Motor' },
+  { value: 'ppob', label: 'PPOB, Pulsa & Token' },
   { value: 'jasa_umum', label: 'Studio / jasa umum' },
 ];
 
@@ -124,6 +126,40 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Terapis *',
     deleteStaffTitle: 'Hapus Terapis?',
     assigneeReceiptLabel: 'Terapis',
+  },
+  carwash: {
+    navStaff: 'Staff',
+    navServices: 'Layanan',
+    navCustomerBooking: 'Booking',
+    navCustomerHistory: 'Riwayat',
+    bookingPageTitle: '📋 Booking',
+    historyPageTitle: 'Riwayat Layanan',
+    staffTeamTitle: 'Tim Staff',
+    staffSingular: 'Staff',
+    addStaffTitle: 'Tambah Staff',
+    editStaffTitle: 'Edit Staff',
+    specialtyPlaceholder: 'Contoh: Poles, Mekanik, Elektrical',
+    bookingNotesPlaceholder: 'Contoh: detail singkat kebutuhan, preferensi jadwal',
+    staffNameFieldLabel: 'Nama Staff *',
+    deleteStaffTitle: 'Hapus Staff?',
+    assigneeReceiptLabel: 'Staff',
+  },
+  ppob: {
+    navStaff: 'Staff',
+    navServices: 'Layanan',
+    navCustomerBooking: 'Booking',
+    navCustomerHistory: 'Riwayat',
+    bookingPageTitle: '📋 Booking',
+    historyPageTitle: 'Riwayat Layanan',
+    staffTeamTitle: 'Tim Staff',
+    staffSingular: 'Staff',
+    addStaffTitle: 'Tambah Staff',
+    editStaffTitle: 'Edit Staff',
+    specialtyPlaceholder: 'Contoh: Konsultasi, Editing, Instalasi',
+    bookingNotesPlaceholder: 'Contoh: ID Pelanggan, nomor tujuan dll',
+    staffNameFieldLabel: 'Nama Staff *',
+    deleteStaffTitle: 'Hapus Staff?',
+    assigneeReceiptLabel: 'Staff',
   },
   jasa_umum: {
     navStaff: 'Staff',

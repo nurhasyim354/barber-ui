@@ -27,6 +27,7 @@ import SpaIcon from '@mui/icons-material/Spa';
 import HandymanIcon from '@mui/icons-material/Handyman';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
+import CarIcon from '@mui/icons-material/CarRepair';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
@@ -49,6 +50,8 @@ const verticalIcons: Record<BusinessVerticalId, React.ReactNode> = {
   barbershop: <ContentCutIcon sx={{ fontSize: 40 }} />,
   bengkel_motor: <TwoWheelerIcon sx={{ fontSize: 40 }} />,
   spa_kecantikan: <SpaIcon sx={{ fontSize: 40 }} />,
+  carwash: <CarIcon sx={{ fontSize: 40 }} />,
+  ppob: <PaymentsIcon sx={{ fontSize: 40 }} />,
   jasa_umum: <HandymanIcon sx={{ fontSize: 40 }} />,
 };
 

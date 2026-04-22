@@ -8,6 +8,8 @@ export type BusinessVerticalId =
   | 'barbershop'
   | 'bengkel_motor'
   | 'spa_kecantikan'
+  | 'carwash'
+  | 'ppob'
   | 'jasa_umum';
 
 export interface BusinessVertical {
@@ -37,7 +39,7 @@ export const BUSINESS_VERTICALS: BusinessVertical[] = [
     label: 'Barbershop / salon',
     shortLabel: 'Barbershop',
     description: 'Booking slot stylist, antrian walk-in, dan kasir terintegrasi.',
-    defaultMonthlyRevenue: 35_000_000,
+    defaultMonthlyRevenue: 7_000_000,
     upliftMin: 0.1,
     upliftMax: 0.28,
   },
@@ -46,10 +48,11 @@ export const BUSINESS_VERTICALS: BusinessVertical[] = [
     label: 'Bengkel motor',
     shortLabel: 'Bengkel motor',
     description: 'Antrian servis, penugasan mekanik, dan tagihan transparan.',
-    defaultMonthlyRevenue: 45_000_000,
+    defaultMonthlyRevenue: 10_000_000,
     upliftMin: 0.08,
     upliftMax: 0.22,
   },
+  
   {
     id: 'spa_kecantikan',
     label: 'Spa & kecantikan',
@@ -60,13 +63,22 @@ export const BUSINESS_VERTICALS: BusinessVertical[] = [
     upliftMax: 0.2,
   },
   {
-    id: 'jasa_umum',
-    label: 'Studio / jasa lainnya',
-    shortLabel: 'Jasa umum',
-    description: 'Katalog layanan fleksibel untuk bisnis servis apa pun.',
-    defaultMonthlyRevenue: 28_000_000,
-    upliftMin: 0.05,
-    upliftMax: 0.15,
+    id: 'carwash',
+    label: 'Carwash & Salon Mobil/Motor',
+    shortLabel: 'Carwash',
+    description: 'Antrian servis, penugasan mekanik, dan tagihan transparan.',
+    defaultMonthlyRevenue: 15_000_000,
+    upliftMin: 0.08,
+    upliftMax: 0.22,
+  },
+  {
+    id: 'ppob',
+    label: 'PPOB, Pulsa & Token',
+    shortLabel: 'PPOB',
+    description: 'Antrian dan tagihan.',
+    defaultMonthlyRevenue: 15_000_000,
+    upliftMin: 0.08,
+    upliftMax: 0.25,
   },
 ];
 
