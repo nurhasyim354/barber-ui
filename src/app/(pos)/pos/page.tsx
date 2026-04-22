@@ -27,6 +27,7 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 
 interface Booking {
   _id: string;
@@ -197,17 +198,25 @@ export default function PosPage() {
     }
   }, [user, isLoading]);
 
-  const loadBookings = useCallback(async () => {
-    setLoading(true);
+  const loadBookings = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent;
+    if (!silent) setLoading(true);
     try {
       const res = await api.get('/bookings/today');
       setBookings(res.data);
     } catch {
-      toast.error('Gagal memuat antrian');
+      if (!silent) toast.error('Gagal memuat antrian');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (isLoading || !user) return;
+    if (user.role === 'customer') return;
+    const id = setInterval(() => { void loadBookings({ silent: true }); }, QUEUE_AUTO_RELOAD_MS);
+    return () => clearInterval(id);
+  }, [isLoading, user, loadBookings]);
 
   const handleUpdateStatus = async (bookingId: string, status: string) => {
     try {
@@ -460,7 +469,7 @@ export default function PosPage() {
         title="Kasir / POS"
         right={
           <Box className="flex items-center">
-          <IconButton color="inherit" onClick={loadBookings}>
+          <IconButton color="inherit" onClick={() => void loadBookings()}>
             <RefreshIcon />
           </IconButton>
           <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>

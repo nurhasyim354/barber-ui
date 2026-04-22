@@ -29,6 +29,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -200,12 +201,13 @@ function BookingContent() {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  const loadBookingData = useCallback(async () => {
+  const loadBookingData = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent;
     if (!effectiveTenantId) {
-      setPageLoading(false);
+      if (!silent) setPageLoading(false);
       return;
     }
-    setPageLoading(true);
+    if (!silent) setPageLoading(true);
     try {
       const [svcRes, histRes, tenantRes] = await Promise.all([
         api.get(`/tenants/${effectiveTenantId}/services`),
@@ -247,9 +249,9 @@ function BookingContent() {
         }
       }
     } catch {
-      toast.error('Gagal memuat data');
+      if (!silent) toast.error('Gagal memuat data');
     } finally {
-      setPageLoading(false);
+      if (!silent) setPageLoading(false);
     }
   }, [effectiveTenantId, isQrFlow]);
 
@@ -258,6 +260,22 @@ function BookingContent() {
     if (user && effectiveTenantId) loadBookingData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTenantId]);
+
+  // Auto-reload antrian / status booking
+  useEffect(() => {
+    if (!user || user.role !== 'customer') return;
+    if (!effectiveTenantId) return;
+    const id = setInterval(() => {
+      void loadBookingData({ silent: true });
+      if (bookStep === 'staff') {
+        api
+          .get(`/tenants/${effectiveTenantId}/staff/queue`)
+          .then((r) => setStaffQueue(r.data))
+          .catch(() => {});
+      }
+    }, QUEUE_AUTO_RELOAD_MS);
+    return () => clearInterval(id);
+  }, [user, effectiveTenantId, bookStep, loadBookingData]);
 
   // ── Registration actions ───────────────────────────────────────────────────
   const handleSendOtp = async () => {
