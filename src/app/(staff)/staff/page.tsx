@@ -28,6 +28,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { StaffBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { parseRupiahInput } from '@/lib/rupiahInput';
+import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 
 interface Booking {
   _id: string;
@@ -142,8 +143,11 @@ export default function StaffQueuePage() {
   const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
   const [tenantLoading, setTenantLoading] = useState(false);
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
+  const [qrisImageBase64, setQrisImageBase64] = useState<string | null>(null);
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
   const [payAmountInput, setPayAmountInput] = useState('');
+  const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
+  const [qrisErrorBanner, setQrisErrorBanner] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
@@ -166,6 +170,13 @@ export default function StaffQueuePage() {
   );
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
+
+  useEffect(() => {
+    if (!user?.tenantId) return;
+    api.get(`/tenants/${user.tenantId}/settings`)
+      .then((r) => setQrisImageBase64(r.data?.qrisImageBase64 || null))
+      .catch(() => {});
+  }, [user?.tenantId]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -206,7 +217,7 @@ export default function StaffQueuePage() {
       const tRes = await api.get(`/tenants/${tenant._id}`);
       setCurrentTenant(tRes.data);
       setTenantDialogOpen(false);
-      loadBookings(tenant._id);
+      loadBookings({ tenantId: tenant._id });
     } catch {
       toast.error('Gagal berpindah salon');
     }
@@ -226,19 +237,30 @@ export default function StaffQueuePage() {
     }
   };
 
-  const loadBookings = useCallback(async (tenantId?: string) => {
-    const tid = tenantId || user?.tenantId;
+  const loadBookings = useCallback(async (opts?: { tenantId?: string; silent?: boolean }) => {
+    const tid = opts?.tenantId || user?.tenantId;
     if (!tid) return;
-    setLoading(true);
+    const silent = opts?.silent;
+    if (!silent) setLoading(true);
     try {
       const res = await api.get('/bookings/today');
       setBookings(res.data);
     } catch {
-      toast.error('Gagal memuat antrian');
+      if (!silent) toast.error('Gagal memuat antrian');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (isLoading || !user) return;
+    if (user.role !== 'staff') return;
+    if (!user.tenantId) return;
+    const id = setInterval(() => {
+      void loadBookings({ silent: true });
+    }, QUEUE_AUTO_RELOAD_MS);
+    return () => clearInterval(id);
+  }, [isLoading, user, loadBookings]);
 
   const handleUpdateStatus = async (bookingId: string, status: string) => {
     try {
@@ -271,6 +293,8 @@ export default function StaffQueuePage() {
       return;
     }
     lastBookingRef.current = b;
+    setPayStep('select');
+    setQrisErrorBanner(null);
     setPayAmountInput(String(b.servicePrice));
     setPayDialog({ open: true, booking: b });
   };
@@ -299,12 +323,20 @@ export default function StaffQueuePage() {
       setPayDialog({ open: false, booking: null });
       setPayAmountInput('');
       setReceiptDialog(true);
+      setQrisErrorBanner(null);
       loadBookings();
     } catch (err: unknown) {
-      toast.error(
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Gagal memproses pembayaran'
-      );
+      const serverMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(serverMsg || 'Gagal memproses pembayaran');
+      if (method === 'qris') {
+        setQrisErrorBanner(
+          serverMsg
+            ? `${serverMsg} — jika perlu, catat pembayaran tunai.`
+            : 'Pembayaran QRIS belum tercatat. Gunakan tombol Ganti ke Tunai di bawah jika pelanggan membayar tunai.',
+        );
+      } else {
+        setQrisErrorBanner(null);
+      }
     } finally {
       setPaying(false);
     }
@@ -712,49 +744,192 @@ export default function StaffQueuePage() {
         )}
       </Dialog>
 
-      {/* Payment Dialog */}
+      {/* Payment Dialog (sama alur tenant_admin POS: pilih metode → layar QRIS, bisa ganti ke tunai jika QRIS gagal) */}
       <Dialog
         open={payDialog.open}
-        onClose={() => { setPayDialog({ open: false, booking: null }); setPayAmountInput(''); }}
+        onClose={() => {
+          setPayDialog({ open: false, booking: null });
+          setPayAmountInput('');
+          setPayStep('select');
+          setQrisErrorBanner(null);
+        }}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle fontWeight={500}>Pilih Metode Bayar</DialogTitle>
-        <DialogContent>
-          {payDialog.booking && (
-            <Box className="text-center mb-4">
-              <TextField
+        {payStep === 'select' ? (
+          <>
+            <DialogTitle fontWeight={500}>Pilih Metode Bayar</DialogTitle>
+            <DialogContent>
+              {payDialog.booking && (
+                <Box className="text-center mb-4">
+                  <TextField
+                    fullWidth
+                    label="Jumlah bayar (Rp)"
+                    value={payAmountInput}
+                    onChange={(e) => setPayAmountInput(e.target.value.replace(/\D/g, ''))}
+                    inputProps={{ inputMode: 'numeric' }}
+                    helperText={
+                      `Harga layanan: Rp ${payDialog.booking.servicePrice.toLocaleString('id-ID')}`
+                    }
+                    sx={{ mb: 1.5, mt: 2 }}
+                    autoFocus
+                  />
+                  <Typography color="text.secondary" variant="body2">
+                    {payDialog.booking.customerName} — {payDialog.booking.serviceName}
+                  </Typography>
+                  {payDialog.booking.staffName && (
+                    <Typography variant="body2" color="text.secondary">
+                      {ui.assigneeReceiptLabel}: {payDialog.booking.staffName}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+              <Box className="flex gap-3">
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="large"
+                  onClick={() => handlePayment('cash')}
+                  disabled={paying}
+                  sx={{ py: 3, flexDirection: 'column', gap: 1 }}
+                >
+                  <PaymentsIcon sx={{ fontSize: 40 }} />
+                  Tunai
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="large"
+                  onClick={() => setPayStep('qris-confirm')}
+                  disabled={paying}
+                  sx={{ py: 3, flexDirection: 'column', gap: 1 }}
+                >
+                  <QrCodeIcon sx={{ fontSize: 40 }} />
+                  QRIS
+                </Button>
+              </Box>
+              {paying && (
+                <Box className="flex justify-center mt-4">
+                  <CircularProgress />
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => {
+                  setPayDialog({ open: false, booking: null });
+                  setPayAmountInput('');
+                  setPayStep('select');
+                  setQrisErrorBanner(null);
+                }}
+              >
+                Batal
+              </Button>
+            </DialogActions>
+          </>
+        ) : (
+          <>
+            <DialogTitle fontWeight={500} sx={{ textAlign: 'center', pb: 0 }}>
+              Konfirmasi Pembayaran QRIS
+            </DialogTitle>
+            <DialogContent>
+              {qrisErrorBanner && (
+                <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setQrisErrorBanner(null)}>
+                  {qrisErrorBanner}
+                </Alert>
+              )}
+              <Box className="text-center py-2">
+                {qrisImageBase64 ? (
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      mb: 2,
+                      bgcolor: 'white',
+                      p: 1,
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrisImageBase64}
+                      alt="QRIS"
+                      style={{ width: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }}
+                    />
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: '20px',
+                      bgcolor: 'rgba(192,57,43,0.1)',
+                      border: '2px solid',
+                      borderColor: 'primary.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      mx: 'auto',
+                      mb: 2,
+                    }}
+                  >
+                    <QrCodeIcon sx={{ fontSize: 48, color: 'primary.main' }} />
+                  </Box>
+                )}
+
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  {qrisImageBase64
+                    ? 'Minta pelanggan scan QR di atas'
+                    : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
+                </Typography>
+                <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
+                  Rp {(parseRupiahInput(payAmountInput) ?? payDialog.booking?.servicePrice ?? 0).toLocaleString('id-ID')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {payDialog.booking?.customerName} — {payDialog.booking?.serviceName}
+                </Typography>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Button
                 fullWidth
-                label="Jumlah bayar (Rp)"
-                value={payAmountInput}
-                onChange={(e) => setPayAmountInput(e.target.value.replace(/\D/g, ''))}
-                inputProps={{ inputMode: 'numeric' }}
-                helperText={
-                  `Harga layanan: Rp ${payDialog.booking.servicePrice.toLocaleString('id-ID')}`
-                }
-                sx={{ mb: 1.5 }}
-                autoFocus
-              />
-              <Typography color="text.secondary" variant="body2">
-                {payDialog.booking.customerName} — {payDialog.booking.serviceName}
-              </Typography>
-            </Box>
-          )}
-          <Box className="flex gap-3">
-            <Button fullWidth variant="outlined" size="large" onClick={() => handlePayment('cash')} disabled={paying} sx={{ py: 3, flexDirection: 'column', gap: 1 }}>
-              <PaymentsIcon sx={{ fontSize: 40 }} />
-              Tunai
-            </Button>
-            <Button fullWidth variant="outlined" size="large" onClick={() => handlePayment('qris')} disabled={paying} sx={{ py: 3, flexDirection: 'column', gap: 1 }}>
-              <QrCodeIcon sx={{ fontSize: 40 }} />
-              QRIS
-            </Button>
-          </Box>
-          {paying && <Box className="flex justify-center mt-4"><CircularProgress /></Box>}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setPayDialog({ open: false, booking: null }); setPayAmountInput(''); }}>Batal</Button>
-        </DialogActions>
+                variant="contained"
+                size="large"
+                color="success"
+                onClick={() => handlePayment('qris')}
+                disabled={paying}
+                startIcon={paying ? <CircularProgress size={20} color="inherit" /> : <CheckCircleIcon />}
+                sx={{ mb: 1.5, py: 1.5 }}
+              >
+                {paying ? 'Memproses…' : 'QRIS Sudah Dibayar'}
+              </Button>
+
+              <Button
+                fullWidth
+                variant="contained"
+                size="large"
+                onClick={() => { setQrisErrorBanner(null); void handlePayment('cash'); }}
+                disabled={paying}
+                startIcon={<PaymentsIcon />}
+                color="secondary"
+                sx={{ mb: 1 }}
+              >
+                Ganti ke Tunai
+              </Button>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => { setPayStep('select'); setQrisErrorBanner(null); }}
+                disabled={paying}
+                color="inherit"
+              >
+                ← Kembali
+              </Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
 
       {/* Receipt Dialog */}

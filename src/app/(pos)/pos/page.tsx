@@ -165,6 +165,7 @@ export default function PosPage() {
   });
   const [payAmountInput, setPayAmountInput] = useState('');
   const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
+  const [qrisErrorBanner, setQrisErrorBanner] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
@@ -273,6 +274,7 @@ export default function PosPage() {
     }
     lastBookingRef.current = b;
     setPayStep('select');
+    setQrisErrorBanner(null);
     setPayAmountInput(String(b.servicePrice));
     setPayDialog({ open: true, booking: b });
   };
@@ -302,12 +304,20 @@ export default function PosPage() {
       setPayDialog({ open: false, booking: null });
       setPayAmountInput('');
       setReceiptDialog(true);
+      setQrisErrorBanner(null);
       loadBookings();
     } catch (err: unknown) {
-      toast.error(
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Gagal memproses pembayaran'
-      );
+      const serverMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(serverMsg || 'Gagal memproses pembayaran');
+      if (method === 'qris') {
+        setQrisErrorBanner(
+          serverMsg
+            ? `${serverMsg} — jika perlu, catat pembayaran tunai.`
+            : 'Pembayaran QRIS belum tercatat. Gunakan tombol Ganti ke Tunai di bawah jika pelanggan membayar tunai.',
+        );
+      } else {
+        setQrisErrorBanner(null);
+      }
     } finally {
       setPaying(false);
     }
@@ -671,7 +681,12 @@ export default function PosPage() {
       {/* Payment Dialog */}
       <Dialog
         open={payDialog.open}
-        onClose={() => { setPayDialog({ open: false, booking: null }); setPayStep('select'); setPayAmountInput(''); }}
+        onClose={() => {
+          setPayDialog({ open: false, booking: null });
+          setPayStep('select');
+          setPayAmountInput('');
+          setQrisErrorBanner(null);
+        }}
         fullWidth
         maxWidth="xs"
       >
@@ -727,7 +742,12 @@ export default function PosPage() {
             </DialogContent>
             <DialogActions>
               <Button
-                onClick={() => { setPayDialog({ open: false, booking: null }); setPayAmountInput(''); }}
+                onClick={() => {
+                  setPayDialog({ open: false, booking: null });
+                  setPayAmountInput('');
+                  setPayStep('select');
+                  setQrisErrorBanner(null);
+                }}
               >
                 Batal
               </Button>
@@ -739,6 +759,11 @@ export default function PosPage() {
               Konfirmasi Pembayaran QRIS
             </DialogTitle>
             <DialogContent>
+              {qrisErrorBanner && (
+                <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setQrisErrorBanner(null)}>
+                  {qrisErrorBanner}
+                </Alert>
+              )}
               {/* QRIS waiting screen */}
               <Box className="text-center py-2">
                 {/* QRIS image or placeholder */}
@@ -804,10 +829,11 @@ export default function PosPage() {
 
               {/* Fallback: switch to cash */}
               <Button
-                fullWidth variant="outlined" size="large"
-                onClick={() => handlePayment('cash')}
+                fullWidth variant="contained" size="large"
+                onClick={() => { setQrisErrorBanner(null); void handlePayment('cash'); }}
                 disabled={paying}
                 startIcon={<PaymentsIcon />}
+                color="secondary"
                 sx={{ mb: 1 }}
               >
                 Ganti ke Tunai
@@ -815,7 +841,7 @@ export default function PosPage() {
             </DialogContent>
             <DialogActions>
               <Button
-                onClick={() => setPayStep('select')}
+                onClick={() => { setPayStep('select'); setQrisErrorBanner(null); }}
                 disabled={paying}
                 color="inherit"
               >

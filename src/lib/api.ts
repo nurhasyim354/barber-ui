@@ -8,7 +8,10 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    const h = config.headers;
+    const fromAxios = typeof h.get === 'function' ? h.get('Authorization') : undefined;
+    const existing = fromAxios ?? (h as { Authorization?: string }).Authorization;
+    if (token && !existing) (h as { Authorization: string }).Authorization = `Bearer ${token}`;
   }
   return config;
 });

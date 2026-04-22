@@ -13,8 +13,18 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { useAuthStore, AuthUser } from '@/store/authStore';
+import { useAuthStore } from '@/store/authStore';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
+
+type LoginIdentityOption = {
+  userId: string;
+  role: string;
+  name: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  staffId: string | null;
+  label: string;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,10 +37,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [pendingAuth, setPendingAuth] = useState<{ token: string; user: AuthUser } | null>(null);
-  const [tenantOptions, setTenantOptions] = useState<{ _id: string; name: string }[]>([]);
-  const [adminTenantOptions, setAdminTenantOptions] = useState<{ _id: string; name: string }[]>([]);
-  const [switchingTenant, setSwitchingTenant] = useState(false);
+  const [pickToken, setPickToken] = useState<string | null>(null);
+  const [identityOptions, setIdentityOptions] = useState<LoginIdentityOption[]>([]);
+  const [selectingUserId, setSelectingUserId] = useState<string | null>(null);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
   useEffect(() => {
@@ -76,12 +85,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.post('/auth/verify-otp', { phone, otp });
-      if (res.data.allAdminTenants && res.data.allAdminTenants.length > 1) {
-        setPendingAuth({ token: res.data.token, user: res.data.user });
-        setAdminTenantOptions(res.data.allAdminTenants);
-      } else if (res.data.allTenants && res.data.allTenants.length > 1) {
-        setPendingAuth({ token: res.data.token, user: res.data.user });
-        setTenantOptions(res.data.allTenants);
+      if (res.data.needsIdentitySelection && res.data.identities?.length) {
+        setPickToken(res.data.pickToken);
+        setIdentityOptions(res.data.identities);
       } else {
         setAuth(res.data.user, res.data.token);
         toast.success(`Selamat datang, ${res.data.user.name}!`);
@@ -93,45 +99,27 @@ export default function LoginPage() {
     }
   };
 
-  const handleSelectTenant = async (tenantId: string) => {
-    if (!pendingAuth) return;
-    setSwitchingTenant(true);
+  const handleSelectIdentity = async (userId: string) => {
+    if (!pickToken) return;
+    setSelectingUserId(userId);
     try {
-      setAuth(pendingAuth.user, pendingAuth.token);
       const res = await api.post(
-        '/auth/switch-customer-tenant',
-        { tenantId },
-        { headers: { Authorization: `Bearer ${pendingAuth.token}` } },
+        '/auth/select-identity',
+        { userId },
+        { headers: { Authorization: `Bearer ${pickToken}` } },
       );
       setAuth(res.data.user, res.data.token);
-      toast.success(`Selamat datang! Salon aktif: ${tenantOptions.find((t) => t._id === tenantId)?.name}`);
-      setTenantOptions([]);
-      setPendingAuth(null);
-    } catch {
-      toast.error('Gagal memilih salon');
-    } finally {
-      setSwitchingTenant(false);
-    }
-  };
-
-  const handleSelectAdminTenant = async (tenantId: string) => {
-    if (!pendingAuth) return;
-    setSwitchingTenant(true);
-    try {
-      setAuth(pendingAuth.user, pendingAuth.token);
-      const res = await api.post(
-        '/auth/switch-tenant',
-        { tenantId },
-        { headers: { Authorization: `Bearer ${pendingAuth.token}` } },
+      const label = identityOptions.find((i) => i.userId === userId)?.label;
+      setPickToken(null);
+      setIdentityOptions([]);
+      toast.success(label ? `Masuk: ${label}` : `Selamat datang, ${res.data.user.name}!`);
+    } catch (err: unknown) {
+      toast.error(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Gagal memilih akun',
       );
-      setAuth(res.data.user, res.data.token);
-      toast.success(`Outlet aktif: ${adminTenantOptions.find((t) => t._id === tenantId)?.name ?? ''}`);
-      setAdminTenantOptions([]);
-      setPendingAuth(null);
-    } catch {
-      toast.error('Gagal memilih outlet');
     } finally {
-      setSwitchingTenant(false);
+      setSelectingUserId(null);
     }
   };
 
@@ -185,52 +173,29 @@ export default function LoginPage() {
         </Typography>
       </Box>
 
-      {/* Dialog pilih outlet (admin jadi admin di >1 tenant) */}
-      <Dialog open={adminTenantOptions.length > 1} maxWidth="xs" fullWidth>
+      <Dialog open={Boolean(pickToken && identityOptions.length > 0)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <StorefrontIcon color="primary" />
-          Pilih outlet yang dikelola
+          Pilih cara masuk
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Nomor Anda terdaftar sebagai admin di lebih dari satu outlet. Pilih outlet yang ingin Anda kelola:
+            Nomor ini punya lebih dari satu profil (peran atau outlet berbeda). Pilih mana yang ingin dipakai
+            sekarang:
           </Typography>
           <List disablePadding>
-            {adminTenantOptions.map((t) => (
+            {identityOptions.map((opt) => (
               <ListItemButton
-                key={t._id}
-                onClick={() => handleSelectAdminTenant(t._id)}
-                disabled={switchingTenant}
+                key={opt.userId}
+                onClick={() => handleSelectIdentity(opt.userId)}
+                disabled={!!selectingUserId}
                 sx={{ borderRadius: 2, mb: 1, border: '1px solid', borderColor: 'divider' }}
               >
-                <ListItemText primary={t.name} />
-                {switchingTenant && <CircularProgress size={18} />}
-              </ListItemButton>
-            ))}
-          </List>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog pilih salon untuk customer multi-tenant */}
-      <Dialog open={tenantOptions.length > 1} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <StorefrontIcon color="primary" />
-          Pilih Outlet
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Nomor Anda terdaftar di beberapa outlet. Pilih outlet yang ingin Anda kunjungi:
-          </Typography>
-          <List disablePadding>
-            {tenantOptions.map((t) => (
-              <ListItemButton
-                key={t._id}
-                onClick={() => handleSelectTenant(t._id)}
-                disabled={switchingTenant}
-                sx={{ borderRadius: 2, mb: 1, border: '1px solid', borderColor: 'divider' }}
-              >
-                <ListItemText primary={t.name} />
-                {switchingTenant && <CircularProgress size={18} />}
+                <ListItemText
+                  primary={opt.label}
+                  secondary={opt.name !== opt.label ? opt.name : undefined}
+                />
+                {selectingUserId === opt.userId && <CircularProgress size={18} />}
               </ListItemButton>
             ))}
           </List>
