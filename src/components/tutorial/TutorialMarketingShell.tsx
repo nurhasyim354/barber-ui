@@ -10,7 +10,9 @@ import {
   Container,
 } from '@mui/material';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
+import MarketingSiteFooter from '@/components/marketing/MarketingSiteFooter';
 
 type TutorialMarketingShellProps = {
   children: React.ReactNode;
@@ -20,7 +22,7 @@ type TutorialMarketingShellProps = {
 
 export default function TutorialMarketingShell({ children, subtitle }: TutorialMarketingShellProps) {
   return (
-    <Box sx={{ minHeight: '100svh', bgcolor: 'background.default' }}>
+    <Box sx={{ minHeight: '100svh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
       <AppBar
         position="sticky"
         color="transparent"
@@ -42,6 +44,12 @@ export default function TutorialMarketingShell({ children, subtitle }: TutorialM
             </Typography>
           ) : null}
           <Box sx={{ flexGrow: 1 }} />
+          <Button component={Link} href="/contact" color="inherit" startIcon={<MailOutlineIcon />} sx={{ mr: 0.5, display: { xs: 'none', sm: 'inline-flex' } }}>
+            Kontak
+          </Button>
+          <Button component={Link} href="/contact" color="inherit" aria-label="Kontak" sx={{ mr: 0.5, display: { xs: 'inline-flex', sm: 'none' } }}>
+            <MailOutlineIcon />
+          </Button>
           <Button component={Link} href="/tutorial" color="inherit" startIcon={<MenuBookIcon />} sx={{ mr: 0.5 }}>
             Panduan
           </Button>
@@ -53,9 +61,10 @@ export default function TutorialMarketingShell({ children, subtitle }: TutorialM
           </Button>
         </Toolbar>
       </AppBar>
-      <Container maxWidth="md" sx={{ px: UI_LAYOUT.containerGutters.px, py: { xs: 3, md: 4 } }}>
+      <Container maxWidth="md" sx={{ px: UI_LAYOUT.containerGutters.px, py: { xs: 3, md: 4 }, flex: 1 }}>
         {children}
       </Container>
+      <MarketingSiteFooter />
     </Box>
   );
 }

@@ -30,12 +30,13 @@ interface StaffMember {
     specialty?: string;
     phone?: string;
     rating: number;
-    reviewCount: number;
+    totalReviews: number;
     isActive: boolean;
     isAvailable: boolean;
+    dailyBookingQuota?: number | null;
 }
 
-const defaultForm = { name: '', photoUrl: '', specialty: '', phone: '' };
+const defaultForm = { name: '', photoUrl: '', specialty: '', phone: '', dailyBookingQuota: '' as string };
 const PAGE_SIZE = 20;
 
 export default function StaffManagementPage() {
@@ -86,7 +87,15 @@ export default function StaffManagementPage() {
     };
 
     const handleEdit = (b: StaffMember) => {
-        setForm({ name: b.name, photoUrl: b.photoUrl || '', specialty: b.specialty || '', phone: b.phone || '' });
+        const dq =
+            b.dailyBookingQuota != null && b.dailyBookingQuota > 0 ? String(Math.min(9999, b.dailyBookingQuota)) : '';
+        setForm({
+            name: b.name,
+            photoUrl: b.photoUrl || '',
+            specialty: b.specialty || '',
+            phone: b.phone || '',
+            dailyBookingQuota: dq,
+        });
         setEditId(b._id);
         setDialogOpen(true);
     };
@@ -97,11 +106,26 @@ export default function StaffManagementPage() {
         if (!form.name.trim()) { toast.error('Nama wajib diisi'); return; }
         setSaving(true);
         try {
+            const quotaPayload =
+                form.dailyBookingQuota.trim() === ''
+                    ? { dailyBookingQuota: null }
+                    : { dailyBookingQuota: Math.min(9999, Math.max(1, parseInt(form.dailyBookingQuota, 10) || 1)) };
             if (editId) {
-                await api.patch(`/staff/${editId}`, { ...form, isActive: true });
+                await api.patch(`/staff/${editId}`, {
+                    name: form.name,
+                    photoUrl: form.photoUrl,
+                    phone: form.phone,
+                    isActive: true,
+                    ...quotaPayload,
+                });
                 toast.success(`${ui.staffSingular} diupdate`);
             } else {
-                await api.post('/staff', form);
+                await api.post('/staff', {
+                    name: form.name,
+                    photoUrl: form.photoUrl,
+                    phone: form.phone,
+                    ...quotaPayload,
+                });
                 toast.success(`${ui.staffSingular} berhasil ditambahkan`);
             }
             setDialogOpen(false);
@@ -210,11 +234,16 @@ export default function StaffManagementPage() {
                                                 {b.phone && (
                                                     <Typography variant="caption" color="text.secondary">📱 {b.phone}</Typography>
                                                 )}
+                                                {b.dailyBookingQuota != null && b.dailyBookingQuota > 0 && (
+                                                    <Typography variant="caption" color="text.secondary" display="block">
+                                                        Kuota harian: {b.dailyBookingQuota} antrian aktif
+                                                    </Typography>
+                                                )}
                                                 <Box className="flex items-center gap-1 mt-1">
                                                     <Rating value={b.rating || 0} precision={0.1} size="small" readOnly />
                                                     <Typography variant="body2" color="text.secondary">
                                                         {b.rating > 0
-                                                            ? `${b.rating.toFixed(1)}${b.reviewCount > 0 ? ` (${b.reviewCount})` : ''}`
+                                                            ? `${b.rating.toFixed(1)}${b.totalReviews > 0 ? ` (${b.totalReviews})` : ''}`
                                                             : 'Belum ada rating'}
                                                     </Typography>
                                                 </Box>
@@ -325,6 +354,22 @@ export default function StaffManagementPage() {
                             inputMode="tel"
                             placeholder="08xx xxxx xxxx"
                             helperText={editId ? 'Kosongkan jika tidak ingin mengubah HP' : 'Jika diisi, staff bisa login via OTP WA'}
+                        />
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Kuota antrian aktif per hari (opsional)"
+                            value={form.dailyBookingQuota}
+                            onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, '');
+                                setForm((p) => ({
+                                    ...p,
+                                    dailyBookingQuota: v === '' ? '' : String(Math.min(9999, parseInt(v, 10))),
+                                }));
+                            }}
+                            inputProps={{ min: 1, max: 9999 }}
+                            placeholder="Ikuti batas outlet saja"
+                            helperText="Kosong = tidak ada batas khusus untuk staff ini (tetap terbatas kuota outlet jika di-set)."
                         />
                     </Box>
                 </DialogContent>

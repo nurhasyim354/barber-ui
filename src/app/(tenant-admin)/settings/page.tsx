@@ -48,6 +48,8 @@ interface TenantSettings {
   customerReturnReminderDays?: number | null;
   /** Menit sebelum perkiraan dilayani — WA pengingat (0 = nonaktif). Hanya jika ETA > 2 jam. */
   customerAppointmentReminderMinutes?: number | null;
+  /** Batas antrian aktif per hari (menunggu + sedang dilayani); null = tidak dibatasi */
+  dailyBookingQuota?: number | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -76,6 +78,8 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState<TenantTheme>(DEFAULT_THEME);
   const [customerReturnReminderDays, setCustomerReturnReminderDays] = useState(21);
   const [customerAppointmentReminderMinutes, setCustomerAppointmentReminderMinutes] = useState(0);
+  /** string kosong = tidak dibatasi */
+  const [dailyBookingQuota, setDailyBookingQuota] = useState('');
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -105,11 +109,14 @@ export default function SettingsPage() {
       setTheme(t.theme ?? DEFAULT_THEME);
       const rd = t.customerReturnReminderDays;
       if (rd === 0) setCustomerReturnReminderDays(0);
-      else if (rd == null || Number.isNaN(Number(rd))) setCustomerReturnReminderDays(21);
+      else if (rd == null || Number.isNaN(Number(rd))) setCustomerReturnReminderDays(0);
       else setCustomerReturnReminderDays(Math.min(90, Math.max(1, Number(rd))));
       const am = t.customerAppointmentReminderMinutes;
       if (am == null || Number.isNaN(Number(am))) setCustomerAppointmentReminderMinutes(0);
       else setCustomerAppointmentReminderMinutes(Math.min(180, Math.max(0, Number(am))));
+      const dq = t.dailyBookingQuota;
+      if (dq == null || dq <= 0 || Number.isNaN(Number(dq))) setDailyBookingQuota('');
+      else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -140,6 +147,7 @@ export default function SettingsPage() {
         theme,
         customerReturnReminderDays,
         customerAppointmentReminderMinutes,
+        dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -288,6 +296,32 @@ export default function SettingsPage() {
                 inputProps={{ min: 0, max: 180 }}
                 sx={{ mt: 2 }}
                 helperText="0 = nonaktif. Contoh: 30 = kirim WA ~30 menit sebelum perkiraan giliran. Hanya dijadwalkan jika estimasi dilayani lebih dari 2 jam dari saat booking diperbarui; membutuhkan staff sudah ditugaskan."
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={500} className="mb-2">
+                Kuota booking harian (outlet)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Batasi jumlah antrian <strong>aktif</strong> per hari kalender untuk seluruh outlet: status menunggu dan sedang
+                dilayani. Booking selesai atau batal membebaskan slot. Kosongkan untuk tidak membatasi.
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                label="Maks. antrian aktif per hari (opsional)"
+                value={dailyBookingQuota}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  if (v === '') setDailyBookingQuota('');
+                  else setDailyBookingQuota(String(Math.min(9999, parseInt(v, 10))));
+                }}
+                inputProps={{ min: 1, max: 9999 }}
+                placeholder="Tidak dibatasi"
+                helperText="Anda juga bisa set batas per staff di menu Kelola Staff."
               />
             </CardContent>
           </Card>

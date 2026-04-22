@@ -6,7 +6,7 @@ import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Avatar, Divider, LinearProgress, Checkbox,
-  InputAdornment, Alert,
+  InputAdornment, Alert, Fab, Tooltip, Paper,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -22,6 +22,7 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import NoteAltIcon from '@mui/icons-material/NoteAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -43,6 +44,10 @@ interface TenantInfo {
   tenantType?: string;
   /** true jika ada tagihan langganan outlet yang overdue */
   subscriptionOverdue?: boolean;
+  /** Max slot aktif (waiting + sedang dilayani) per hari; null = tidak dibatasi */
+  dailyBookingQuota?: number | null;
+  /** Slot aktif saat ini (hari ini) */
+  todayActiveBookingCount?: number;
 }
 
 interface ServicePhotoDoc {
@@ -70,6 +75,9 @@ interface StaffQueueRow {
   totalReviews: number;
   queueCount: number;
   estimatedWaitMinutes: number;
+  dailyBookingQuota?: number | null;
+  /** false = sedang tidak terima booking (dari staff / toggle ketersediaan) */
+  isAvailable?: boolean;
 }
 
 interface ActiveBooking {
@@ -124,6 +132,21 @@ const formatEstimatedServe = (iso: string) =>
     hour: '2-digit',
     minute: '2-digit',
   });
+
+/** Pelanggan memilih `extra` booking aktif baru — melebihi kuota outlet? */
+function tenantQuotaExceeded(tenant: TenantInfo | null, extra: number): boolean {
+  const cap = tenant?.dailyBookingQuota;
+  if (cap == null || cap <= 0) return false;
+  const used = tenant?.todayActiveBookingCount ?? 0;
+  return used + extra > cap;
+}
+
+/** Staff tidak bisa menerima `extra` booking aktif lagi hari ini */
+function staffQuotaExceeded(row: StaffQueueRow, extra: number): boolean {
+  const cap = row.dailyBookingQuota;
+  if (cap == null || cap <= 0) return false;
+  return row.queueCount + extra > cap;
+}
 
 // ── Main content ──────────────────────────────────────────────────────────────
 
@@ -270,12 +293,44 @@ function BookingContent() {
       if (bookStep === 'staff') {
         api
           .get(`/tenants/${effectiveTenantId}/staff/queue`)
-          .then((r) => setStaffQueue(r.data))
+          .then((r) => {
+            if (Array.isArray(r.data)) setStaffQueue(r.data);
+          })
           .catch(() => {});
       }
     }, QUEUE_AUTO_RELOAD_MS);
     return () => clearInterval(id);
   }, [user, effectiveTenantId, bookStep, loadBookingData]);
+
+  /** Prefetch antrian staff agar langkah pilih staff tidak gagal diam-diam */
+  useEffect(() => {
+    if (!user || user.role !== 'customer') return;
+    if (!effectiveTenantId || bookStep !== 'service' || selectedServices.length === 0) return;
+    if (tenant?.subscriptionOverdue) return;
+    const cap = tenant?.dailyBookingQuota;
+    const used = tenant?.todayActiveBookingCount ?? 0;
+    if (cap != null && cap > 0 && used >= cap) return;
+    let cancelled = false;
+    api
+      .get(`/tenants/${effectiveTenantId}/staff/queue`)
+      .then((r) => {
+        if (cancelled) return;
+        if (Array.isArray(r.data)) setStaffQueue(r.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    effectiveTenantId,
+    bookStep,
+    selectedServices.length,
+    tenant?.subscriptionOverdue,
+    tenant?.dailyBookingQuota,
+    tenant?.todayActiveBookingCount,
+    tenant,
+  ]);
 
   // ── Registration actions ───────────────────────────────────────────────────
   const handleSendOtp = async () => {
@@ -327,10 +382,21 @@ function BookingContent() {
     }
   };
 
+  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
+
+  const outletQuotaFull =
+    !!tenant?.dailyBookingQuota &&
+    tenant.dailyBookingQuota > 0 &&
+    (tenant.todayActiveBookingCount ?? 0) >= tenant.dailyBookingQuota;
+  const tenantSlotsExceededForCart = tenantQuotaExceeded(tenant, selectedServices.length);
+
   // ── Booking actions ────────────────────────────────────────────────────────
   const toggleService = (svc: Service) => {
     if (activeBooking) return;
     if (tenant?.subscriptionOverdue) return;
+    if (outletQuotaFull) return;
     setSelectedServices((prev) => {
       const exists = prev.find((s) => s._id === svc._id);
       return exists ? prev.filter((s) => s._id !== svc._id) : [...prev, svc];
@@ -342,19 +408,48 @@ function BookingContent() {
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
       return;
     }
+    if (tenantQuotaExceeded(tenant, selectedServices.length)) {
+      toast.error(
+        'Kuota antrian aktif harian outlet tidak cukup untuk jumlah layanan ini. Kurangi pilihan atau coba lagi nanti.',
+      );
+      return;
+    }
     if (selectedServices.length === 0) { toast.error('Pilih minimal satu layanan'); return; }
     setSelectedStaff(null);
     setBookStep('staff');
     setStaffQueueLoading(true);
-    api.get(`/tenants/${effectiveTenantId}/staff/queue`)
-      .then((r) => setStaffQueue(r.data))
-      .catch(() => toast.error('Gagal memuat daftar staff'))
+    api
+      .get(`/tenants/${effectiveTenantId}/staff/queue`)
+      .then((r) => {
+        if (Array.isArray(r.data)) setStaffQueue(r.data);
+        else {
+          setStaffQueue([]);
+          toast.error('Format daftar staff tidak valid');
+        }
+      })
+      .catch((err: unknown) => {
+        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+        toast.error(msg ?? 'Gagal memuat daftar staff');
+        setStaffQueue([]);
+      })
       .finally(() => setStaffQueueLoading(false));
   };
 
   const handleBook = async () => {
     if (tenant?.subscriptionOverdue) {
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
+      return;
+    }
+    if (tenantQuotaExceeded(tenant, selectedServices.length)) {
+      toast.error('Kuota antrian aktif harian outlet tidak cukup untuk booking ini.');
+      return;
+    }
+    if (selectedStaff && staffQuotaExceeded(selectedStaff, selectedServices.length)) {
+      toast.error(`Kuota harian ${bookingLabels.staffSingular} ini sudah penuh untuk jumlah layanan dipilih.`);
+      return;
+    }
+    if (selectedStaff && selectedStaff.isAvailable === false) {
+      toast.error(`${bookingLabels.staffSingular} ini sedang tidak menerima booking baru.`);
       return;
     }
     if (selectedServices.length === 0) return;
@@ -390,10 +485,6 @@ function BookingContent() {
       setSubmitting(false);
     }
   };
-
-  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
 
   // ── Loading spinner ────────────────────────────────────────────────────────
   if (authLoading) {
@@ -674,11 +765,29 @@ function BookingContent() {
     );
   }
 
+  const showFloatingCartSummary =
+    !pageLoading &&
+    !!effectiveTenantId &&
+    bookStep === 'service' &&
+    selectedServices.length > 0 &&
+    !activeBooking;
+
+  const showPickStaffFab =
+    showFloatingCartSummary && !tenant?.subscriptionOverdue;
+
+  const pickStaffFabDisabled = outletQuotaFull || tenantSlotsExceededForCart;
+
+  /** Di atas FAB “Pilih staff”; jika FAB disembunyikan (mis. tagihan), rapat di atas bottom nav */
+  const floatingCartBottom = showPickStaffFab
+    ? { xs: 158, sm: 168 }
+    : { xs: 80, sm: 88 };
+
   // ── Authenticated Booking Flow ────────────────────────────────────────────
   return (
     <Box
       sx={{
-        minHeight: '100svh', pb: 24,
+        minHeight: '100svh',
+        pb: showFloatingCartSummary ? (showPickStaffFab ? 42 : 30) : 24,
         background: (t) =>
           `linear-gradient(180deg, ${t.palette.background.default} 0%, ${t.palette.background.paper} 100%)`,
       }}
@@ -782,6 +891,7 @@ function BookingContent() {
         <Box
           sx={{
             p: { xs: 2, sm: 2.5 },
+            ...(showFloatingCartSummary ? { pb: { xs: 18, sm: 20 } } : {}),
             maxWidth: { xs: '100%', sm: UI_LAYOUT.bookingColumnMaxWidthPx },
             mx: 'auto',
           }}
@@ -922,6 +1032,32 @@ function BookingContent() {
             </Alert>
           )}
 
+          {tenant && !tenant.subscriptionOverdue && outletQuotaFull && (
+            <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+              <Typography variant="body2" fontWeight={600}>Kuota antrian harian penuh</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Outlet membatasi {tenant.dailyBookingQuota} antrian aktif (menunggu / sedang dilayani) per hari. Slot hari ini sudah terpakai.
+              </Typography>
+            </Alert>
+          )}
+
+          {tenant &&
+            !tenant.subscriptionOverdue &&
+            !outletQuotaFull &&
+            tenant.dailyBookingQuota &&
+            tenant.dailyBookingQuota > 0 &&
+            selectedServices.length > 0 &&
+            tenantSlotsExceededForCart && (
+              <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+                <Typography variant="body2" fontWeight={600}>Terlalu banyak layanan untuk sisa kuota</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Tersisa sekitar{' '}
+                  {Math.max(0, tenant.dailyBookingQuota - (tenant.todayActiveBookingCount ?? 0))} slot aktif hari ini.
+                  Kurangi jumlah layanan atau pesan terpisah.
+                </Typography>
+              </Alert>
+            )}
+
           {/* Step 1: Select Services */}
           {bookStep === 'service' && (
             <>
@@ -959,7 +1095,8 @@ function BookingContent() {
                         key={svc._id}
                         onClick={() => toggleService(svc)}
                         sx={{
-                          cursor: activeBooking || tenant?.subscriptionOverdue ? 'default' : 'pointer',
+                          cursor:
+                            activeBooking || tenant?.subscriptionOverdue || outletQuotaFull ? 'default' : 'pointer',
                           borderRadius: 3,
                           border: selected
                             ? (t) => `1.5px solid ${t.palette.primary.main}`
@@ -970,14 +1107,16 @@ function BookingContent() {
                           boxShadow: selected
                             ? (t) => `0 6px 24px ${t.palette.primary.main}24, 0 2px 6px rgba(0,0,0,0.06)`
                             : '0 2px 10px rgba(0,0,0,0.06)',
-                          opacity: activeBooking || tenant?.subscriptionOverdue ? 0.55 : 1,
+                          opacity:
+                            activeBooking || tenant?.subscriptionOverdue || outletQuotaFull ? 0.55 : 1,
                           transition: 'all 0.2s ease',
                         }}
                       >
                         <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '14px !important' }}>
                           <Checkbox
                             checked={selected} color="primary" sx={{ p: 0 }}
-                            disabled={!!activeBooking || !!tenant?.subscriptionOverdue} onChange={() => toggleService(svc)}
+                            disabled={!!activeBooking || !!tenant?.subscriptionOverdue || outletQuotaFull}
+                            onChange={() => toggleService(svc)}
                             onClick={(e) => e.stopPropagation()}
                           />
                           <Avatar
@@ -1029,53 +1168,6 @@ function BookingContent() {
                       </Card>
                     );
                   })}
-                </Box>
-              )}
-
-              {/* Cart summary */}
-              {selectedServices.length > 0 && (
-                <Box
-                  sx={{
-                    mt: 3, p: 2.5, borderRadius: 3,
-                    background: (t) => `linear-gradient(135deg, ${t.palette.primary.main}12 0%, ${t.palette.primary.light}06 100%)`,
-                    border: (t) => `1px solid ${t.palette.primary.main}22`,
-                    boxShadow: (t) => `0 4px 20px ${t.palette.primary.main}14`,
-                  }}
-                >
-                  <Typography variant="subtitle2" fontWeight={500} mb={1.5} color="primary">
-                    Layanan Dipilih ({selectedServices.length})
-                  </Typography>
-                  {selectedServices.map((s) => (
-                    <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                        <Avatar
-                          src={s.photoUrl || undefined}
-                          variant="rounded"
-                          sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: 'primary.light' }}
-                        >
-                          {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16 }} />}
-                        </Avatar>
-                        <Typography variant="body2" noWrap>{s.name}</Typography>
-                      </Box>
-                      <Typography variant="body2" fontWeight={500} sx={{ flexShrink: 0 }}>Rp {s.price.toLocaleString('id-ID')}</Typography>
-                    </Box>
-                  ))}
-                  <Divider sx={{ my: 1.5, opacity: 0.4, borderColor: 'rgba(0,0,0,0.12)' }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Total waktu: ~{totalDuration} menit
-                    </Typography>
-                    <Typography fontWeight={600} color="primary">
-                      Rp {totalPrice.toLocaleString('id-ID')}
-                    </Typography>
-                  </Box>
-                  <Button
-                    variant="contained" fullWidth onClick={handleGoToStaff}
-                    disabled={!!tenant?.subscriptionOverdue}
-                    sx={{ borderRadius: 2.5, py: 1.3, fontWeight: 700, letterSpacing: 0.3 }}
-                  >
-                    Pilih Staff →
-                  </Button>
                 </Box>
               )}
 
@@ -1152,7 +1244,11 @@ function BookingContent() {
                     <Typography color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>Belum ada staff tersedia</Typography>
                     <Button
                       variant="outlined" sx={{ borderRadius: 2.5 }}
-                      disabled={!!tenant?.subscriptionOverdue}
+                      disabled={
+                        !!tenant?.subscriptionOverdue ||
+                        outletQuotaFull ||
+                        tenantSlotsExceededForCart
+                      }
                       onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
                     >
                       Booking Tanpa Pilih Staf
@@ -1163,12 +1259,25 @@ function BookingContent() {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {staffQueue.map((b) => {
                     const sel = selectedStaff?.staffId === b.staffId;
+                    const staffFull = staffQuotaExceeded(b, selectedServices.length);
+                    const staffUnavailable = b.isAvailable === false;
+                    const cardDisabled =
+                      !!tenant?.subscriptionOverdue ||
+                      outletQuotaFull ||
+                      tenantSlotsExceededForCart ||
+                      staffFull ||
+                      staffUnavailable;
                     return (
                       <Card
                         key={b.staffId}
-                        onClick={() => { setSelectedStaff(b); setDialogOpen(true); }}
+                        onClick={() => {
+                          if (cardDisabled) return;
+                          setSelectedStaff(b);
+                          setDialogOpen(true);
+                        }}
                         sx={{
-                          cursor: 'pointer', borderRadius: 3,
+                          cursor: cardDisabled ? 'not-allowed' : 'pointer',
+                          borderRadius: 3,
                           border: sel
                             ? (t) => `1.5px solid ${t.palette.primary.main}`
                             : '1.5px solid rgba(0,0,0,0.07)',
@@ -1178,6 +1287,7 @@ function BookingContent() {
                           boxShadow: sel
                             ? (t) => `0 6px 24px ${t.palette.primary.main}24, 0 2px 6px rgba(0,0,0,0.06)`
                             : '0 2px 10px rgba(0,0,0,0.06)',
+                          opacity: cardDisabled ? 0.5 : 1,
                           transition: 'all 0.2s ease',
                         }}
                       >
@@ -1211,6 +1321,17 @@ function BookingContent() {
                               </Box>
                             </Box>
                             <Box sx={{ textAlign: 'right' }}>
+                              {staffUnavailable && (
+                                <Chip
+                                  label="Tidak terima booking"
+                                  color="default"
+                                  size="small"
+                                  sx={{ fontWeight: 700, mb: 0.5 }}
+                                />
+                              )}
+                              {staffFull && !staffUnavailable && (
+                                <Chip label="Kuota penuh" color="error" size="small" sx={{ fontWeight: 700, mb: 0.5 }} />
+                              )}
                               <Chip
                                 icon={<HourglassTopIcon sx={{ fontSize: '12px !important' }} />}
                                 label={waitLabel(b.estimatedWaitMinutes)}
@@ -1220,6 +1341,9 @@ function BookingContent() {
                               {b.queueCount > 0 && (
                                 <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
                                   {b.queueCount} orang antri
+                                  {b.dailyBookingQuota != null && b.dailyBookingQuota > 0
+                                    ? ` · max ${b.dailyBookingQuota}/hari`
+                                    : ''}
                                 </Typography>
                               )}
                             </Box>
@@ -1230,12 +1354,22 @@ function BookingContent() {
                   })}
 
                   <Box
-                    onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
+                    onClick={() => {
+                      if (tenant?.subscriptionOverdue || outletQuotaFull || tenantSlotsExceededForCart) return;
+                      setSelectedStaff(null);
+                      setDialogOpen(true);
+                    }}
                     sx={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      py: 2, borderRadius: 3, cursor: 'pointer',
+                      py: 2, borderRadius: 3,
+                      cursor:
+                        tenant?.subscriptionOverdue || outletQuotaFull || tenantSlotsExceededForCart
+                          ? 'not-allowed'
+                          : 'pointer',
                       border: '1.5px dashed rgba(0,0,0,0.15)',
                       color: 'text.secondary',
+                      opacity:
+                        tenant?.subscriptionOverdue || outletQuotaFull || tenantSlotsExceededForCart ? 0.5 : 1,
                       transition: 'all 0.15s',
                       '&:hover': { bgcolor: 'rgba(0,0,0,0.025)', borderColor: 'rgba(0,0,0,0.25)' },
                     }}
@@ -1360,7 +1494,17 @@ function BookingContent() {
             Batal
           </Button>
           <Button
-            onClick={handleBook} variant="contained" fullWidth disabled={submitting || !!tenant?.subscriptionOverdue}
+            onClick={handleBook}
+            variant="contained"
+            fullWidth
+            disabled={
+              submitting ||
+              !!tenant?.subscriptionOverdue ||
+              outletQuotaFull ||
+              tenantSlotsExceededForCart ||
+              (!!selectedStaff && staffQuotaExceeded(selectedStaff, selectedServices.length)) ||
+              (!!selectedStaff && selectedStaff.isAvailable === false)
+            }
             startIcon={submitting ? undefined : <CheckCircleIcon />}
             sx={{ borderRadius: 2.5, py: 1.2, fontWeight: 700 }}
           >
@@ -1368,6 +1512,114 @@ function BookingContent() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {showFloatingCartSummary && (
+        <Paper
+          elevation={12}
+          sx={{
+            position: 'fixed',
+            left: 12,
+            right: 12,
+            bottom: floatingCartBottom,
+            zIndex: 59,
+            borderRadius: 3,
+            maxWidth: UI_LAYOUT.bookingColumnMaxWidthPx,
+            mx: 'auto',
+            overflow: 'hidden',
+            border: (t) => `1px solid ${t.palette.primary.main}22`,
+            background: (t) => `linear-gradient(145deg, ${t.palette.primary.main}10 0%, ${t.palette.background.paper} 55%, ${t.palette.background.paper} 100%)`,
+          }}
+        >
+          <Box sx={{ p: 1.75, pt: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <ShoppingCartIcon color="primary" sx={{ fontSize: 22 }} />
+              <Typography variant="subtitle2" fontWeight={700} color="primary">
+                Layanan dipilih ({selectedServices.length})
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                maxHeight: 140,
+                overflowY: 'auto',
+                pr: 0.5,
+                WebkitOverflowScrolling: 'touch',
+              }}
+            >
+              {selectedServices.map((s) => (
+                <Box
+                  key={s._id}
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, gap: 1 }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                    <Avatar
+                      src={s.photoUrl || undefined}
+                      variant="rounded"
+                      sx={{ width: 28, height: 28, flexShrink: 0, bgcolor: 'primary.light' }}
+                    >
+                      {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 14 }} />}
+                    </Avatar>
+                    <Typography variant="body2" noWrap fontWeight={500}>
+                      {s.name}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
+                    Rp {s.price.toLocaleString('id-ID')}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+            <Divider sx={{ my: 1, opacity: 0.35, borderColor: 'rgba(0,0,0,0.1)' }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" color="text.secondary">
+                Total waktu ~{totalDuration} menit
+              </Typography>
+              <Typography fontWeight={800} color="primary" variant="subtitle1">
+                Rp {totalPrice.toLocaleString('id-ID')}
+              </Typography>
+            </Box>
+            {showPickStaffFab && (
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.45 }}>
+                Lanjut dengan tombol <strong>Pilih staff</strong> di pojok kanan bawah.
+              </Typography>
+            )}
+            {tenant?.subscriptionOverdue && (
+              <Typography variant="caption" color="error" display="block" sx={{ mt: 0.75, fontWeight: 600 }}>
+                Outlet tidak dapat menerima booking baru saat ini.
+              </Typography>
+            )}
+          </Box>
+        </Paper>
+      )}
+
+      {showPickStaffFab && (
+        <Tooltip
+          title={
+            pickStaffFabDisabled
+              ? outletQuotaFull
+                ? 'Kuota antrian outlet hari ini penuh'
+                : 'Kurangi jumlah layanan agar muat dengan sisa kuota'
+              : `Pilih ${bookingLabels.staffSingular.toLowerCase()}`
+          }
+        >
+          <Fab
+            color="primary"
+            variant="extended"
+            disabled={pickStaffFabDisabled}
+            onClick={() => void handleGoToStaff()}
+            sx={{
+              position: 'fixed',
+              bottom: { xs: 88, sm: 96 },
+              right: 16,
+              zIndex: 60,
+              px: 2,
+              fontWeight: 700,
+            }}
+          >
+            <PersonSearchIcon sx={{ mr: 1 }} />
+            Pilih staff
+          </Fab>
+        </Tooltip>
+      )}
 
       <CustomerBottomNav tenantType={tenant?.tenantType ?? user?.tenantType} />
     </Box>
