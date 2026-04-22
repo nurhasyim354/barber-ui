@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, CircularProgress,
   Grid, IconButton, Divider, Button,
+  Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText,
 } from '@mui/material';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PeopleIcon from '@mui/icons-material/People';
@@ -15,6 +16,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -60,19 +62,52 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
 }
 
 export default function DashboardPage() {
-  const { user, isLoading, loadFromStorage, logout } = useAuthStore();
+  const { user, isLoading, loadFromStorage, logout, setAuth, token } = useAuthStore();
   const router = useRouter();
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adminOutlets, setAdminOutlets] = useState<{ _id: string; name: string }[]>([]);
+  const [outletDialogOpen, setOutletDialogOpen] = useState(false);
+  const [switchingOutlet, setSwitchingOutlet] = useState(false);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
+  const loadAdminOutlets = useCallback(async () => {
+    try {
+      const res = await api.get('/auth/my-admin-tenants');
+      setAdminOutlets(res.data);
+    } catch { /* abaikan */ }
+  }, []);
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
     if (user.role === 'customer') { router.replace('/booking'); return; }
     if (user.role === 'super_admin') { router.replace('/admin/tenants'); return; }
     loadRevenue();
-  }, [user, isLoading]);
+    if (user.role === 'tenant_admin') void loadAdminOutlets();
+  }, [user, isLoading, loadAdminOutlets]);
+
+  const handleSwitchAdminOutlet = async (tenantId: string) => {
+    if (!token) return;
+    setSwitchingOutlet(true);
+    try {
+      const res = await api.post(
+        '/auth/switch-tenant',
+        { tenantId },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      setAuth(res.data.user, res.data.token);
+      const name = adminOutlets.find((o) => o._id === tenantId)?.name;
+      if (name) toast.success(`Outlet aktif: ${name}`);
+      setOutletDialogOpen(false);
+      void loadRevenue();
+      void loadAdminOutlets();
+    } catch {
+      toast.error('Gagal pindah outlet');
+    } finally {
+      setSwitchingOutlet(false);
+    }
+  };
 
   const loadRevenue = useCallback(async () => {
     setLoading(true);
@@ -97,6 +132,11 @@ export default function DashboardPage() {
         title="Dashboard"
         right={
           <Box className="flex items-center">
+            {user?.role === 'tenant_admin' && adminOutlets.length > 1 && (
+              <IconButton color="inherit" onClick={() => setOutletDialogOpen(true)} title="Ganti outlet">
+                <StorefrontIcon />
+              </IconButton>
+            )}
             <IconButton color="inherit" onClick={() => router.push('/reports')}>
               <BarChartIcon />
             </IconButton>
@@ -236,6 +276,36 @@ export default function DashboardPage() {
           </Box>
         </PageContainer>
       )}
+
+      <Dialog open={outletDialogOpen} onClose={() => !switchingOutlet && setOutletDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <StorefrontIcon color="primary" />
+          Pilih outlet
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Anda admin di lebih dari satu outlet. Pilih outlet yang ingin dikelola:
+          </Typography>
+          {switchingOutlet && (
+            <Box display="flex" justifyContent="center" py={1}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+          <List disablePadding>
+            {adminOutlets.map((o) => (
+              <ListItemButton
+                key={o._id}
+                selected={o._id === user?.tenantId}
+                onClick={() => handleSwitchAdminOutlet(o._id)}
+                disabled={switchingOutlet || o._id === user?.tenantId}
+                sx={{ borderRadius: 2, mb: 1, border: '1px solid', borderColor: 'divider' }}
+              >
+                <ListItemText primary={o.name} />
+              </ListItemButton>
+            ))}
+          </List>
+        </DialogContent>
+      </Dialog>
 
       <TenantAdminBottomNav />
     </AppPageShell>

@@ -22,6 +22,8 @@ interface Booking {
   tenantId?: string;
   serviceName: string;
   servicePrice: number;
+  /** Nominal pembayaran (selesai) — ada jika ada transaksi; bisa beda dari servicePrice */
+  paidAmount?: number;
   queueNumber: number;
   status: string;
   date: string;
@@ -36,6 +38,7 @@ interface LastDoneVisit {
   _id: string;
   serviceName: string;
   servicePrice: number;
+  paidAmount?: number;
   queueNumber: number;
   staffName: string | null;
   date: string;
@@ -50,6 +53,7 @@ interface ServicePhotoDoc {
 
 interface TenantPublic {
   name: string;
+  address?: string;
   customerReturnReminderDays?: number;
   tenantType?: string;
 }
@@ -104,6 +108,7 @@ export default function HistoryPage() {
           setLastPhotos(photoRes.data ?? null);
           setTenantInfo({
             name: tRes.data.name,
+            address: tRes.data.address,
             customerReturnReminderDays: tRes.data.customerReturnReminderDays,
             tenantType: tRes.data.tenantType,
           });
@@ -140,6 +145,11 @@ export default function HistoryPage() {
 
   const historyTitle = getTenantUiLabels(tenantInfo?.tenantType ?? user?.tenantType).historyPageTitle;
 
+  const fmtRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+
+  const showOriginalVsPaid = (servicePrice: number, paidAmount?: number) =>
+    paidAmount != null && paidAmount !== servicePrice;
+
   return (
     <AppPageShell variant="withBottomNav">
       <PageHeader title={`${historyTitle}${total > 0 ? ` (${total})` : ''}`} />
@@ -148,6 +158,18 @@ export default function HistoryPage() {
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
         <PageContainer>
+          {tenantInfo && (
+            <Box sx={{ mb: 2.5, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography variant="subtitle1" fontWeight={700} component="h2">
+                {tenantInfo.name}
+              </Typography>
+              {tenantInfo.address && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.5 }}>
+                  {tenantInfo.address}
+                </Typography>
+              )}
+            </Box>
+          )}
           {(lastDone || (lastPhotos && lastPhotos.photos.length > 0)) && (
             <Card sx={{ mb: 3, borderRadius: 2 }}>
               <CardContent>
@@ -156,12 +178,29 @@ export default function HistoryPage() {
                   Terakhir di {tenantInfo?.name ?? 'outlet'}
                 </Typography>
                 {lastDone && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    <strong>{lastDone.serviceName}</strong>
-                    {' · '}
-                    {new Date(lastDone.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    {lastDone.staffName ? ` · ${lastDone.staffName}` : ''}
-                  </Typography>
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>{lastDone.serviceName}</strong>
+                      {' · '}
+                      {new Date(lastDone.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {lastDone.staffName ? ` · ${lastDone.staffName}` : ''}
+                    </Typography>
+                    {showOriginalVsPaid(lastDone.servicePrice, lastDone.paidAmount) ? (
+                      <Typography variant="body2" sx={{ mt: 0.75 }}>
+                        <Box component="span" color="text.secondary">Harga tercatat: </Box>
+                        <Box component="span" fontWeight={600}>{fmtRp(lastDone.servicePrice)}</Box>
+                        {' · '}
+                        <Box component="span" color="text.secondary">Dibayar: </Box>
+                        <Box component="span" fontWeight={700} color="primary.main">
+                          {fmtRp(lastDone.paidAmount!)}
+                        </Box>
+                      </Typography>
+                    ) : (
+                      <Typography variant="body2" fontWeight={600} color="primary" sx={{ mt: 0.5 }}>
+                        {fmtRp(lastDone.paidAmount ?? lastDone.servicePrice)}
+                      </Typography>
+                    )}
+                  </Box>
                 )}
                 {lastPhotos && lastPhotos.photos.length > 0 && (
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -248,9 +287,20 @@ export default function HistoryPage() {
                             </Typography>
                           )}
                         </Box>
-                        <Typography fontWeight={500} color="primary" className="text-right">
-                          Rp {b.servicePrice.toLocaleString('id-ID')}
-                        </Typography>
+                        {b.status === 'done' && showOriginalVsPaid(b.servicePrice, b.paidAmount) ? (
+                          <Box className="text-right" sx={{ minWidth: 0, maxWidth: 160, ml: 1 }}>
+                            <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                              Tercatat {fmtRp(b.servicePrice)}
+                            </Typography>
+                            <Typography fontWeight={700} color="primary" variant="body2" sx={{ mt: 0.25 }}>
+                              Dibayar {fmtRp(b.paidAmount!)}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography fontWeight={500} color="primary" className="text-right">
+                            {fmtRp(b.paidAmount ?? b.servicePrice)}
+                          </Typography>
+                        )}
                       </CardContent>
                     </Card>
                   );

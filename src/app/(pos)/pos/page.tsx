@@ -5,7 +5,7 @@ import {
   Box, Card, CardContent, Typography, Button, Chip,
   CircularProgress, Dialog, DialogTitle, DialogContent,
   DialogActions, Divider, IconButton, List, ListItemButton,
-  ListItemAvatar, Avatar, ListItemText, Radio, Alert,
+  ListItemAvatar, Avatar, ListItemText, Radio, Alert, TextField,
 } from '@mui/material';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -28,6 +28,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
+import { parseRupiahInput } from '@/lib/rupiahInput';
 
 interface Booking {
   _id: string;
@@ -35,6 +36,8 @@ interface Booking {
   customerName: string;
   serviceName: string;
   servicePrice: number;
+  /** Nominal pembayaran tercatat (selesai) — beda jika kasir menyesuaikan harga */
+  paidAmount?: number;
   queueNumber: number;
   status: string;
   notes?: string;
@@ -160,6 +163,7 @@ export default function PosPage() {
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({
     open: false, booking: null,
   });
+  const [payAmountInput, setPayAmountInput] = useState('');
   const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
   const [paying, setPaying] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
@@ -182,6 +186,10 @@ export default function PosPage() {
 
   // Keep latest booking ref so receipt still has data after dialog closes
   const lastBookingRef = useRef<Booking | null>(null);
+
+  const fmtRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const showOrigVsPaid = (b: Booking) =>
+    b.status === 'done' && b.paidAmount != null && b.paidAmount !== b.servicePrice;
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -265,15 +273,21 @@ export default function PosPage() {
     }
     lastBookingRef.current = b;
     setPayStep('select');
+    setPayAmountInput(String(b.servicePrice));
     setPayDialog({ open: true, booking: b });
   };
 
   const handlePayment = async (method: 'cash' | 'qris') => {
     const booking = lastBookingRef.current;
     if (!booking) return;
+    const amount = parseRupiahInput(payAmountInput);
+    if (amount == null) {
+      toast.error('Masukkan jumlah pembayaran yang valid (minimal Rp 1)');
+      return;
+    }
     setPaying(true);
     try {
-      const res = await api.post('/payments', { bookingId: booking._id, method });
+      const res = await api.post('/payments', { bookingId: booking._id, method, amount });
       const payment: Payment = res.data;
 
       // Fetch tenant name for receipt
@@ -286,6 +300,7 @@ export default function PosPage() {
       setReceiptData({ booking, payment, shopName });
       toast.success('Pembayaran berhasil!');
       setPayDialog({ open: false, booking: null });
+      setPayAmountInput('');
       setReceiptDialog(true);
       loadBookings();
     } catch (err: unknown) {
@@ -530,7 +545,7 @@ export default function PosPage() {
                     </Box>
                     <Box className="text-right">
                       <Typography fontWeight={600} color="primary">
-                        Rp {b.servicePrice.toLocaleString('id-ID')}
+                        {fmtRp(b.servicePrice)}
                       </Typography>
                       <Chip
                         label={statusLabel[b.status]}
@@ -628,10 +643,21 @@ export default function PosPage() {
                         </Typography>
                       </Box>
                       <Box className="text-right">
-                        <CheckCircleIcon color="success" />
-                        <Typography variant="body2" fontWeight={500}>
-                          Rp {b.servicePrice.toLocaleString('id-ID')}
-                        </Typography>
+                        <CheckCircleIcon color="success" sx={{ display: 'block', ml: 'auto', mb: 0.5 }} />
+                        {showOrigVsPaid(b) ? (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                              Tercatat {fmtRp(b.servicePrice)}
+                            </Typography>
+                            <Typography variant="body2" fontWeight={700} color="primary">
+                              Dibayar {fmtRp(b.paidAmount!)}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" fontWeight={500}>
+                            {fmtRp(b.paidAmount ?? b.servicePrice)}
+                          </Typography>
+                        )}
                       </Box>
                     </CardContent>
                   </Card>
@@ -645,7 +671,7 @@ export default function PosPage() {
       {/* Payment Dialog */}
       <Dialog
         open={payDialog.open}
-        onClose={() => { setPayDialog({ open: false, booking: null }); setPayStep('select'); }}
+        onClose={() => { setPayDialog({ open: false, booking: null }); setPayStep('select'); setPayAmountInput(''); }}
         fullWidth
         maxWidth="xs"
       >
@@ -655,10 +681,19 @@ export default function PosPage() {
             <DialogContent>
               {payDialog.booking && (
                 <Box className="text-center mb-4">
-                  <Typography variant="h5" fontWeight={600} color="primary">
-                    Rp {payDialog.booking.servicePrice.toLocaleString('id-ID')}
-                  </Typography>
-                  <Typography color="text.secondary">
+                  <TextField
+                    fullWidth
+                    label="Jumlah bayar (Rp)"
+                    value={payAmountInput}
+                    onChange={(e) => setPayAmountInput(e.target.value.replace(/\D/g, ''))}
+                    inputProps={{ inputMode: 'numeric' }}
+                    helperText={
+                      `Harga layanan: Rp ${payDialog.booking.servicePrice.toLocaleString('id-ID')}`
+                    }
+                    sx={{ mb: 1.5, mt: 2 }}
+                    autoFocus
+                  />
+                  <Typography color="text.secondary" variant="body2">
                     {payDialog.booking.customerName} — {payDialog.booking.serviceName}
                   </Typography>
                   {payDialog.booking.staffName && (
@@ -691,7 +726,11 @@ export default function PosPage() {
               {paying && <Box className="flex justify-center mt-4"><CircularProgress /></Box>}
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setPayDialog({ open: false, booking: null })}>Batal</Button>
+              <Button
+                onClick={() => { setPayDialog({ open: false, booking: null }); setPayAmountInput(''); }}
+              >
+                Batal
+              </Button>
             </DialogActions>
           </>
         ) : (
@@ -742,7 +781,7 @@ export default function PosPage() {
                     : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
                 </Typography>
                 <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
-                  Rp {payDialog.booking?.servicePrice.toLocaleString('id-ID')}
+                  Rp {(parseRupiahInput(payAmountInput) ?? payDialog.booking?.servicePrice ?? 0).toLocaleString('id-ID')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {payDialog.booking?.customerName} — {payDialog.booking?.serviceName}

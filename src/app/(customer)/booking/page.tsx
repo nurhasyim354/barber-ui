@@ -559,7 +559,18 @@ function BookingContent() {
           <CheckCircleIcon sx={{ fontSize: 44, color: 'white' }} />
         </Box>
         <Typography variant="h5" fontWeight={600} letterSpacing={-0.5} mb={0.5}>Booking Berhasil!</Typography>
-        <Typography color="text.secondary" mb={4}>{tenant?.name}</Typography>
+        <Box textAlign="center" mb={4}>
+          {tenant?.name && (
+            <Typography fontWeight={600} color="text.primary" display="block">
+              {tenant.name}
+            </Typography>
+          )}
+          {tenant?.address && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 360, mx: 'auto', lineHeight: 1.5 }}>
+              {tenant.address}
+            </Typography>
+          )}
+        </Box>
 
         <Card
           sx={{
@@ -691,6 +702,27 @@ function BookingContent() {
           ) : undefined
         }
       />
+
+      {tenant && effectiveTenantId && (
+        <Box
+          sx={{
+            px: 2,
+            py: 1.25,
+            bgcolor: 'background.paper',
+            borderBottom: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <Typography variant="subtitle1" fontWeight={700} component="h2" noWrap>
+            {tenant.name}
+          </Typography>
+          {tenant.address && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35, lineHeight: 1.5 }}>
+              {tenant.address}
+            </Typography>
+          )}
+        </Box>
+      )}
 
       {/* Multi-tenant selector dialog */}
       <Dialog

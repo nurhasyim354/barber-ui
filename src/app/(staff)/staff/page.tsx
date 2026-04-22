@@ -6,7 +6,7 @@ import {
   CircularProgress, Dialog, DialogTitle, DialogContent,
   DialogActions, Divider, IconButton, Avatar, List,
   ListItem, ListItemButton, ListItemText, ListItemAvatar,
-  Switch, FormControlLabel, Alert,
+  Switch, FormControlLabel, Alert, TextField,
 } from '@mui/material';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -27,6 +27,7 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { StaffBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import { parseRupiahInput } from '@/lib/rupiahInput';
 
 interface Booking {
   _id: string;
@@ -142,6 +143,7 @@ export default function StaffQueuePage() {
   const [tenantLoading, setTenantLoading] = useState(false);
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+  const [payAmountInput, setPayAmountInput] = useState('');
   const [paying, setPaying] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
@@ -269,15 +271,21 @@ export default function StaffQueuePage() {
       return;
     }
     lastBookingRef.current = b;
+    setPayAmountInput(String(b.servicePrice));
     setPayDialog({ open: true, booking: b });
   };
 
   const handlePayment = async (method: 'cash' | 'qris') => {
     const booking = lastBookingRef.current;
     if (!booking) return;
+    const amount = parseRupiahInput(payAmountInput);
+    if (amount == null) {
+      toast.error('Masukkan jumlah pembayaran yang valid (minimal Rp 1)');
+      return;
+    }
     setPaying(true);
     try {
-      const res = await api.post('/payments', { bookingId: booking._id, method });
+      const res = await api.post('/payments', { bookingId: booking._id, method, amount });
       const payment: Payment = res.data;
 
       let shopName = currentTenant?.name || 'Outlet';
@@ -289,6 +297,7 @@ export default function StaffQueuePage() {
       setReceiptData({ booking, payment, shopName });
       toast.success('Pembayaran berhasil!');
       setPayDialog({ open: false, booking: null });
+      setPayAmountInput('');
       setReceiptDialog(true);
       loadBookings();
     } catch (err: unknown) {
@@ -704,15 +713,29 @@ export default function StaffQueuePage() {
       </Dialog>
 
       {/* Payment Dialog */}
-      <Dialog open={payDialog.open} onClose={() => setPayDialog({ open: false, booking: null })} fullWidth maxWidth="xs">
+      <Dialog
+        open={payDialog.open}
+        onClose={() => { setPayDialog({ open: false, booking: null }); setPayAmountInput(''); }}
+        fullWidth
+        maxWidth="xs"
+      >
         <DialogTitle fontWeight={500}>Pilih Metode Bayar</DialogTitle>
         <DialogContent>
           {payDialog.booking && (
             <Box className="text-center mb-4">
-              <Typography variant="h5" fontWeight={600} color="primary">
-                Rp {payDialog.booking.servicePrice.toLocaleString('id-ID')}
-              </Typography>
-              <Typography color="text.secondary">
+              <TextField
+                fullWidth
+                label="Jumlah bayar (Rp)"
+                value={payAmountInput}
+                onChange={(e) => setPayAmountInput(e.target.value.replace(/\D/g, ''))}
+                inputProps={{ inputMode: 'numeric' }}
+                helperText={
+                  `Harga layanan: Rp ${payDialog.booking.servicePrice.toLocaleString('id-ID')}`
+                }
+                sx={{ mb: 1.5 }}
+                autoFocus
+              />
+              <Typography color="text.secondary" variant="body2">
                 {payDialog.booking.customerName} — {payDialog.booking.serviceName}
               </Typography>
             </Box>
@@ -730,7 +753,7 @@ export default function StaffQueuePage() {
           {paying && <Box className="flex justify-center mt-4"><CircularProgress /></Box>}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPayDialog({ open: false, booking: null })}>Batal</Button>
+          <Button onClick={() => { setPayDialog({ open: false, booking: null }); setPayAmountInput(''); }}>Batal</Button>
         </DialogActions>
       </Dialog>
 
