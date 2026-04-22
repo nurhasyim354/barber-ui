@@ -7,7 +7,9 @@ import {
   DialogActions, Divider, IconButton, Avatar, List,
   ListItem, ListItemButton, ListItemText, ListItemAvatar,
   Switch, FormControlLabel, Alert, TextField,
+  Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import PrintIcon from '@mui/icons-material/Print';
@@ -29,6 +31,7 @@ import { StaffBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { parseRupiahInput } from '@/lib/rupiahInput';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
+import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 
 interface Booking {
   _id: string;
@@ -135,6 +138,7 @@ function buildReceipt(data: ReceiptData): string {
 
 export default function StaffQueuePage() {
   const { user, isLoading, loadFromStorage, setAuth, token } = useAuthStore();
+  const pendingLoginPhone = useAuthStore((s) => s.user?.pendingPhone);
   const router = useRouter();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -178,6 +182,7 @@ export default function StaffQueuePage() {
       .catch(() => {});
   }, [user?.tenantId]);
 
+  /** Jangan pakai [user] utuh — pembaruan profil (/auth/me) mengganti referensi user dan memicu loop jika memuat ulang antrian + loading. */
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
@@ -189,7 +194,8 @@ export default function StaffQueuePage() {
       loadCurrentTenant(user.tenantId);
       loadBookings();
     }
-  }, [user, isLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hanya tenantId/role; hindari re-fetch saat phone/pendingPhone berubah
+  }, [isLoading, user?.tenantId, user?.role]);
 
   const loadTenants = useCallback(async () => {
     setTenantLoading(true);
@@ -514,6 +520,31 @@ export default function StaffQueuePage() {
               Tagihan berlangganan outlet melewati jatuh tempo. Pembayaran layanan dinonaktifkan sampai tagihan dilunasi.
             </Alert>
           )}
+          <Card variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
+            <Accordion
+              defaultExpanded={Boolean(pendingLoginPhone)}
+              disableGutters
+              elevation={0}
+              sx={{
+                bgcolor: 'transparent',
+                '&:before': { display: 'none' },
+              }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', pr: 1 }}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Ubah nomor WhatsApp (login)
+                  </Typography>
+                  {pendingLoginPhone ? (
+                    <Chip size="small" label="Menunggu verifikasi" color="info" />
+                  ) : null}
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 0, px: 2, pb: 2 }}>
+                <PhoneChangeSection hideIntro />
+              </AccordionDetails>
+            </Accordion>
+          </Card>
           {/* Info staff */}
           <Card
             className="mb-4"

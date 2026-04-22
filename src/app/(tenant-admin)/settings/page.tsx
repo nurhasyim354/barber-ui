@@ -4,7 +4,9 @@ import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   TextField, Divider, IconButton, Chip,
+  Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveIcon from '@mui/icons-material/Save';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -21,6 +23,7 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { defaultBrandPalette } from '@/lib/uiStyleConfig';
+import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 
 interface TenantTheme {
   primaryColor: string;
@@ -56,6 +59,7 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
 
 export default function SettingsPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();
+  const pendingLoginPhone = useAuthStore((s) => s.user?.pendingPhone);
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -83,19 +87,16 @@ export default function SettingsPage() {
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
-  useEffect(() => {
-    if (isLoading) return;
-    if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'tenant_admin') { router.replace('/dashboard'); return; }
-    loadTenant();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isLoading]);
+  const tenantId = user?.tenantId;
+  const role = user?.role;
 
+  /** Hanya bergantung pada tenantId — jangan memuat ulang saat profil user berubah (mis. setelah /auth/me di PhoneChangeSection). */
   const loadTenant = useCallback(async () => {
+    if (!tenantId) return;
     setLoading(true);
     try {
       // /settings endpoint returns full data including qrisImageBase64
-      const res = await api.get(`/tenants/${user!.tenantId}/settings`);
+      const res = await api.get(`/tenants/${tenantId}/settings`);
       const t: TenantSettings = res.data;
       setTenant(t);
       setForm({
@@ -122,7 +123,19 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [tenantId]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) { router.replace('/login'); return; }
+    if (user.role !== 'tenant_admin') { router.replace('/dashboard'); return; }
+  }, [user, isLoading, router]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (role !== 'tenant_admin' || !tenantId) return;
+    void loadTenant();
+  }, [isLoading, role, tenantId, loadTenant]);
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error('Nama Tenant wajib diisi'); return; }
@@ -234,6 +247,32 @@ export default function SettingsPage() {
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
         <PageContainer sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+          <Card variant="outlined" sx={{ borderRadius: 2 }}>
+            <Accordion
+              defaultExpanded={Boolean(pendingLoginPhone)}
+              disableGutters
+              elevation={0}
+              sx={{
+                bgcolor: 'transparent',
+                '&:before': { display: 'none' },
+              }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', pr: 1 }}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Ubah nomor WhatsApp (login)
+                  </Typography>
+                  {pendingLoginPhone ? (
+                    <Chip size="small" label="Menunggu verifikasi" color="info" />
+                  ) : null}
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 0, px: 2, pb: 2 }}>
+                <PhoneChangeSection hideIntro />
+              </AccordionDetails>
+            </Accordion>
+          </Card>
 
           {/* Info Tenant */}
           <Card>

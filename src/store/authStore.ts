@@ -4,6 +4,8 @@ import { create } from 'zustand';
 export interface AuthUser {
   _id: string;
   phone: string;
+  /** Nomor baru yang menunggu verifikasi (tautan WA) */
+  pendingPhone?: string | null;
   name: string;
   role: 'super_admin' | 'tenant_admin' | 'customer' | 'staff';
   tenantId?: string | null;
