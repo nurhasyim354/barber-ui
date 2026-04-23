@@ -181,7 +181,7 @@ function BookingContent() {
   const [notes, setNotes] = useState('');
   const [bookStep, setBookStep] = useState<'service' | 'staff'>('service');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
+  const [activeBookings, setActiveBookings] = useState<ActiveBooking[]>([]);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
   const [serviceQty, setServiceQty] = useState<Record<string, number>>({});
   const [serviceSearch, setServiceSearch] = useState('');
@@ -239,13 +239,13 @@ function BookingContent() {
       setServices(svcRes.data);
       setTenant(tenantRes.data);
       const historyItems: ActiveBooking[] = histRes.data?.data ?? [];
-      const active = historyItems.find(
+      const actives = historyItems.filter(
         (b) =>
           (!effectiveTenantId || b.tenantId === effectiveTenantId) &&
           (b.status === 'waiting' || b.status === 'in_progress'),
       );
-      if (active) setActiveBooking(active);
-      else setActiveBooking(null);
+      actives.sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
+      setActiveBookings(actives);
 
       try {
         const [photoRes, doneRes] = await Promise.all([
@@ -421,7 +421,6 @@ function BookingContent() {
 
   // ── Booking actions ────────────────────────────────────────────────────────
   const toggleService = (svc: Service) => {
-    if (activeBooking) return;
     if (tenant?.subscriptionOverdue) return;
     if (outletQuotaFull) return;
     setSelectedServices((prev) => {
@@ -665,6 +664,7 @@ function BookingContent() {
 
   // ── QR Flow Confirmed Screen ───────────────────────────────────────────────
   if (isQrFlow && bookingResult) {
+    const activeForThisBooking = activeBookings.find((b) => b._id === bookingResult._id);
     return (
       <Box
         sx={{
@@ -745,10 +745,7 @@ function BookingContent() {
               <Typography variant="body2" color="text.secondary">Status</Typography>
               <Chip label="Menunggu" size="small" color="warning" sx={{ fontWeight: 700 }} />
             </Box>
-            {activeBooking &&
-              bookingResult &&
-              activeBooking._id === bookingResult._id &&
-              activeBooking.estimatedServedAt && (
+            {activeForThisBooking?.estimatedServedAt && (
               <Box
                 sx={{
                   mt: 2,
@@ -766,7 +763,7 @@ function BookingContent() {
                     Perkiraan waktu dilayani
                   </Typography>
                   <Typography variant="body1" fontWeight={700} color="primary">
-                    {formatEstimatedServe(activeBooking.estimatedServedAt)}
+                    {formatEstimatedServe(activeForThisBooking.estimatedServedAt)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.35 }}>
                     Berdasarkan rata-rata durasi staff dan antrian saat ini
@@ -774,10 +771,7 @@ function BookingContent() {
                 </Box>
               </Box>
             )}
-            {activeBooking &&
-              bookingResult &&
-              activeBooking._id === bookingResult._id &&
-              !activeBooking.staffId && (
+            {activeForThisBooking && !activeForThisBooking.staffId && (
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
                 Estimasi akan tersedia setelah outlet menugaskan staff.
               </Typography>
@@ -805,8 +799,7 @@ function BookingContent() {
     !pageLoading &&
     !!effectiveTenantId &&
     bookStep === 'service' &&
-    selectedServices.length > 0 &&
-    !activeBooking;
+    selectedServices.length > 0;
 
   const showPickStaffFab =
     showFloatingCartSummary && !tenant?.subscriptionOverdue;
@@ -928,8 +921,8 @@ function BookingContent() {
           }}
         >
 
-          {/* Active booking banner */}
-          {activeBooking && (
+          {/* Active booking banner(s) — pelanggan boleh punya lebih dari satu antrian aktif */}
+          {activeBookings.length > 0 && (
             <Card
               sx={{
                 mb: 3,
@@ -941,62 +934,66 @@ function BookingContent() {
             >
               <CardContent sx={{ pb: '12px !important' }}>
                 <Typography variant="overline" sx={{ color: 'warning.dark', fontWeight: 700, letterSpacing: 1.2, fontSize: '0.65rem' }}>
-                  Booking Aktif
+                  {activeBookings.length > 1 ? `Antrian aktif (${activeBookings.length})` : 'Booking aktif'}
                 </Typography>
-                <Typography variant="h4" fontWeight={900} color="primary" letterSpacing={-1}>
-                  #{activeBooking.queueNumber}
-                </Typography>
-                <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{bookingServicesLabel(activeBooking)}</Typography>
-                {activeBooking.staffName && (
-                  <Typography variant="body2" color="text.secondary">
-                    {bookingLabels.staffSingular}: {activeBooking.staffName}
-                  </Typography>
-                )}
-                <Chip
-                  label={statusLabel(activeBooking.status)}
-                  color={statusColor(activeBooking.status) as 'warning' | 'info' | 'success' | 'default'}
-                  size="small"
-                  sx={{ mt: 1.5, fontWeight: 700 }}
-                />
-                {activeBooking.status === 'waiting' && activeBooking.estimatedServedAt && (
-                  <Box
-                    sx={{
-                      mt: 2,
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 1,
-                      p: 1.5,
-                      borderRadius: 2,
-                      bgcolor: 'background.paper',
-                      border: 1,
-                      borderColor: 'divider',
-                    }}
-                  >
-                    <AccessTimeIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.1 }} />
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.35}>
-                        Perkiraan waktu dilayani
+                {activeBookings.map((ab, idx) => (
+                  <Box key={ab._id} sx={idx > 0 ? { mt: 2.5, pt: 2.5, borderTop: 1, borderColor: 'divider' } : {}}>
+                    <Typography variant="h4" fontWeight={900} color="primary" letterSpacing={-1}>
+                      #{ab.queueNumber}
+                    </Typography>
+                    <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{bookingServicesLabel(ab)}</Typography>
+                    {ab.staffName && (
+                      <Typography variant="body2" color="text.secondary">
+                        {bookingLabels.staffSingular}: {ab.staffName}
                       </Typography>
-                      <Typography variant="body1" fontWeight={700} color="primary">
-                        {formatEstimatedServe(activeBooking.estimatedServedAt)}
+                    )}
+                    <Chip
+                      label={statusLabel(ab.status)}
+                      color={statusColor(ab.status) as 'warning' | 'info' | 'success' | 'default'}
+                      size="small"
+                      sx={{ mt: 1.5, fontWeight: 700 }}
+                    />
+                    {ab.status === 'waiting' && ab.estimatedServedAt && (
+                      <Box
+                        sx={{
+                          mt: 2,
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 1,
+                          p: 1.5,
+                          borderRadius: 2,
+                          bgcolor: 'background.paper',
+                          border: 1,
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <AccessTimeIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.1 }} />
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.35}>
+                            Perkiraan waktu dilayani
+                          </Typography>
+                          <Typography variant="body1" fontWeight={700} color="primary">
+                            {formatEstimatedServe(ab.estimatedServedAt)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.35 }}>
+                            Berdasarkan rata-rata durasi staff dan antrian saat ini
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+                    {ab.status === 'waiting' && !ab.staffId && (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+                        Estimasi akan tersedia setelah outlet menugaskan staff.
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.35 }}>
-                        Berdasarkan rata-rata durasi staff dan antrian saat ini
-                      </Typography>
-                    </Box>
+                    )}
                   </Box>
-                )}
-                {activeBooking.status === 'waiting' && !activeBooking.staffId && (
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
-                    Estimasi akan tersedia setelah outlet menugaskan staff.
-                  </Typography>
-                )}
+                ))}
               </CardContent>
             </Card>
           )}
 
           {/* Kunjungan terakhir + foto hasil layanan + info reminder */}
-          {!activeBooking && (lastDoneVisit || (lastHaircut && lastHaircut.photos.length > 0)) && (
+          {(lastDoneVisit || (lastHaircut && lastHaircut.photos.length > 0)) && (
             <Card sx={{ mb: 3, borderRadius: 3, border: 1, borderColor: 'divider' }}>
               <CardContent>
                 <Typography variant="subtitle2" fontWeight={800} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -1124,7 +1121,7 @@ function BookingContent() {
                   placeholder="Cari layanan (nama atau deskripsi)…"
                   value={serviceSearch}
                   onChange={(e) => setServiceSearch(e.target.value)}
-                  disabled={!!activeBooking || !!tenant?.subscriptionOverdue || outletQuotaFull}
+                  disabled={!!tenant?.subscriptionOverdue || outletQuotaFull}
                   sx={{ mb: 2 }}
                   InputProps={{
                     startAdornment: (
@@ -1161,7 +1158,7 @@ function BookingContent() {
                         onClick={() => toggleService(svc)}
                         sx={{
                           cursor:
-                            activeBooking || tenant?.subscriptionOverdue || outletQuotaFull ? 'default' : 'pointer',
+                            tenant?.subscriptionOverdue || outletQuotaFull ? 'default' : 'pointer',
                           borderRadius: 3,
                           border: selected
                             ? (t) => `1.5px solid ${t.palette.primary.main}`
@@ -1173,14 +1170,14 @@ function BookingContent() {
                             ? (t) => `0 6px 24px ${t.palette.primary.main}24, 0 2px 6px rgba(0,0,0,0.06)`
                             : '0 2px 10px rgba(0,0,0,0.06)',
                           opacity:
-                            activeBooking || tenant?.subscriptionOverdue || outletQuotaFull ? 0.55 : 1,
+                            tenant?.subscriptionOverdue || outletQuotaFull ? 0.55 : 1,
                           transition: 'all 0.2s ease',
                         }}
                       >
                         <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '14px !important' }}>
                           <Checkbox
                             checked={selected} color="primary" sx={{ p: 0 }}
-                            disabled={!!activeBooking || !!tenant?.subscriptionOverdue || outletQuotaFull}
+                            disabled={!!tenant?.subscriptionOverdue || outletQuotaFull}
                             onChange={() => toggleService(svc)}
                             onClick={(e) => e.stopPropagation()}
                           />
@@ -1271,11 +1268,6 @@ function BookingContent() {
                 </Box>
               )}
 
-              {activeBooking && (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 3, opacity: 0.7 }}>
-                  Anda sudah memiliki booking aktif
-                </Typography>
-              )}
             </>
           )}
 
