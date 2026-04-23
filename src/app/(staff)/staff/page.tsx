@@ -635,6 +635,7 @@ export default function StaffQueuePage() {
           <Box className="flex flex-col gap-3 mb-6">
             {pendingBookings.map((b) => {
               const mine = isMyQueue(b);
+              const posLines = getReceiptServiceLines(b);
               return (
                 <Card
                   key={b._id}
@@ -653,7 +654,29 @@ export default function StaffQueuePage() {
                           )}
                         </Box>
                         <Typography fontWeight={600}>{b.customerName}</Typography>
-                        <Typography variant="body2" color="text.secondary">{bookingServicesLabel(b)}</Typography>
+                        {posLines.length > 0 ? (
+                          <Box component="div" sx={{ mt: 0.5 }}>
+                            {posLines.map((L, i) => (
+                              <Typography
+                                key={i}
+                                variant="body2"
+                                color="text.secondary"
+                                component="div"
+                                sx={{ lineHeight: 1.5 }}
+                              >
+                                <Box component="span" sx={{ fontWeight: 700, color: 'primary.main', mr: 0.75 }}>
+                                  {L.qty} x
+                                </Box>
+                                {L.name}
+                                
+                              </Typography>
+                            ))}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {bookingServicesLabel(b)}
+                          </Typography>
+                        )}
                         {b.notes && (
                           <Typography variant="body2" className="italic text-gray-400">
                             &quot;{b.notes}&quot;
@@ -742,14 +765,36 @@ export default function StaffQueuePage() {
                 Selesai ({doneBookings.length})
               </Typography>
               <Box className="flex flex-col gap-2">
-                {doneBookings.map((b) => (
+                {doneBookings.map((b) => {
+                  const posLines = getReceiptServiceLines(b);
+                  return (
                   <Card key={b._id} className="opacity-60">
                     <CardContent className="py-3 flex justify-between items-center">
                       <Box>
                         <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {bookingServicesLabel(b)}{b.staffName && ` · ${b.staffName}`}
-                        </Typography>
+                        {posLines.length > 0 ? (
+                          <Box component="div" sx={{ mt: 0.25 }}>
+                            {posLines.map((L, i) => (
+                              <Typography key={i} variant="body2" color="text.secondary" component="div">
+                                <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', mr: 0.5 }}>
+                                  {L.qty} x
+                                </Box>
+                                {L.name}
+                                
+                              </Typography>
+                            ))}
+                            {b.staffName && (
+                              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }} component="div">
+                                · {b.staffName}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            {bookingServicesLabel(b)}
+                            {b.staffName && ` · ${b.staffName}`}
+                          </Typography>
+                        )}
                       </Box>
                       <Box className="text-right">
                         <CheckCircleIcon color="success" />
@@ -759,7 +804,8 @@ export default function StaffQueuePage() {
                       </Box>
                     </CardContent>
                   </Card>
-                ))}
+                );
+                })}
               </Box>
             </>
           )}
@@ -770,7 +816,7 @@ export default function StaffQueuePage() {
       <Dialog open={tenantDialogOpen} onClose={() => { if (user?.tenantId) setTenantDialogOpen(false); }} fullWidth maxWidth="xs">
         <DialogTitle fontWeight={500}>
           <StorefrontIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-          Pilih Salon Tempat Bekerja
+          Pilih Tempat Bekerja
         </DialogTitle>
         <DialogContent sx={{ p: 0 }}>
           {tenantLoading ? (
