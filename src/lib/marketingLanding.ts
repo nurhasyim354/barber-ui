@@ -10,7 +10,8 @@ export type BusinessVerticalId =
   | 'spa_kecantikan'
   | 'carwash'
   | 'ppob'
-  | 'jasa_umum';
+  | 'jasa_umum'
+  | 'restaurant';
 
 export interface BusinessVertical {
   id: BusinessVerticalId;
@@ -88,6 +89,15 @@ export const BUSINESS_VERTICALS: BusinessVertical[] = [
     defaultMonthlyRevenue: 15_000_000,
     upliftMin: 0.1,
     upliftMax: 0.28,
+  },
+  {
+    id: 'restaurant',
+    label: 'Restoran & kafe',
+    shortLabel: 'Restoran',
+    description: 'Reservasi meja, paket makan, antrian kasir, dan nota transparan.',
+    defaultMonthlyRevenue: 45_000_000,
+    upliftMin: 0.08,
+    upliftMax: 0.22,
   },
 ];
 

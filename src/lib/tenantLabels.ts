@@ -1,7 +1,16 @@
 /**
  * Label UI per jenis tenant — diselaraskan dengan `tenantType` di API & marketing vertikal.
  */
-export const TENANT_TYPES = ['klinik', 'barbershop', 'bengkel_motor', 'spa_kecantikan', 'carwash', 'ppob', 'jasa_umum'] as const;
+export const TENANT_TYPES = [
+  'klinik',
+  'barbershop',
+  'bengkel_motor',
+  'spa_kecantikan',
+  'carwash',
+  'ppob',
+  'jasa_umum',
+  'restaurant',
+] as const;
 export type TenantType = (typeof TENANT_TYPES)[number];
 
 export const DEFAULT_TENANT_TYPE: TenantType = 'barbershop';
@@ -23,6 +32,7 @@ export const TENANT_TYPE_OPTIONS: { value: TenantType; label: string }[] = [
   { value: 'carwash', label: 'Carwash & Salon Mobil/Motor' },
   { value: 'ppob', label: 'PPOB, Pulsa & Token' },
   { value: 'jasa_umum', label: 'Studio / jasa umum' },
+  { value: 'restaurant', label: 'Restoran & kafe' },
 ];
 
 export interface TenantUiLabels {
@@ -177,6 +187,23 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',
+  },
+  restaurant: {
+    navStaff: 'Pelayan',
+    navServices: 'Menu & layanan',
+    navCustomerBooking: 'Reservasi',
+    navCustomerHistory: 'Riwayat',
+    bookingPageTitle: '🍽️ Reservasi',
+    historyPageTitle: 'Riwayat Kunjungan',
+    staffTeamTitle: 'Tim Pelayan',
+    staffSingular: 'Pelayan',
+    addStaffTitle: 'Tambah Pelayan',
+    editStaffTitle: 'Edit Pelayan',
+    specialtyPlaceholder: 'Contoh: Chef, Waiter, Bartender',
+    bookingNotesPlaceholder: 'Contoh: Ga pedes, Kuah Pisah dll',
+    staffNameFieldLabel: 'Nama Pelayan *',
+    deleteStaffTitle: 'Hapus Pelayan?',
+    assigneeReceiptLabel: 'Pelayan',
   },
 };
 

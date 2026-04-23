@@ -24,6 +24,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import CarIcon from '@mui/icons-material/CarRepair';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import ReplayIcon from '@mui/icons-material/Replay';
@@ -130,6 +131,7 @@ const verticalIcons: Record<BusinessVerticalId, React.ReactNode> = {
   carwash: <CarIcon sx={{ fontSize: 40 }} />,
   ppob: <PaymentsIcon sx={{ fontSize: 40 }} />,
   jasa_umum: <HandymanIcon sx={{ fontSize: 40 }} />,
+  restaurant: <RestaurantIcon sx={{ fontSize: 40 }} />,
 };
 
 const TENANT_BENEFITS: { icon: React.ReactNode; title: string; body: string }[] = [
