@@ -16,28 +16,16 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import { bookingServicesLabel, bookingSubtotalOrLegacy, type UiBooking } from '@/lib/bookingDisplay';
 
-interface Booking {
-  _id: string;
-  tenantId?: string;
-  serviceName: string;
-  servicePrice: number;
-  /** Nominal pembayaran (selesai) — ada jika ada transaksi; bisa beda dari servicePrice */
-  paidAmount?: number;
-  queueNumber: number;
-  status: string;
-  date: string;
-  notes?: string;
-  staffName?: string | null;
-  staffId?: string | null;
-  /** ISO — dari API untuk booking menunggu hari ini yang sudah ditugaskan staff */
-  estimatedServedAt?: string | null;
-}
+type Booking = UiBooking & { tenantId?: string; estimatedServedAt?: string | null };
 
 interface LastDoneVisit {
   _id: string;
   serviceName: string;
   servicePrice: number;
+  services?: { serviceName: string; unitPrice: number; quantity: number; lineSubtotal?: number }[];
+  totalSubtotal?: number;
   paidAmount?: number;
   queueNumber: number;
   staffName: string | null;
@@ -147,8 +135,10 @@ export default function HistoryPage() {
 
   const fmtRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 
-  const showOriginalVsPaid = (servicePrice: number, paidAmount?: number) =>
-    paidAmount != null && paidAmount !== servicePrice;
+  const listedSubtotal = (x: Pick<UiBooking, 'totalSubtotal' | 'servicePrice'>) => bookingSubtotalOrLegacy(x);
+
+  const showOriginalVsPaid = (listed: number, paidAmount?: number) =>
+    paidAmount != null && paidAmount !== listed;
 
   return (
     <AppPageShell variant="withBottomNav">
@@ -180,15 +170,20 @@ export default function HistoryPage() {
                 {lastDone && (
                   <Box sx={{ mb: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                      <strong>{lastDone.serviceName}</strong>
+                      <strong>
+                        {bookingServicesLabel({
+                          serviceName: lastDone.serviceName,
+                          services: lastDone.services,
+                        })}
+                      </strong>
                       {' · '}
                       {new Date(lastDone.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                       {lastDone.staffName ? ` · ${lastDone.staffName}` : ''}
                     </Typography>
-                    {showOriginalVsPaid(lastDone.servicePrice, lastDone.paidAmount) ? (
+                    {showOriginalVsPaid(listedSubtotal(lastDone), lastDone.paidAmount) ? (
                       <Typography variant="body2" sx={{ mt: 0.75 }}>
                         <Box component="span" color="text.secondary">Harga tercatat: </Box>
-                        <Box component="span" fontWeight={600}>{fmtRp(lastDone.servicePrice)}</Box>
+                        <Box component="span" fontWeight={600}>{fmtRp(listedSubtotal(lastDone))}</Box>
                         {' · '}
                         <Box component="span" color="text.secondary">Dibayar: </Box>
                         <Box component="span" fontWeight={700} color="primary.main">
@@ -197,7 +192,7 @@ export default function HistoryPage() {
                       </Typography>
                     ) : (
                       <Typography variant="body2" fontWeight={600} color="primary" sx={{ mt: 0.5 }}>
-                        {fmtRp(lastDone.paidAmount ?? lastDone.servicePrice)}
+                        {fmtRp(lastDone.paidAmount ?? listedSubtotal(lastDone))}
                       </Typography>
                     )}
                   </Box>
@@ -246,7 +241,7 @@ export default function HistoryPage() {
                         </Avatar>
                         <Box className="flex-1">
                           <Box className="flex items-center justify-between">
-                            <Typography fontWeight={500}>{b.serviceName}</Typography>
+                            <Typography fontWeight={500}>{bookingServicesLabel(b)}</Typography>
                             <Chip label={cfg.label} color={cfg.color} size="small" />
                           </Box>
                           <Typography variant="body2" color="text.secondary">
@@ -287,10 +282,10 @@ export default function HistoryPage() {
                             </Typography>
                           )}
                         </Box>
-                        {b.status === 'done' && showOriginalVsPaid(b.servicePrice, b.paidAmount) ? (
+                        {b.status === 'done' && showOriginalVsPaid(listedSubtotal(b), b.paidAmount) ? (
                           <Box className="text-right" sx={{ minWidth: 0, maxWidth: 160, ml: 1 }}>
                             <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
-                              Tercatat {fmtRp(b.servicePrice)}
+                              Tercatat {fmtRp(listedSubtotal(b))}
                             </Typography>
                             <Typography fontWeight={700} color="primary" variant="body2" sx={{ mt: 0.25 }}>
                               Dibayar {fmtRp(b.paidAmount!)}
@@ -298,7 +293,7 @@ export default function HistoryPage() {
                           </Box>
                         ) : (
                           <Typography fontWeight={500} color="primary" className="text-right">
-                            {fmtRp(b.paidAmount ?? b.servicePrice)}
+                            {fmtRp(b.paidAmount ?? listedSubtotal(b))}
                           </Typography>
                         )}
                       </CardContent>

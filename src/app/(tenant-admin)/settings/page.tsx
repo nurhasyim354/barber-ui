@@ -5,6 +5,7 @@ import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   TextField, Divider, IconButton, Chip,
   Accordion, AccordionSummary, AccordionDetails,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveIcon from '@mui/icons-material/Save';
@@ -53,6 +54,8 @@ interface TenantSettings {
   customerAppointmentReminderMinutes?: number | null;
   /** Batas antrian aktif per hari (menunggu + sedang dilayani); null = tidak dibatasi */
   dailyBookingQuota?: number | null;
+  /** Halaman /booking: tampil field qty per layanan */
+  showBookingQty?: boolean | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -84,6 +87,7 @@ export default function SettingsPage() {
   const [customerAppointmentReminderMinutes, setCustomerAppointmentReminderMinutes] = useState(0);
   /** string kosong = tidak dibatasi */
   const [dailyBookingQuota, setDailyBookingQuota] = useState('');
+  const [showBookingQty, setShowBookingQty] = useState(false);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -118,6 +122,7 @@ export default function SettingsPage() {
       const dq = t.dailyBookingQuota;
       if (dq == null || dq <= 0 || Number.isNaN(Number(dq))) setDailyBookingQuota('');
       else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
+      setShowBookingQty(t.showBookingQty === true);
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -161,6 +166,7 @@ export default function SettingsPage() {
         customerReturnReminderDays,
         customerAppointmentReminderMinutes,
         dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
+        showBookingQty,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -362,6 +368,26 @@ export default function SettingsPage() {
                 placeholder="Tidak dibatasi"
                 helperText="Anda juga bisa set batas per staff di menu Kelola Staff."
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={500} className="mb-2">
+                Halaman booking pelanggan
+              </Typography>
+              <FormControlLabel
+                control={(
+                  <Switch
+                    checked={showBookingQty}
+                    onChange={(_, v) => setShowBookingQty(v)}
+                  />
+                )}
+                label="Tampilkan jumlah (qty) per layanan"
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                Jika dimatikan, setiap layanan dianggap qty 1; pelanggan tidak melihat field kuantitas.
+              </Typography>
             </CardContent>
           </Card>
 

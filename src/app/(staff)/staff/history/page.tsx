@@ -16,18 +16,12 @@ import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { StaffBottomNav } from '@/components/layout/BottomNav';
+import { bookingServicesLabel, bookingSubtotalOrLegacy, type UiBooking } from '@/lib/bookingDisplay';
 
-interface BookingHistory {
-  _id: string;
-  customerName: string;
-  serviceName: string;
-  servicePrice: number;
-  queueNumber: number;
-  status: string;
-  date: string;
-  notes?: string;
-  staffName?: string;
-}
+type BookingHistory = Pick<
+  UiBooking,
+  '_id' | 'customerName' | 'services' | 'summaryServiceLabel' | 'serviceName' | 'totalSubtotal' | 'servicePrice' | 'queueNumber' | 'status' | 'date' | 'notes' | 'staffName'
+>;
 
 const PAGE_SIZE = 20;
 
@@ -85,7 +79,7 @@ export default function StaffHistoryPage() {
 
   const totalRevenue = bookings
     .filter((b) => b.status === 'done')
-    .reduce((sum, b) => sum + b.servicePrice, 0);
+    .reduce((sum, b) => sum + bookingSubtotalOrLegacy(b), 0);
 
   return (
     <AppPageShell variant="withBottomNav">
@@ -155,12 +149,12 @@ export default function StaffHistoryPage() {
                         <Box className="flex items-center justify-between mb-0.5">
                           <Typography fontWeight={500}>{b.customerName}</Typography>
                           <Typography fontWeight={600} color="primary" variant="body2">
-                            Rp {b.servicePrice.toLocaleString('id-ID')}
+                            Rp {bookingSubtotalOrLegacy(b).toLocaleString('id-ID')}
                           </Typography>
                         </Box>
 
                         <Typography variant="body2" color="text.secondary">
-                          {b.serviceName}
+                          {bookingServicesLabel(b)}
                         </Typography>
 
                         {b.notes && (

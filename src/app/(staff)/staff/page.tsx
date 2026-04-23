@@ -32,20 +32,15 @@ import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { parseRupiahInput } from '@/lib/rupiahInput';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
+import {
+  bookingServicesLabel,
+  bookingSubtotalOrLegacy,
+  formatRpId,
+  getReceiptServiceLines,
+  type UiBooking,
+} from '@/lib/bookingDisplay';
 
-interface Booking {
-  _id: string;
-  customerId: string;
-  customerName: string;
-  serviceName: string;
-  servicePrice: number;
-  queueNumber: number;
-  status: string;
-  notes?: string;
-  staffId?: string;
-  staffName?: string;
-  date: string;
-}
+type Booking = UiBooking & { customerId: string };
 
 interface ServicePhotoDoc {
   _id: string;
@@ -109,6 +104,28 @@ function buildReceipt(data: ReceiptData): string {
   });
   const divider = '--------------------------------\n';
   const dashes = '- - - - - - - - - - - - - - - -\n';
+  const recLines = getReceiptServiceLines(booking);
+  const itemParts: string[] = [];
+  if (recLines.length > 0) {
+    itemParts.push(LEFT, BOLD_ON, 'Layanan\n', BOLD_OFF, divider);
+    for (const L of recLines) {
+      itemParts.push(LEFT, `${L.name}\n`);
+      itemParts.push(
+        LEFT,
+        `  Rp ${formatRpId(L.unitPrice)} x ${L.qty} = Rp ${formatRpId(L.subtotal)}\n`,
+      );
+    }
+    itemParts.push(divider);
+  } else {
+    itemParts.push(
+      CENTER,
+      BOLD_ON,
+      bookingServicesLabel(booking) + LINE_FEED,
+      BOLD_OFF,
+      LEFT,
+      divider,
+    );
+  }
 
   return [
     RESET, CENTER, BOLD_ON, DOUBLE_HEIGHT,
@@ -118,9 +135,8 @@ function buildReceipt(data: ReceiptData): string {
     LEFT,
     `Tgl : ${date}\n`,
     `No  : #${booking.queueNumber.toString().padStart(4, '0')}\n`,
-    divider, CENTER, BOLD_ON,
-    booking.serviceName + LINE_FEED,
-    BOLD_OFF, LEFT,
+    divider,
+    ...itemParts,
     `Pelanggan : ${booking.customerName}\n`,
     booking.staffName ? `Staff    : ${booking.staffName}\n` : '',
     booking.notes ? `Catatan   : ${booking.notes}\n` : '',
@@ -301,7 +317,7 @@ export default function StaffQueuePage() {
     lastBookingRef.current = b;
     setPayStep('select');
     setQrisErrorBanner(null);
-    setPayAmountInput(String(b.servicePrice));
+    setPayAmountInput(String(bookingSubtotalOrLegacy(b)));
     setPayDialog({ open: true, booking: b });
   };
 
@@ -405,23 +421,39 @@ export default function StaffQueuePage() {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const recLines = getReceiptServiceLines(booking);
+    const itemsHtml =
+      recLines.length > 0
+        ? `<div class="bold" style="margin-bottom:4px">Layanan</div>${recLines
+            .map(
+              (L) =>
+                `<div style="margin-bottom:6px"><div class="bold">${esc(L.name)}</div>` +
+                `<div class="row" style="display:flex;justify-content:space-between;gap:8px">` +
+                `<span>Rp ${formatRpId(L.unitPrice)} x ${L.qty}</span>` +
+                `<span>= Rp ${formatRpId(L.subtotal)}</span></div></div>`,
+            )
+            .join('')}`
+        : `<div class="center bold spacer">${esc(bookingServicesLabel(booking))}</div>`;
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0 auto; padding: 4mm; }
       .center { text-align: center; } .bold { font-weight: bold; } .large { font-size: 16px; }
-      .divider { border-top: 1px dashed #000; margin: 4px 0; } .row { display: flex; justify-content: space-between; }
-      .spacer { margin: 4px 0; } @media print { @page { margin: 0; size: 80mm auto; } }
+      .divider { border-top: 1px dashed #000; margin: 4px 0; } .row { display: flex; justify-content: space-between; } .spacer { margin: 4px 0; }
+      @media print { @page { margin: 0; size: 80mm auto; } }
     </style></head><body>
-      <div class="center bold large spacer">${shopName}</div>
+      <div class="center bold large spacer">${esc(shopName)}</div>
       <div class="center spacer"> RECEIPT </div>
       <div class="divider"></div>
-      <div>Tgl : ${date}</div>
+      <div>Tgl : ${esc(date)}</div>
       <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
       <div class="divider"></div>
-      <div class="center bold spacer">${booking.serviceName}</div>
-      <div>Pelanggan : ${booking.customerName}</div>
-      ${booking.staffName ? `<div>${assigneeLabel}    : ${booking.staffName}</div>` : ''}
-      ${booking.notes ? `<div>Catatan   : ${booking.notes}</div>` : ''}
+      ${itemsHtml}
+      <div class="divider"></div>
+      <div>Pelanggan : ${esc(booking.customerName)}</div>
+      ${booking.staffName ? `<div>${esc(assigneeLabel)}    : ${esc(booking.staffName)}</div>` : ''}
+      ${booking.notes ? `<div>Catatan   : ${esc(booking.notes)}</div>` : ''}
       <div class="divider"></div>
       <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
       <div>Metode    : ${payment.method === 'cash' ? 'Tunai' : 'QRIS'}</div>
@@ -621,7 +653,7 @@ export default function StaffQueuePage() {
                           )}
                         </Box>
                         <Typography fontWeight={600}>{b.customerName}</Typography>
-                        <Typography variant="body2" color="text.secondary">{b.serviceName}</Typography>
+                        <Typography variant="body2" color="text.secondary">{bookingServicesLabel(b)}</Typography>
                         {b.notes && (
                           <Typography variant="body2" className="italic text-gray-400">
                             &quot;{b.notes}&quot;
@@ -630,7 +662,7 @@ export default function StaffQueuePage() {
                       </Box>
                       <Box className="text-right">
                         <Typography fontWeight={600} color="primary">
-                          Rp {b.servicePrice.toLocaleString('id-ID')}
+                          Rp {bookingSubtotalOrLegacy(b).toLocaleString('id-ID')}
                         </Typography>
                         <Chip
                           label={statusLabel[b.status]}
@@ -716,13 +748,13 @@ export default function StaffQueuePage() {
                       <Box>
                         <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {b.serviceName}{b.staffName && ` · ${b.staffName}`}
+                          {bookingServicesLabel(b)}{b.staffName && ` · ${b.staffName}`}
                         </Typography>
                       </Box>
                       <Box className="text-right">
                         <CheckCircleIcon color="success" />
                         <Typography variant="body2" fontWeight={500}>
-                          Rp {b.servicePrice.toLocaleString('id-ID')}
+                          Rp {bookingSubtotalOrLegacy(b).toLocaleString('id-ID')}
                         </Typography>
                       </Box>
                     </CardContent>
@@ -800,13 +832,13 @@ export default function StaffQueuePage() {
                     onChange={(e) => setPayAmountInput(e.target.value.replace(/\D/g, ''))}
                     inputProps={{ inputMode: 'numeric' }}
                     helperText={
-                      `Harga layanan: Rp ${payDialog.booking.servicePrice.toLocaleString('id-ID')}`
+                      `Harga layanan: Rp ${bookingSubtotalOrLegacy(payDialog.booking).toLocaleString('id-ID')}`
                     }
                     sx={{ mb: 1.5, mt: 2 }}
                     autoFocus
                   />
                   <Typography color="text.secondary" variant="body2">
-                    {payDialog.booking.customerName} — {payDialog.booking.serviceName}
+                    {payDialog.booking.customerName} — {bookingServicesLabel(payDialog.booking)}
                   </Typography>
                   {payDialog.booking.staffName && (
                     <Typography variant="body2" color="text.secondary">
@@ -915,10 +947,10 @@ export default function StaffQueuePage() {
                     : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
                 </Typography>
                 <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
-                  Rp {(parseRupiahInput(payAmountInput) ?? payDialog.booking?.servicePrice ?? 0).toLocaleString('id-ID')}
+                  Rp {(parseRupiahInput(payAmountInput) ?? (payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0) ?? 0).toLocaleString('id-ID')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {payDialog.booking?.customerName} — {payDialog.booking?.serviceName}
+                  {payDialog.booking?.customerName} — {payDialog.booking ? bookingServicesLabel(payDialog.booking) : '—'}
                 </Typography>
               </Box>
 
@@ -985,9 +1017,43 @@ export default function StaffQueuePage() {
                   Tgl : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
                 </Typography>
                 <Divider className="my-1" />
-                <Typography variant="body2" className="text-center font-bold block" sx={{ fontFamily: 'inherit', fontWeight: 700 }}>
-                  {receiptData.booking.serviceName}
-                </Typography>
+                {(() => {
+                  const lines = getReceiptServiceLines(receiptData.booking);
+                  if (lines.length > 0) {
+                    return (
+                      <>
+                        <Typography
+                          variant="caption"
+                          sx={{ fontFamily: 'inherit', fontWeight: 700, display: 'block', mb: 0.75 }}
+                        >
+                          Layanan
+                        </Typography>
+                        {lines.map((L, i) => (
+                          <Box key={i} sx={{ mb: 1.25 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontFamily: 'inherit', fontWeight: 600, display: 'block' }}
+                            >
+                              {L.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ fontFamily: 'inherit', display: 'block', lineHeight: 1.45 }}
+                            >
+                              Rp {formatRpId(L.unitPrice)} x {L.qty} = Rp {formatRpId(L.subtotal)}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </>
+                    );
+                  }
+                  return (
+                    <Typography variant="body2" className="text-center font-bold block" sx={{ fontFamily: 'inherit', fontWeight: 700 }}>
+                      {bookingServicesLabel(receiptData.booking)}
+                    </Typography>
+                  );
+                })()}
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
                   Pelanggan: {receiptData.booking.customerName}
                 </Typography>

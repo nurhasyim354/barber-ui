@@ -29,22 +29,15 @@ import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 import { parseRupiahInput } from '@/lib/rupiahInput';
+import {
+  bookingServicesLabel,
+  bookingSubtotalOrLegacy,
+  formatRpId,
+  getReceiptServiceLines,
+  type UiBooking,
+} from '@/lib/bookingDisplay';
 
-interface Booking {
-  _id: string;
-  customerId: string;
-  customerName: string;
-  serviceName: string;
-  servicePrice: number;
-  /** Nominal pembayaran tercatat (selesai) — beda jika kasir menyesuaikan harga */
-  paidAmount?: number;
-  queueNumber: number;
-  status: string;
-  notes?: string;
-  staffId?: string;
-  staffName?: string;
-  date: string;
-}
+type Booking = UiBooking & { customerId: string };
 
 interface ServicePhotoDoc {
   _id: string;
@@ -108,6 +101,28 @@ function buildReceipt(data: ReceiptData): string {
   });
   const divider = '--------------------------------\n';
   const dashes = '- - - - - - - - - - - - - - - -\n';
+  const recLines = getReceiptServiceLines(booking);
+  const itemParts: string[] = [];
+  if (recLines.length > 0) {
+    itemParts.push(LEFT, BOLD_ON, 'Layanan\n', BOLD_OFF, divider);
+    for (const L of recLines) {
+      itemParts.push(LEFT, `${L.name}\n`);
+      itemParts.push(
+        LEFT,
+        `  Rp ${formatRpId(L.unitPrice)} x ${L.qty} = Rp ${formatRpId(L.subtotal)}\n`,
+      );
+    }
+    itemParts.push(divider);
+  } else {
+    itemParts.push(
+      CENTER,
+      BOLD_ON,
+      bookingServicesLabel(booking) + LINE_FEED,
+      BOLD_OFF,
+      LEFT,
+      divider,
+    );
+  }
 
   const lines = [
     RESET,
@@ -123,11 +138,7 @@ function buildReceipt(data: ReceiptData): string {
     `Tgl : ${date}\n`,
     `No  : #${booking.queueNumber.toString().padStart(4, '0')}\n`,
     divider,
-    CENTER,
-    BOLD_ON,
-    booking.serviceName + LINE_FEED,
-    BOLD_OFF,
-    LEFT,
+    ...itemParts,
     `Pelanggan : ${booking.customerName}\n`,
     booking.staffName ? `Staff    : ${booking.staffName}\n` : '',
     booking.notes ? `Catatan   : ${booking.notes}\n` : '',
@@ -190,7 +201,7 @@ export default function PosPage() {
 
   const fmtRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
   const showOrigVsPaid = (b: Booking) =>
-    b.status === 'done' && b.paidAmount != null && b.paidAmount !== b.servicePrice;
+    b.status === 'done' && b.paidAmount != null && b.paidAmount !== bookingSubtotalOrLegacy(b);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -275,7 +286,7 @@ export default function PosPage() {
     lastBookingRef.current = b;
     setPayStep('select');
     setQrisErrorBanner(null);
-    setPayAmountInput(String(b.servicePrice));
+    setPayAmountInput(String(bookingSubtotalOrLegacy(b)));
     setPayDialog({ open: true, booking: b });
   };
 
@@ -388,6 +399,20 @@ export default function PosPage() {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const recLines = getReceiptServiceLines(booking);
+    const itemsHtml =
+      recLines.length > 0
+        ? `<div class="bold" style="margin-bottom:4px">Layanan</div>${recLines
+            .map(
+              (L) =>
+                `<div style="margin-bottom:6px"><div class="bold">${esc(L.name)}</div>` +
+                `<div class="row"><span>Rp ${formatRpId(L.unitPrice)} x ${L.qty}</span>` +
+                `<span>= Rp ${formatRpId(L.subtotal)}</span></div></div>`,
+            )
+            .join('')}`
+        : `<div class="center bold spacer">${esc(bookingServicesLabel(booking))}</div>`;
 
     const html = `
       <!DOCTYPE html>
@@ -407,7 +432,7 @@ export default function PosPage() {
           .bold { font-weight: bold; }
           .large { font-size: 16px; }
           .divider { border-top: 1px dashed #000; margin: 4px 0; }
-          .row { display: flex; justify-content: space-between; }
+          .row { display: flex; justify-content: space-between; gap: 8px; }
           .spacer { margin: 4px 0; }
           @media print {
             @page { margin: 0; size: 80mm auto; }
@@ -415,16 +440,17 @@ export default function PosPage() {
         </style>
       </head>
       <body>
-        <div class="center bold large spacer">${shopName}</div>
+        <div class="center bold large spacer">${esc(shopName)}</div>
         <div class="center spacer"> RECEIPT </div>
         <div class="divider"></div>
-        <div>Tgl : ${date}</div>
+        <div>Tgl : ${esc(date)}</div>
         <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
         <div class="divider"></div>
-        <div class="center bold spacer">${booking.serviceName}</div>
-        <div>Pelanggan : ${booking.customerName}</div>
-        ${booking.staffName ? `<div>${assigneeLabel}    : ${booking.staffName}</div>` : ''}
-        ${booking.notes ? `<div>Catatan   : ${booking.notes}</div>` : ''}
+        ${itemsHtml}
+        <div class="divider"></div>
+        <div>Pelanggan : ${esc(booking.customerName)}</div>
+        ${booking.staffName ? `<div>${esc(assigneeLabel)}    : ${esc(booking.staffName)}</div>` : ''}
+        ${booking.notes ? `<div>Catatan   : ${esc(booking.notes)}</div>` : ''}
         <div class="divider"></div>
         <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
         <div>Metode    : ${payment.method === 'cash' ? 'Tunai' : 'QRIS'}</div>
@@ -541,7 +567,7 @@ export default function PosPage() {
                     <Box>
                       <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
                       <Typography fontWeight={600}>{b.customerName}</Typography>
-                      <Typography variant="body2" color="text.secondary">{b.serviceName}</Typography>
+                      <Typography variant="body2" color="text.secondary">{bookingServicesLabel(b)}</Typography>
                       {b.staffName && (
                         <Typography variant="body2" color="text.secondary">
                         dengan  {b.staffName}
@@ -555,7 +581,7 @@ export default function PosPage() {
                     </Box>
                     <Box className="text-right">
                       <Typography fontWeight={600} color="primary">
-                        {fmtRp(b.servicePrice)}
+                        {fmtRp(bookingSubtotalOrLegacy(b))}
                       </Typography>
                       <Chip
                         label={statusLabel[b.status]}
@@ -648,7 +674,7 @@ export default function PosPage() {
                       <Box>
                         <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {b.serviceName}
+                          {bookingServicesLabel(b)}
                           {b.staffName && ` · ${b.staffName}`}
                         </Typography>
                       </Box>
@@ -657,7 +683,7 @@ export default function PosPage() {
                         {showOrigVsPaid(b) ? (
                           <Box>
                             <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
-                              Tercatat {fmtRp(b.servicePrice)}
+                              Tercatat {fmtRp(bookingSubtotalOrLegacy(b))}
                             </Typography>
                             <Typography variant="body2" fontWeight={700} color="primary">
                               Dibayar {fmtRp(b.paidAmount!)}
@@ -665,7 +691,7 @@ export default function PosPage() {
                           </Box>
                         ) : (
                           <Typography variant="body2" fontWeight={500}>
-                            {fmtRp(b.paidAmount ?? b.servicePrice)}
+                            {fmtRp(b.paidAmount ?? bookingSubtotalOrLegacy(b))}
                           </Typography>
                         )}
                       </Box>
@@ -703,13 +729,13 @@ export default function PosPage() {
                     onChange={(e) => setPayAmountInput(e.target.value.replace(/\D/g, ''))}
                     inputProps={{ inputMode: 'numeric' }}
                     helperText={
-                      `Harga layanan: Rp ${payDialog.booking.servicePrice.toLocaleString('id-ID')}`
+                      `Harga layanan: Rp ${bookingSubtotalOrLegacy(payDialog.booking).toLocaleString('id-ID')}`
                     }
                     sx={{ mb: 1.5, mt: 2 }}
                     autoFocus
                   />
                   <Typography color="text.secondary" variant="body2">
-                    {payDialog.booking.customerName} — {payDialog.booking.serviceName}
+                    {payDialog.booking.customerName} — {bookingServicesLabel(payDialog.booking)}
                   </Typography>
                   {payDialog.booking.staffName && (
                     <Typography variant="body2" color="text.secondary">
@@ -806,10 +832,10 @@ export default function PosPage() {
                     : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
                 </Typography>
                 <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
-                  Rp {(parseRupiahInput(payAmountInput) ?? payDialog.booking?.servicePrice ?? 0).toLocaleString('id-ID')}
+                  Rp {(parseRupiahInput(payAmountInput) ?? (payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0) ?? 0).toLocaleString('id-ID')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {payDialog.booking?.customerName} — {payDialog.booking?.serviceName}
+                  {payDialog.booking?.customerName} — {payDialog.booking ? bookingServicesLabel(payDialog.booking) : '—'}
                 </Typography>
               </Box>
 
@@ -893,13 +919,47 @@ export default function PosPage() {
                   Tgl : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
                 </Typography>
                 <Divider className="my-1" />
-                <Typography
-                  variant="body2"
-                  className="text-center font-bold block"
-                  sx={{ fontFamily: 'inherit', fontWeight: 700 }}
-                >
-                  {receiptData.booking.serviceName}
-                </Typography>
+                {(() => {
+                  const lines = getReceiptServiceLines(receiptData.booking);
+                  if (lines.length > 0) {
+                    return (
+                      <>
+                        <Typography
+                          variant="caption"
+                          sx={{ fontFamily: 'inherit', fontWeight: 700, display: 'block', mb: 0.75 }}
+                        >
+                          Layanan
+                        </Typography>
+                        {lines.map((L, i) => (
+                          <Box key={i} sx={{ mb: 1.25 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontFamily: 'inherit', fontWeight: 600, display: 'block' }}
+                            >
+                              {L.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ fontFamily: 'inherit', display: 'block', lineHeight: 1.45 }}
+                            >
+                              Rp {formatRpId(L.unitPrice)} x {L.qty} = Rp {formatRpId(L.subtotal)}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </>
+                    );
+                  }
+                  return (
+                    <Typography
+                      variant="body2"
+                      className="text-center font-bold block"
+                      sx={{ fontFamily: 'inherit', fontWeight: 700 }}
+                    >
+                      {bookingServicesLabel(receiptData.booking)}
+                    </Typography>
+                  );
+                })()}
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
                   Pelanggan: {receiptData.booking.customerName}
                 </Typography>

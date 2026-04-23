@@ -1,12 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Avatar, Divider, LinearProgress, Checkbox,
-  InputAdornment, Alert, Fab, Tooltip, Paper,
+  InputAdornment, Alert, Fab, Tooltip, Paper, IconButton,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -20,8 +20,12 @@ import LockIcon from '@mui/icons-material/Lock';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import NoteAltIcon from '@mui/icons-material/NoteAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import RemoveIcon from '@mui/icons-material/Remove';
+import AddIcon from '@mui/icons-material/Add';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
+import SearchIcon from '@mui/icons-material/Search';
+import SearchOffIcon from '@mui/icons-material/SearchOff';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -30,6 +34,11 @@ import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
+import {
+  bookingServicesLabel,
+  bookingSubtotalOrLegacy,
+  type UiBooking,
+} from '@/lib/bookingDisplay';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,6 +56,8 @@ interface TenantInfo {
   dailyBookingQuota?: number | null;
   /** Slot aktif saat ini (hari ini) */
   todayActiveBookingCount?: number;
+  /** Tampilkan qty per layanan di form booking */
+  showBookingQty?: boolean;
 }
 
 interface ServicePhotoDoc {
@@ -79,30 +90,16 @@ interface StaffQueueRow {
   isAvailable?: boolean;
 }
 
-interface ActiveBooking {
-  _id: string;
-  tenantId?: string;
-  serviceName: string;
-  staffName?: string;
-  staffId?: string | null;
-  queueNumber: number;
-  status: string;
-  date: string;
-  estimatedServedAt?: string | null;
-}
+type ActiveBooking = UiBooking & { tenantId?: string; estimatedServedAt?: string | null };
 
-interface BookingResult {
-  _id: string;
-  queueNumber: number;
-  serviceName: string;
-  staffName: string | null;
-  servicePrice: number;
-}
+type BookingResult = Pick<UiBooking, '_id' | 'queueNumber' | 'summaryServiceLabel' | 'serviceName' | 'staffName' | 'totalSubtotal' | 'servicePrice' | 'services'>;
 
 interface LastDoneVisit {
   _id: string;
   serviceName: string;
   servicePrice: number;
+  services?: { serviceName: string; unitPrice: number; quantity: number; lineSubtotal?: number }[];
+  totalSubtotal?: number;
   queueNumber: number;
   staffName: string | null;
   date: string;
@@ -186,6 +183,9 @@ function BookingContent() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
+  const [serviceQty, setServiceQty] = useState<Record<string, number>>({});
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [staffSearch, setStaffSearch] = useState('');
   const [lastHaircut, setLastHaircut] = useState<ServicePhotoDoc | null>(null);
   const [lastDoneVisit, setLastDoneVisit] = useState<LastDoneVisit | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
@@ -381,15 +381,43 @@ function BookingContent() {
     }
   };
 
-  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const qFor = (id: string) => Math.min(99, Math.max(1, Math.floor(serviceQty[id] ?? 1)));
+
+  const filteredServices = useMemo(() => {
+    const q = serviceSearch.trim().toLowerCase();
+    if (!q) return services;
+    return services.filter((s) => {
+      if (s.name.toLowerCase().includes(q)) return true;
+      if (s.description && s.description.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [services, serviceSearch]);
+
+  const filteredStaffQueue = useMemo(() => {
+    const q = staffSearch.trim().toLowerCase();
+    if (!q) return staffQueue;
+    return staffQueue.filter((b) => b.staffName.toLowerCase().includes(q));
+  }, [staffQueue, staffSearch]);
+
+  const totalCartQty = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + qFor(s._id), 0),
+    [selectedServices, serviceQty],
+  );
+  const totalPrice = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.price * qFor(s._id), 0),
+    [selectedServices, serviceQty],
+  );
+  const totalDuration = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.durationMinutes * qFor(s._id), 0),
+    [selectedServices, serviceQty],
+  );
   const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
 
   const outletQuotaFull =
     !!tenant?.dailyBookingQuota &&
     tenant.dailyBookingQuota > 0 &&
     (tenant.todayActiveBookingCount ?? 0) >= tenant.dailyBookingQuota;
-  const tenantSlotsExceededForCart = tenantQuotaExceeded(tenant, selectedServices.length);
+  const tenantSlotsExceededForCart = tenantQuotaExceeded(tenant, totalCartQty);
 
   // ── Booking actions ────────────────────────────────────────────────────────
   const toggleService = (svc: Service) => {
@@ -398,7 +426,16 @@ function BookingContent() {
     if (outletQuotaFull) return;
     setSelectedServices((prev) => {
       const exists = prev.find((s) => s._id === svc._id);
-      return exists ? prev.filter((s) => s._id !== svc._id) : [...prev, svc];
+      if (exists) {
+        setServiceQty((q) => {
+          const n = { ...q };
+          delete n[svc._id];
+          return n;
+        });
+        return prev.filter((s) => s._id !== svc._id);
+      }
+      setServiceQty((q) => ({ ...q, [svc._id]: 1 }));
+      return [...prev, svc];
     });
   };
 
@@ -407,7 +444,7 @@ function BookingContent() {
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
       return;
     }
-    if (tenantQuotaExceeded(tenant, selectedServices.length)) {
+    if (tenantQuotaExceeded(tenant, totalCartQty)) {
       toast.error(
         'Kuota antrian aktif harian outlet tidak cukup untuk jumlah layanan ini. Kurangi pilihan atau coba lagi nanti.',
       );
@@ -439,11 +476,11 @@ function BookingContent() {
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
       return;
     }
-    if (tenantQuotaExceeded(tenant, selectedServices.length)) {
+    if (tenantQuotaExceeded(tenant, totalCartQty)) {
       toast.error('Kuota antrian aktif harian outlet tidak cukup untuk booking ini.');
       return;
     }
-    if (selectedStaff && staffQuotaExceeded(selectedStaff, selectedServices.length)) {
+    if (selectedStaff && staffQuotaExceeded(selectedStaff, totalCartQty)) {
       toast.error(`Kuota harian ${bookingLabels.staffSingular} ini sudah penuh untuk jumlah layanan dipilih.`);
       return;
     }
@@ -456,11 +493,11 @@ function BookingContent() {
     try {
       const res = await api.post('/bookings', {
         tenantId: effectiveTenantId,
-        serviceIds: selectedServices.map((s) => s._id),
+        items: selectedServices.map((s) => ({ serviceId: s._id, quantity: qFor(s._id) })),
         staffId: selectedStaff?.staffId,
         notes,
       });
-      const result = Array.isArray(res.data) ? res.data[0] : res.data;
+      const result = res.data as BookingResult;
       setDialogOpen(false);
       setNotes('');
 
@@ -695,7 +732,7 @@ function BookingContent() {
           <CardContent sx={{ textAlign: 'left', px: 2.5 }}>
             <Box display="flex" justifyContent="space-between" mb={1}>
               <Typography variant="body2" color="text.secondary">Layanan</Typography>
-              <Typography variant="body2" fontWeight={500}>{bookingResult.serviceName}</Typography>
+              <Typography variant="body2" fontWeight={500}>{bookingServicesLabel(bookingResult)}</Typography>
             </Box>
             {bookingResult.staffName && (
               <Box display="flex" justifyContent="space-between" mb={1}>
@@ -909,7 +946,7 @@ function BookingContent() {
                 <Typography variant="h4" fontWeight={900} color="primary" letterSpacing={-1}>
                   #{activeBooking.queueNumber}
                 </Typography>
-                <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{activeBooking.serviceName}</Typography>
+                <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{bookingServicesLabel(activeBooking)}</Typography>
                 {activeBooking.staffName && (
                   <Typography variant="body2" color="text.secondary">
                     {bookingLabels.staffSingular}: {activeBooking.staffName}
@@ -968,7 +1005,12 @@ function BookingContent() {
                 </Typography>
                 {lastDoneVisit && (
                   <Box sx={{ mb: lastHaircut?.photos?.length ? 1.5 : 0 }}>
-                    <Typography fontWeight={700}>{lastDoneVisit.serviceName}</Typography>
+                    <Typography fontWeight={700}>
+                      {bookingServicesLabel({
+                        serviceName: lastDoneVisit.serviceName,
+                        services: lastDoneVisit.services,
+                      })}
+                    </Typography>
                     <Typography variant="body2" color="text.secondary">
                       {new Date(lastDoneVisit.date).toLocaleDateString('id-ID', {
                         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -976,7 +1018,7 @@ function BookingContent() {
                       {lastDoneVisit.staffName ? ` · ${lastDoneVisit.staffName}` : ''}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Rp {lastDoneVisit.servicePrice.toLocaleString('id-ID')} · antrian #{lastDoneVisit.queueNumber}
+                      Rp {bookingSubtotalOrLegacy({ totalSubtotal: lastDoneVisit.totalSubtotal, servicePrice: lastDoneVisit.servicePrice }).toLocaleString('id-ID')} · antrian #{lastDoneVisit.queueNumber}
                     </Typography>
                   </Box>
                 )}
@@ -1068,21 +1110,50 @@ function BookingContent() {
                 {selectedServices.length > 0 && (
                   <Chip
                     icon={<ShoppingCartIcon sx={{ fontSize: '14px !important' }} />}
-                    label={`${selectedServices.length} dipilih`}
+                    label={`${totalCartQty} slot${selectedServices.length > 1 ? ` · ${selectedServices.length} jenis` : ''}`}
                     color="primary" size="small"
                     sx={{ fontWeight: 700 }}
                   />
                 )}
               </Box>
 
+              {services.length > 0 && (
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Cari layanan (nama atau deskripsi)…"
+                  value={serviceSearch}
+                  onChange={(e) => setServiceSearch(e.target.value)}
+                  disabled={!!activeBooking || !!tenant?.subscriptionOverdue || outletQuotaFull}
+                  sx={{ mb: 2 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon color="action" fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
+
               {services.length === 0 ? (
                 <Box sx={{ textAlign: 'center', py: 8 }}>
                   <ContentCutIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1.5 }} />
                   <Typography color="text.secondary">Belum ada layanan tersedia</Typography>
                 </Box>
+              ) : filteredServices.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6, px: 2 }}>
+                  <SearchOffIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1.5 }} />
+                  <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+                    Tidak ada layanan yang cocok dengan &ldquo;{serviceSearch.trim()}&rdquo;
+                  </Typography>
+                  <Button size="small" variant="outlined" onClick={() => setServiceSearch('')}>
+                    Hapus pencarian
+                  </Button>
+                </Box>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {services.map((svc) => {
+                  {filteredServices.map((svc) => {
                     const selected = !!selectedServices.find((s) => s._id === svc._id);
                     return (
                       <Card
@@ -1156,6 +1227,41 @@ function BookingContent() {
                           >
                             Rp {svc.price.toLocaleString('id-ID')}
                           </Typography>
+                            {selected && tenant?.showBookingQty && (
+                              <Box
+                                display="flex"
+                                alignItems="center"
+                                gap={0.25}
+                                mt={1}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <IconButton
+                                  size="small"
+                                  aria-label="Kurangi qty"
+                                  onClick={() =>
+                                    setServiceQty((q) => ({
+                                      ...q,
+                                      [svc._id]: Math.max(1, qFor(svc._id) - 1),
+                                    }))}
+                                >
+                                  <RemoveIcon fontSize="small" />
+                                </IconButton>
+                                <Typography variant="body2" fontWeight={700} sx={{ minWidth: 28, textAlign: 'center' }}>
+                                  {qFor(svc._id)}
+                                </Typography>
+                                <IconButton
+                                  size="small"
+                                  aria-label="Tambah qty"
+                                  onClick={() =>
+                                    setServiceQty((q) => ({
+                                      ...q,
+                                      [svc._id]: Math.min(99, qFor(svc._id) + 1),
+                                    }))}
+                                >
+                                  <AddIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            )}
                           </Box>
                           
                         </CardContent>
@@ -1199,10 +1305,13 @@ function BookingContent() {
                         >
                           {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 14 }} />}
                         </Avatar>
-                        <Typography variant="body2" fontWeight={600} noWrap>{s.name}</Typography>
+                        <Typography variant="body2" fontWeight={600} noWrap>
+                          {s.name}
+                          {tenant?.showBookingQty && qFor(s._id) > 1 ? ` ×${qFor(s._id)}` : ''}
+                        </Typography>
                       </Box>
                       <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
-                        Rp {s.price.toLocaleString('id-ID')}
+                        Rp {(s.price * qFor(s._id)).toLocaleString('id-ID')}
                       </Typography>
                     </Box>
                   ))}
@@ -1223,6 +1332,24 @@ function BookingContent() {
                 />
                 <Typography variant="h6" fontWeight={600} letterSpacing={-0.3}>Pilih {bookingLabels.staffSingular}</Typography>
               </Box>
+
+              {!staffQueueLoading && staffQueue.length > 0 && (
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder={`Cari nama ${bookingLabels.staffSingular}…`}
+                  value={staffSearch}
+                  onChange={(e) => setStaffSearch(e.target.value)}
+                  sx={{ mb: 2 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon color="action" fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
 
               {staffQueueLoading ? (
                 <Box sx={{ px: 1 }}>
@@ -1249,11 +1376,21 @@ function BookingContent() {
                     </Button>
                   </CardContent>
                 </Card>
+              ) : filteredStaffQueue.length === 0 && staffSearch.trim() ? (
+                <Box sx={{ textAlign: 'center', py: 4, px: 2 }}>
+                  <SearchOffIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+                  <Typography color="text.secondary" variant="body2" sx={{ mb: 1.5 }}>
+                    Tidak ada {bookingLabels.staffSingular} yang cocok dengan &ldquo;{staffSearch.trim()}&rdquo;
+                  </Typography>
+                  <Button size="small" variant="outlined" onClick={() => setStaffSearch('')}>
+                    Hapus pencarian
+                  </Button>
+                </Box>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {staffQueue.map((b) => {
+                  {filteredStaffQueue.map((b) => {
                     const sel = selectedStaff?.staffId === b.staffId;
-                    const staffFull = staffQuotaExceeded(b, selectedServices.length);
+                    const staffFull = staffQuotaExceeded(b, totalCartQty);
                     const staffUnavailable = b.isAvailable === false;
                     const cardDisabled =
                       !!tenant?.subscriptionOverdue ||
@@ -1496,7 +1633,7 @@ function BookingContent() {
               !!tenant?.subscriptionOverdue ||
               outletQuotaFull ||
               tenantSlotsExceededForCart ||
-              (!!selectedStaff && staffQuotaExceeded(selectedStaff, selectedServices.length)) ||
+              (!!selectedStaff && staffQuotaExceeded(selectedStaff, totalCartQty)) ||
               (!!selectedStaff && selectedStaff.isAvailable === false)
             }
             startIcon={submitting ? undefined : <CheckCircleIcon />}
