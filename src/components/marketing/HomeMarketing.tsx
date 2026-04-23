@@ -3,8 +3,6 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
-  AppBar,
-  Toolbar,
   Typography,
   Button,
   Box,
@@ -16,9 +14,6 @@ import {
   Slider,
   Chip,
   useTheme,
-  Menu,
-  MenuItem,
-  Divider,
 } from '@mui/material';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
@@ -33,9 +28,6 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import ReplayIcon from '@mui/icons-material/Replay';
 import InsightsIcon from '@mui/icons-material/Insights';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import {
   BUSINESS_VERTICALS,
   MARKETING_FEATURES,
@@ -43,10 +35,10 @@ import {
   type BusinessVerticalId,
   projectRevenue,
 } from '@/lib/marketingLanding';
-import { TUTORIAL_PAGES, audienceLabel } from '@/lib/tutorialContent';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 import { alpha } from '@mui/material/styles';
 import MarketingSiteFooter from '@/components/marketing/MarketingSiteFooter';
+import MarketingSiteAppBar from '@/components/marketing/MarketingSiteAppBar';
 
 /** Grafik vektor inline — tanpa file gambar, aman untuk performa halaman. */
 function HeroQueueIllustration({ primary, paper }: { primary: string; paper: string }) {
@@ -171,88 +163,13 @@ export default function HomeMarketing() {
   const theme = useTheme();
   const [vertical, setVertical] = useState<BusinessVertical>(BUSINESS_VERTICALS[1]);
   const [revenueSlider, setRevenueSlider] = useState(35); // juta Rp
-  const [tutorialAnchor, setTutorialAnchor] = useState<null | HTMLElement>(null);
-  const closeTutorialMenu = () => setTutorialAnchor(null);
 
   const baseRp = useMemo(() => revenueSlider * 1_000_000, [revenueSlider]);
   const projection = useMemo(() => projectRevenue(baseRp, vertical), [baseRp, vertical]);
 
   return (
     <Box sx={{ minHeight: '100svh', bgcolor: 'background.default' }}>
-      <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-        <Toolbar sx={{ maxWidth: 1200, mx: 'auto', width: '100%' }}>
-          <Typography variant="h6" fontWeight={800} color="primary" sx={{ flexGrow: 1 }}>
-            Booking App
-          </Typography>
-          <Button component={Link} href="/contact" color="inherit" sx={{ mr: 0.5, display: { xs: 'none', sm: 'inline-flex' } }}>
-            Kontak
-          </Button>
-          <Button
-            id="tutorial-menu-button"
-            color="inherit"
-            onClick={(e) => setTutorialAnchor(e.currentTarget)}
-            startIcon={<MenuBookIcon />}
-            endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 18 }} />}
-            sx={{ mr: 0.5, display: { xs: 'none', sm: 'inline-flex' } }}
-          >
-            Tutorial
-          </Button>
-          <Button
-            component={Link}
-            href="/contact"
-            color="inherit"
-            aria-label="Kontak"
-            sx={{ mr: 0.5, display: { xs: 'inline-flex', sm: 'none' } }}
-          >
-            <MailOutlineIcon />
-          </Button>
-          <Button
-            color="inherit"
-            onClick={(e) => setTutorialAnchor(e.currentTarget)}
-            aria-label="Menu tutorial"
-            sx={{ mr: 0.5, display: { xs: 'inline-flex', sm: 'none' } }}
-          >
-            <MenuBookIcon />
-          </Button>
-          <Menu
-            anchorEl={tutorialAnchor}
-            open={Boolean(tutorialAnchor)}
-            onClose={closeTutorialMenu}
-            MenuListProps={{ 'aria-labelledby': 'tutorial-menu-button' }}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            PaperProps={{ sx: { maxHeight: 420, minWidth: 280 } }}
-          >
-            <MenuItem component={Link} href="/tutorial" onClick={closeTutorialMenu}>
-              <Typography variant="body2" fontWeight={700}>
-                Semua panduan
-              </Typography>
-            </MenuItem>
-            <Divider />
-            {TUTORIAL_PAGES.map((p) => (
-              <MenuItem
-                key={p.slug}
-                component={Link}
-                href={`/tutorial/${p.slug}`}
-                onClick={closeTutorialMenu}
-                sx={{ alignItems: 'flex-start', py: 1.25 }}
-              >
-                <Box>
-                  <Typography variant="body2" fontWeight={600}>
-                    {p.title}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {audienceLabel(p.audience)} · ±{p.readMinutes} menit
-                  </Typography>
-                </Box>
-              </MenuItem>
-            ))}
-          </Menu>
-          <Button component={Link} href="/login" color="inherit">
-            Masuk
-          </Button>
-        </Toolbar>
-      </AppBar>
+      <MarketingSiteAppBar />
 
       {/* Hero */}
       <Box

@@ -5,6 +5,11 @@ const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
+      borderRadius: {
+        'app-button': 'var(--app-radius-button)',
+        'app-card': 'var(--app-radius-card)',
+        'app-box': 'var(--app-radius-box)',
+      },
       screens: tailwindScreens,
       colors: {
         brand: {

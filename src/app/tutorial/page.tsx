@@ -9,9 +9,7 @@ import {
   CardActionArea,
   Chip,
   Stack,
-  Button,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   TUTORIAL_PAGES,
   audienceLabel,
@@ -40,10 +38,6 @@ export default function TutorialHubPage() {
 
   return (
     <TutorialMarketingShell subtitle="Panduan">
-      <Button component={Link} href="/" startIcon={<ArrowBackIcon />} color="inherit" size="small" sx={{ mb: 2 }}>
-        Kembali ke beranda
-      </Button>
-
       <Typography variant="h4" component="h1" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
         Panduan fitur
       </Typography>

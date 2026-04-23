@@ -10,7 +10,6 @@ import {
   Button,
   Link as MuiLink,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import TutorialMarketingShell from '@/components/tutorial/TutorialMarketingShell';
 import { SITE_BRANDING } from '@/lib/siteBranding';
@@ -21,10 +20,6 @@ const mailHref = `mailto:${SITE_BRANDING.contactEmail}?subject=${mailSubject}`;
 export default function ContactPage() {
   return (
     <TutorialMarketingShell subtitle="Kontak">
-      <Button component={Link} href="/" startIcon={<ArrowBackIcon />} color="inherit" size="small" sx={{ mb: 2 }}>
-        Kembali ke beranda
-      </Button>
-
       <Typography variant="h4" component="h1" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
         Kontak
       </Typography>

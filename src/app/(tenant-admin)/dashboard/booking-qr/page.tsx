@@ -13,13 +13,13 @@ import ClearIcon from '@mui/icons-material/Clear';
 import DownloadIcon from '@mui/icons-material/Download';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import QRCode from 'react-qr-code';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
+import PageHeader from '@/components/layout/PageHeader';
 
 export default function BookingQrPage() {
   const router = useRouter();
@@ -116,17 +116,13 @@ export default function BookingQrPage() {
 
   return (
     <AppPageShell variant="adminFooter" sx={{ pb: 6 }}>
+      <PageHeader title="QR Booking" back backHref="/dashboard" />
       <PageContainer>
-      {/* Header */}
-      <Box display="flex" alignItems="center" gap={1} pt={2} mb={4}>
-        <IconButton onClick={() => router.back()} size="small" sx={{ mr: 0.5 }}>
-          <ArrowBackIcon />
-        </IconButton>
+      <Box display="flex" alignItems="center" gap={1} pt={1} mb={3}>
         <QrCode2Icon sx={{ fontSize: 26, color: 'primary.main' }} />
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h6" fontWeight={500} lineHeight={1.2}>QR Booking</Typography>
           {tenantName ? (
-            <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap sx={{ mt: 0.25 }}>
+            <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap>
               {tenantName}
             </Typography>
           ) : null}

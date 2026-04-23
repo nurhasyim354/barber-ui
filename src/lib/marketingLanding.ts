@@ -80,6 +80,15 @@ export const BUSINESS_VERTICALS: BusinessVertical[] = [
     upliftMin: 0.08,
     upliftMax: 0.25,
   },
+  {
+    id: 'jasa_umum',
+    label: 'Jasa umum',
+    shortLabel: 'Jasa umum',
+    description: 'Antrian dan tagihan.',
+    defaultMonthlyRevenue: 15_000_000,
+    upliftMin: 0.1,
+    upliftMax: 0.28,
+  },
 ];
 
 export interface MarketingFeature {

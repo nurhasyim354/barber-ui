@@ -9,16 +9,31 @@ import { useRouter } from 'next/navigation';
 interface Props {
   title: string;
   back?: boolean;
+  /** Navigasi eksplisit menggantikan router.back() */
+  backHref?: string;
+  /** Handler kustom menggantikan back / backHref (mis. wizard langkah) */
+  onBack?: () => void;
   right?: React.ReactNode;
 }
 
-export default function PageHeader({ title, back, right }: Props) {
+export default function PageHeader({ title, back, backHref, onBack, right }: Props) {
   const router = useRouter();
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    if (backHref) {
+      router.push(backHref);
+      return;
+    }
+    router.back();
+  };
   return (
     <AppBar position="sticky" color="primary" elevation={0}>
       <Toolbar>
         {back && (
-          <IconButton edge="start" color="inherit" onClick={() => router.back()}>
+          <IconButton edge="start" color="inherit" onClick={handleBack} aria-label="Kembali">
             <ArrowBackIcon />
           </IconButton>
         )}

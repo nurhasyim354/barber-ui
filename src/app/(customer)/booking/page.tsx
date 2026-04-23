@@ -12,7 +12,6 @@ import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PersonIcon from '@mui/icons-material/Person';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import StarIcon from '@mui/icons-material/Star';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
@@ -795,14 +794,9 @@ function BookingContent() {
       <PageHeader
         title={bookingLabels.bookingPageTitle}
         back={bookStep === 'staff'}
+        onBack={bookStep === 'staff' ? () => setBookStep('service') : undefined}
         right={
-          bookStep === 'staff' ? (
-            <Button color="inherit" size="small" startIcon={<ArrowBackIcon />}
-              onClick={() => setBookStep('service')}
-            >
-              Ganti Layanan
-            </Button>
-          ) : visitedTenants.length > 1 ? (
+          visitedTenants.length > 1 && bookStep !== 'staff' ? (
             <Button color="inherit" size="small" startIcon={<QrCodeScannerIcon />}
               onClick={() => setTenantSelectorOpen(true)}
             >
@@ -1527,7 +1521,7 @@ function BookingContent() {
             mx: 'auto',
             overflow: 'hidden',
             border: (t) => `1px solid ${t.palette.primary.main}22`,
-            background: (t) => `linear-gradient(145deg, ${t.palette.primary.main}10 0%, ${t.palette.background.paper} 55%, ${t.palette.background.paper} 100%)`,
+            
           }}
         >
           <Box sx={{ p: 1.75, pt: 1.5 }}>

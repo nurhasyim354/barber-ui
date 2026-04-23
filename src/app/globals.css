@@ -2,10 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Radius UI — tombol, kartu, dan Box MUI (IconButton/Fab tidak memakai .MuiButton-root).
+ */
+:root {
+  --app-radius-button: 2px;
+  --app-radius-card: 2px;
+  --app-radius-box: 2px;
+}
+
 html, body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+}
+
+html .MuiButton-root {
+  border-radius: var(--app-radius-button) !important;
+}
+
+html .MuiCard-root {
+  border-radius: var(--app-radius-card) !important;
+}
+
+html .MuiBox-root {
+  border-radius: var(--app-radius-box) !important;
 }
 
 * {

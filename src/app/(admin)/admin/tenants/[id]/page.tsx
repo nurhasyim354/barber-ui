@@ -7,7 +7,6 @@ import {
   FormControl, InputLabel, Select, MenuItem, Alert, Divider,
   FormControlLabel, Switch,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -125,7 +124,7 @@ export default function AdminTenantDetailPage() {
   if (loading || !row) {
     return (
       <AppPageShell variant="adminFooter">
-        <PageHeader title="Detail tenant" back />
+        <PageHeader title="Detail tenant" back backHref="/admin/tenants" />
         <Box className="flex justify-center mt-16"><CircularProgress /></Box>
       </AppPageShell>
     );
@@ -133,15 +132,7 @@ export default function AdminTenantDetailPage() {
 
   return (
     <AppPageShell variant="adminFooter">
-      <PageHeader
-        title={row.name}
-        back
-        right={
-          <Button color="inherit" startIcon={<ArrowBackIcon />} onClick={() => router.push('/admin/tenants')}>
-            Daftar
-          </Button>
-        }
-      />
+      <PageHeader title={row.name} back backHref="/admin/tenants" />
       <PageContainer>
         <Card sx={{ mb: 2 }}>
           <CardContent>

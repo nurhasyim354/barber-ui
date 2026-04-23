@@ -10,7 +10,7 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import LockIcon from '@mui/icons-material/Lock';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import StorefrontIcon from '@mui/icons-material/Storefront';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MarketingSiteAppBar from '@/components/marketing/MarketingSiteAppBar';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -124,30 +124,26 @@ export default function LoginPage() {
   };
 
   return (
+    <Box
+      sx={{
+        minHeight: '100svh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: (t) =>
+          `linear-gradient(160deg, ${t.palette.primary.light}22 0%, ${t.palette.background.default} 55%, ${t.palette.background.paper} 100%)`,
+      }}
+    >
+      <MarketingSiteAppBar showBack backHref="/" pageHint="Login" />
       <Box
         sx={{
-          position: 'relative',
-          minHeight: '100svh', display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', p: 2,
-          background: (t) =>
-            `linear-gradient(160deg, ${t.palette.primary.light}22 0%, ${t.palette.background.default} 55%, ${t.palette.background.paper} 100%)`,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 2,
         }}
       >
-      <Button
-        variant="text"
-        color="inherit"
-        startIcon={<ArrowBackIcon />}
-        onClick={() => router.push('/')}
-        sx={{
-          position: 'absolute',
-          top: { xs: 8, sm: 16 },
-          left: { xs: 8, sm: 16 },
-          color: 'text.secondary',
-          '&:hover': { bgcolor: 'action.hover' },
-        }}
-      >
-        Kembali ke beranda
-      </Button>
       <Box sx={{ mb: 5, textAlign: 'center' }}>
         <Box
           sx={{
@@ -309,6 +305,7 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
+      </Box>
     </Box>
   );
 }

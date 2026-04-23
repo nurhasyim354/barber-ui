@@ -2,8 +2,10 @@
 
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Box, Typography, Button, Alert } from '@mui/material';
+import { Box, Typography, Button, Alert, Container } from '@mui/material';
 import { useAuthStore } from '@/store/authStore';
+import MarketingSiteAppBar from '@/components/marketing/MarketingSiteAppBar';
+import MarketingSiteFooter from '@/components/marketing/MarketingSiteFooter';
 
 function VerifyPhoneContent() {
   const params = useSearchParams();
@@ -18,7 +20,7 @@ function VerifyPhoneContent() {
   }, [ok, logout]);
 
   return (
-    <Box sx={{ maxWidth: 480, mx: 'auto', p: 3, mt: 8 }}>
+    <Box sx={{ maxWidth: 480, mx: 'auto', p: 3, pt: 2 }}>
       <Typography variant="h5" fontWeight={600} gutterBottom>
         Verifikasi nomor WhatsApp
       </Typography>
@@ -55,8 +57,14 @@ function VerifyPhoneContent() {
 
 export default function VerifyPhoneChangePage() {
   return (
-    <Suspense fallback={<Box p={3}>Memuat…</Box>}>
-      <VerifyPhoneContent />
-    </Suspense>
+    <Box sx={{ minHeight: '100svh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
+      <MarketingSiteAppBar showBack backHref="/login" pageHint="Verifikasi" />
+      <Container maxWidth="sm" sx={{ flex: 1, py: 2 }}>
+        <Suspense fallback={<Box py={4}>Memuat…</Box>}>
+          <VerifyPhoneContent />
+        </Suspense>
+      </Container>
+      <MarketingSiteFooter />
+    </Box>
   );
 }

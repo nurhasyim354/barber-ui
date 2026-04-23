@@ -5,6 +5,8 @@ const P = defaultBrandPalette;
 
 const theme = createTheme({
   breakpoints: { values: muiBreakpointValues },
+  /** Satu langkah radius untuk input & modal (4px); komponen lain bisa pakai nilai berbeda */
+  shape: { borderRadius: 1 },
   palette: {
     mode: 'light',
     primary: {
@@ -52,7 +54,6 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
           textTransform: 'none',
           fontWeight: 600,
           fontSize: '1rem',
@@ -81,18 +82,39 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
           backgroundColor: P.paper,
           boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
           border: `1px solid ${P.divider}`,
         },
       },
     },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          borderRadius: theme.shape.borderRadius,
+        }),
+      },
+    },
+    MuiFilledInput: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          borderRadius: theme.shape.borderRadius,
+          borderTopLeftRadius: theme.shape.borderRadius,
+          borderTopRightRadius: theme.shape.borderRadius,
+        }),
+      },
+    },
+    MuiInput: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          borderRadius: theme.shape.borderRadius,
+        }),
+      },
+    },
     MuiTextField: {
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 12,
             backgroundColor: '#FAFAF9',
             '& fieldset': { borderColor: P.divider },
             '&:hover fieldset': { borderColor: P.primary },
@@ -126,10 +148,11 @@ const theme = createTheme({
     },
     MuiDialog: {
       styleOverrides: {
-        paper: {
+        paper: ({ theme }) => ({
+          borderRadius: theme.shape.borderRadius,
           backgroundColor: P.paper,
           border: `1px solid ${P.divider}`,
-        },
+        }),
       },
     },
     MuiToggleButton: {

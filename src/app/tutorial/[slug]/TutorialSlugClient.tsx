@@ -9,14 +9,13 @@ import {
   Button,
   Chip,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import type { TutorialPageDef } from '@/lib/tutorialContent';
 import { audienceLabel } from '@/lib/tutorialContent';
 import TutorialMarketingShell from '@/components/tutorial/TutorialMarketingShell';
 
 export default function TutorialSlugClient({ page }: { page: TutorialPageDef }) {
   return (
-    <TutorialMarketingShell subtitle={page.title}>
+    <TutorialMarketingShell subtitle={page.title} backHref="/tutorial">
       <Breadcrumbs sx={{ mb: 2 }} separator="›">
         <MuiLink component={Link} href="/" underline="hover" color="inherit" variant="body2">
           Beranda
@@ -28,17 +27,6 @@ export default function TutorialSlugClient({ page }: { page: TutorialPageDef }) 
           {page.title}
         </Typography>
       </Breadcrumbs>
-
-      <Button
-        component={Link}
-        href="/tutorial"
-        startIcon={<ArrowBackIcon />}
-        color="inherit"
-        size="small"
-        sx={{ mb: 2 }}
-      >
-        Semua panduan
-      </Button>
 
       <Chip label={audienceLabel(page.audience)} size="small" sx={{ mb: 2 }} color="primary" variant="outlined" />
 

@@ -47,6 +47,7 @@ export function createTenantTheme(colors: TenantThemeColors): Theme {
 
   return createTheme({
     breakpoints: { values: muiBreakpointValues },
+    shape: { borderRadius: 1 },
     palette: {
       mode,
       primary: {
@@ -82,7 +83,6 @@ export function createTenantTheme(colors: TenantThemeColors): Theme {
       MuiButton: {
         styleOverrides: {
           root: {
-            borderRadius: 12,
             textTransform: 'none',
             fontWeight: 600,
             fontSize: '1rem',
@@ -103,7 +103,6 @@ export function createTenantTheme(colors: TenantThemeColors): Theme {
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: 16,
             boxShadow:
               mode === 'dark'
                 ? '0 2px 16px rgba(0,0,0,0.4)'
@@ -111,11 +110,36 @@ export function createTenantTheme(colors: TenantThemeColors): Theme {
           },
         },
       },
-      MuiTextField: {
+      MuiOutlinedInput: {
         styleOverrides: {
-          root: {
-            '& .MuiOutlinedInput-root': { borderRadius: 12 },
-          },
+          root: ({ theme }) => ({
+            borderRadius: theme.shape.borderRadius,
+          }),
+        },
+      },
+      MuiFilledInput: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            borderRadius: theme.shape.borderRadius,
+            borderTopLeftRadius: theme.shape.borderRadius,
+            borderTopRightRadius: theme.shape.borderRadius,
+          }),
+        },
+      },
+      MuiInput: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            borderRadius: theme.shape.borderRadius,
+          }),
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: ({ theme }) => ({
+            borderRadius: theme.shape.borderRadius,
+            border:
+              mode === 'dark' ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.08)',
+          }),
         },
       },
       MuiChip: {

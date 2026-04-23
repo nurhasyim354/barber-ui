@@ -15,11 +15,11 @@ import {
   Stack,
   Alert,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { BUSINESS_VERTICALS, type BusinessVerticalId } from '@/lib/marketingLanding';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
+import MarketingSiteAppBar from '@/components/marketing/MarketingSiteAppBar';
 
 function DaftarForm() {
   const searchParams = useSearchParams();
@@ -29,6 +29,7 @@ function DaftarForm() {
     (BUSINESS_VERTICALS.some((b) => b.id === bisnisParam) ? bisnisParam : 'barbershop') as BusinessVerticalId,
   );
   const [outletName, setOutletName] = useState('');
+  const [address, setAddress] = useState('');
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
   const [referralName, setReferralName] = useState('');
@@ -43,14 +44,20 @@ function DaftarForm() {
   }, [bisnisParam]);
 
   const handleSubmit = async () => {
-    if (!outletName.trim() || !contactName.trim() || phone.replace(/\D/g, '').length < 9) {
-      toast.error('Isi nama outlet, nama PIC, dan nomor WA PIC yang valid');
+    if (
+      !outletName.trim() ||
+      !address.trim() ||
+      !contactName.trim() ||
+      phone.replace(/\D/g, '').length < 9
+    ) {
+      toast.error('Isi nama outlet, alamat, nama PIC, dan nomor WA PIC yang valid');
       return;
     }
     setSubmitting(true);
     try {
       await api.post('/public/tenant-registrations', {
         outletName: outletName.trim(),
+        address: address.trim(),
         contactName: contactName.trim(),
         phone,
         businessType,
@@ -63,6 +70,7 @@ function DaftarForm() {
       });
       toast.success('Outlet berhasil dibuat dan aktif. Silakan masuk dengan nomor WA PIC melalui halaman login.');
       setOutletName('');
+      setAddress('');
       setContactName('');
       setPhone('');
       setReferralName('');
@@ -78,10 +86,6 @@ function DaftarForm() {
 
   return (
     <Container maxWidth="sm" sx={{ py: 4, px: UI_LAYOUT.containerGutters.px }}>
-      <Button component={Link} href="/" startIcon={<ArrowBackIcon />} color="inherit" sx={{ mb: 2 }}>
-        Kembali ke beranda
-      </Button>
-
       <Typography variant="h4" fontWeight={800} gutterBottom>
         Daftar sebagai tenant
       </Typography>
@@ -115,6 +119,16 @@ function DaftarForm() {
             onChange={(e) => setOutletName(e.target.value)}
             fullWidth
             required
+          />
+          <TextField
+            label="Alamat outlet (wajib)"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            fullWidth
+            required
+            multiline
+            minRows={2}
+            placeholder="Jl., kelurahan, kota — tampil untuk pelanggan & admin"
           />
           <TextField
             label="Nama PIC (wajib)"
@@ -161,7 +175,13 @@ function DaftarForm() {
               variant="contained"
               size="large"
               onClick={() => void handleSubmit()}
-              disabled={!outletName.trim() || !contactName.trim() || phone.length < 9 || submitting}
+              disabled={
+                !outletName.trim() ||
+                !address.trim() ||
+                !contactName.trim() ||
+                phone.length < 9 ||
+                submitting
+              }
             >
               {submitting ? 'Mengirim…' : 'Kirim pengajuan'}
             </Button>
@@ -178,6 +198,7 @@ function DaftarForm() {
 export default function DaftarTenantPage() {
   return (
     <Box sx={{ minHeight: '100svh', bgcolor: 'background.default' }}>
+      <MarketingSiteAppBar showBack pageHint="Daftar" />
       <Suspense
         fallback={
           <Container maxWidth="sm" sx={{ py: 8, textAlign: 'center' }}>
