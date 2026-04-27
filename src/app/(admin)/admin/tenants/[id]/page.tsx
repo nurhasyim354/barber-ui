@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, TextField, Button, CircularProgress,
   FormControl, InputLabel, Select, MenuItem, Alert, Divider,
-  FormControlLabel, Switch,
+  FormControlLabel, Switch, Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -46,6 +46,8 @@ export default function AdminTenantDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [row, setRow] = useState<TenantDetail | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -118,6 +120,20 @@ export default function AdminTenantDetailPage() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menyimpan');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRemoveTenant = async () => {
+    setRemoving(true);
+    try {
+      await api.delete(`/admin/tenants/${id}`);
+      toast.success('Tenant dihapus permanen');
+      setRemoveDialogOpen(false);
+      router.replace('/admin/tenants');
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menghapus tenant');
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -237,9 +253,44 @@ export default function AdminTenantDetailPage() {
             <Button variant="contained" size="large" onClick={() => void handleSave()} disabled={saving}>
               {saving ? <CircularProgress size={22} color="inherit" /> : 'Simpan perubahan'}
             </Button>
+
+            <Divider sx={{ my: 1 }} />
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setRemoveDialogOpen(true)}
+            >
+              Hapus tenant permanen
+            </Button>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Menghapus outlet beserta semua data terkait di database. Tidak dapat dikembalikan.
+            </Typography>
           </CardContent>
         </Card>
       </PageContainer>
+
+      <Dialog open={removeDialogOpen} onClose={() => !removing && setRemoveDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={500}>Hapus tenant permanen?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            Semua data outlet <strong>{row.name}</strong> akan dihapus dari database. Tindakan ini tidak dapat dikembalikan.
+          </Typography>
+        </DialogContent>
+        <DialogActions className="p-4 gap-2">
+          <Button onClick={() => setRemoveDialogOpen(false)} variant="outlined" fullWidth disabled={removing}>
+            Batal
+          </Button>
+          <Button
+            onClick={() => void handleRemoveTenant()}
+            variant="contained"
+            color="error"
+            fullWidth
+            disabled={removing}
+          >
+            {removing ? <CircularProgress size={20} color="inherit" /> : 'Hapus permanen'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </AppPageShell>
   );
 }

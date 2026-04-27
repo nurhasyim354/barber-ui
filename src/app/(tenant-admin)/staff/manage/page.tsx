@@ -53,6 +53,7 @@ export default function StaffManagementPage() {
     const [editId, setEditId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const [photoUploading, setPhotoUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,13 +165,16 @@ export default function StaffManagementPage() {
 
     const handleDelete = async () => {
         if (!deleteId) return;
+        setDeleting(true);
         try {
             await api.delete(`/staff/${deleteId}`);
-            toast.success('Staff dihapus');
+            toast.success('Staff dihapus permanen');
             setDeleteId(null);
             loadStaffPage(page);
         } catch {
             toast.error('Gagal menghapus staff');
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -382,14 +386,20 @@ export default function StaffManagementPage() {
             </Dialog>
 
             {/* Delete Confirm */}
-            <Dialog open={!!deleteId} onClose={() => setDeleteId(null)} maxWidth="xs" fullWidth>
+            <Dialog open={!!deleteId} onClose={() => !deleting && setDeleteId(null)} maxWidth="xs" fullWidth>
                 <DialogTitle fontWeight={500}>{ui.deleteStaffTitle}</DialogTitle>
                 <DialogContent>
-                    <Typography color="text.secondary">Data {ui.staffSingular.toLowerCase()} akan dihapus permanen.</Typography>
+                    <Typography color="text.secondary">
+                        Profil {ui.staffSingular.toLowerCase()} ini akan dihapus permanen dari database. Tindakan ini tidak dapat dikembalikan.
+                    </Typography>
                 </DialogContent>
                 <DialogActions className="p-4 gap-2">
-                    <Button onClick={() => setDeleteId(null)} variant="outlined" fullWidth>Batal</Button>
-                    <Button onClick={handleDelete} variant="contained" color="error" fullWidth>Hapus</Button>
+                    <Button onClick={() => setDeleteId(null)} variant="outlined" fullWidth disabled={deleting}>
+                        Batal
+                    </Button>
+                    <Button onClick={() => void handleDelete()} variant="contained" color="error" fullWidth disabled={deleting}>
+                        {deleting ? <CircularProgress size={20} color="inherit" /> : 'Hapus permanen'}
+                    </Button>
                 </DialogActions>
             </Dialog>
 

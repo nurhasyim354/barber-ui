@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Box, Card, CardContent, Typography, Button, CircularProgress,
+  Box, Card, CardContent, Typography, Button, CircularProgress, Chip,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   IconButton, Switch, FormControlLabel, Fab, Avatar,
 } from '@mui/material';
@@ -45,6 +45,8 @@ export default function ServicesPage() {
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  const [deletingService, setDeletingService] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
@@ -141,13 +143,18 @@ export default function ServicesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const confirmDeleteService = async () => {
+    if (!serviceToDelete) return;
+    setDeletingService(true);
     try {
-      await api.delete(`/services/${id}`);
-      toast.success('Layanan dihapus');
+      await api.delete(`/services/${serviceToDelete._id}`);
+      toast.success('Layanan dihapus permanen');
+      setServiceToDelete(null);
       loadServices();
-    } catch {
-      toast.error('Gagal menghapus layanan');
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menghapus layanan');
+    } finally {
+      setDeletingService(false);
     }
   };
 
@@ -180,7 +187,21 @@ export default function ServicesPage() {
           ) : (
             <Box className="flex flex-col gap-3">
               {services.map((svc) => (
-                <Card key={svc._id} className={svc.isActive ? '' : 'opacity-50'}>
+                <Card
+                  key={svc._id}
+                  variant="outlined"
+                  sx={
+                    svc.isActive
+                      ? { borderColor: 'divider' }
+                      : (theme) => ({
+                          borderStyle: 'dashed',
+                          borderColor: 'text.disabled',
+                          bgcolor:
+                            theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'grey.100',
+                          boxShadow: 'none',
+                        })
+                  }
+                >
                   <CardContent>
                     <Box className="flex justify-between items-start gap-2">
                       <Avatar
@@ -191,16 +212,35 @@ export default function ServicesPage() {
                           height: 56,
                           flexShrink: 0,
                           bgcolor: 'primary.light',
+                          ...(!svc.isActive
+                            ? { filter: 'grayscale(0.6)', opacity: 0.85 }
+                            : {}),
                         }}
                       >
                         {!svc.photoUrl && <ContentCutIcon />}
                       </Avatar>
                       <Box className="flex-1 min-w-0">
-                        <Typography fontWeight={500}>{svc.name}</Typography>
+                        <Box className="flex items-center gap-1 flex-wrap">
+                          <Typography fontWeight={500} color={svc.isActive ? 'text.primary' : 'text.secondary'}>
+                            {svc.name}
+                          </Typography>
+                          {!svc.isActive && (
+                            <Chip label="Dinonaktifkan" size="small" color="default" variant="outlined" />
+                          )}
+                        </Box>
                         {svc.description && (
-                          <Typography variant="body2" color="text.secondary">{svc.description}</Typography>
+                          <Typography
+                            variant="body2"
+                            color={svc.isActive ? 'text.secondary' : 'text.disabled'}
+                          >
+                            {svc.description}
+                          </Typography>
                         )}
-                        <Typography color="primary" fontWeight={600} className="mt-1">
+                        <Typography
+                          color={svc.isActive ? 'primary' : 'text.disabled'}
+                          fontWeight={600}
+                          className="mt-1"
+                        >
                           Rp {svc.price.toLocaleString('id-ID')} · {svc.durationMinutes} menit
                         </Typography>
                       </Box>
@@ -208,7 +248,12 @@ export default function ServicesPage() {
                         <IconButton size="small" onClick={() => openEdit(svc)}>
                           <EditIcon fontSize="small" />
                         </IconButton>
-                        <IconButton size="small" color="error" onClick={() => handleDelete(svc._id)}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setServiceToDelete(svc)}
+                          aria-label="Hapus layanan"
+                        >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Box>
@@ -335,6 +380,29 @@ export default function ServicesPage() {
           </Button>
           <Button onClick={handleSave} variant="contained" fullWidth disabled={saving}>
             {saving ? <CircularProgress size={20} color="inherit" /> : 'Simpan'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!serviceToDelete} onClose={() => !deletingService && setServiceToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={500}>Hapus layanan permanen?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            Layanan <strong>{serviceToDelete?.name}</strong> akan dihapus dari katalog. Tindakan ini tidak dapat dikembalikan.
+          </Typography>
+        </DialogContent>
+        <DialogActions className="p-4 gap-2">
+          <Button onClick={() => setServiceToDelete(null)} variant="outlined" fullWidth disabled={deletingService}>
+            Batal
+          </Button>
+          <Button
+            onClick={() => void confirmDeleteService()}
+            variant="contained"
+            color="error"
+            fullWidth
+            disabled={deletingService}
+          >
+            {deletingService ? <CircularProgress size={20} color="inherit" /> : 'Hapus permanen'}
           </Button>
         </DialogActions>
       </Dialog>

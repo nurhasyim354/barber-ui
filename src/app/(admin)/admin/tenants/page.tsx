@@ -15,6 +15,7 @@ import CreditCardIcon from '@mui/icons-material/CreditCard';
 import PersonIcon from '@mui/icons-material/Person';
 import PhoneIcon from '@mui/icons-material/Phone';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ChatIcon from '@mui/icons-material/Chat';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -77,6 +78,8 @@ export default function AdminTenantsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
+  const [deletingTenant, setDeletingTenant] = useState(false);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -133,6 +136,21 @@ export default function AdminTenantsPage() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menyimpan');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteTenant = async () => {
+    if (!tenantToDelete) return;
+    setDeletingTenant(true);
+    try {
+      await api.delete(`/admin/tenants/${tenantToDelete._id}`);
+      toast.success('Tenant dihapus permanen');
+      setTenantToDelete(null);
+      await loadTenants(page);
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menghapus tenant');
+    } finally {
+      setDeletingTenant(false);
     }
   };
 
@@ -252,9 +270,19 @@ export default function AdminTenantsPage() {
                         Didaftarkan {new Date(t.createdAt).toLocaleDateString('id-ID')}
                       </Typography>
                     </Box>
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); router.push(`/admin/tenants/${t._id}`); }} aria-label="Detail">
-                      <ChevronRightIcon />
-                    </IconButton>
+                    <Box className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => { setTenantToDelete(t); }}
+                        aria-label="Hapus tenant permanen"
+                      >
+                        <DeleteOutlineIcon />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => router.push(`/admin/tenants/${t._id}`)} aria-label="Detail">
+                        <ChevronRightIcon />
+                      </IconButton>
+                    </Box>
                   </Box>
                 </CardContent>
               </Card>
@@ -332,6 +360,29 @@ export default function AdminTenantsPage() {
           </Button>
           <Button onClick={() => void handleSave()} variant="contained" fullWidth disabled={saving}>
             {saving ? <CircularProgress size={20} color="inherit" /> : 'Simpan'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!tenantToDelete} onClose={() => !deletingTenant && setTenantToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={500}>Hapus tenant permanen?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            Outlet <strong>{tenantToDelete?.name}</strong> beserta semua data outlet ini akan dihapus dari database: booking, pembayaran, pelanggan, staff, layanan, tagihan, pengingat, dan sejenisnya. Tindakan ini tidak dapat dikembalikan.
+          </Typography>
+        </DialogContent>
+        <DialogActions className="p-4 gap-2">
+          <Button onClick={() => setTenantToDelete(null)} variant="outlined" fullWidth disabled={deletingTenant}>
+            Batal
+          </Button>
+          <Button
+            onClick={() => void handleConfirmDeleteTenant()}
+            variant="contained"
+            color="error"
+            fullWidth
+            disabled={deletingTenant}
+          >
+            {deletingTenant ? <CircularProgress size={20} color="inherit" /> : 'Hapus permanen'}
           </Button>
         </DialogActions>
       </Dialog>
