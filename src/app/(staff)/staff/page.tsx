@@ -6,7 +6,7 @@ import {
   CircularProgress, Dialog, DialogTitle, DialogContent,
   DialogActions, Divider, IconButton, Avatar, List,
   ListItem, ListItemButton, ListItemText, ListItemAvatar,
-  Switch, FormControlLabel, Alert, TextField,
+  Switch, FormControlLabel, Alert, TextField, Tooltip,
   Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -33,6 +33,7 @@ import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { parseRupiahInput } from '@/lib/rupiahInput';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
+import { BookingQuantityEditor, buildQtyDraftFromBooking } from '@/components/booking/BookingQuantityEditor';
 import {
   bookingServicesLabel,
   bookingSubtotalOrLegacy,
@@ -176,6 +177,9 @@ export default function StaffQueuePage() {
   const [tenantLoading, setTenantLoading] = useState(false);
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [qrisImageBase64, setQrisImageBase64] = useState<string | null>(null);
+  const [showBookingQty, setShowBookingQty] = useState(false);
+  const [qtyDraftByBooking, setQtyDraftByBooking] = useState<Record<string, { serviceId: string; quantity: number }[]>>({});
+  const [savingQtyBookingId, setSavingQtyBookingId] = useState<string | null>(null);
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
   const [payAmountInput, setPayAmountInput] = useState('');
   const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
@@ -241,7 +245,10 @@ export default function StaffQueuePage() {
   useEffect(() => {
     if (!user?.tenantId) return;
     api.get(`/tenants/${user.tenantId}/settings`)
-      .then((r) => setQrisImageBase64(r.data?.qrisImageBase64 || null))
+      .then((r) => {
+        setQrisImageBase64(r.data?.qrisImageBase64 || null);
+        setShowBookingQty(r.data?.showBookingQty === true);
+      })
       .catch(() => {});
   }, [user?.tenantId]);
 
@@ -320,6 +327,38 @@ export default function StaffQueuePage() {
       if (!silent) setLoading(false);
     }
   }, [user]);
+
+  const draftQtyLines = (b: Booking) => qtyDraftByBooking[b._id] ?? buildQtyDraftFromBooking(b);
+
+  const setQtyLine = (bookingId: string, serviceId: string, raw: number) => {
+    const q = Math.max(1, Math.min(99, Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1));
+    setQtyDraftByBooking((prev) => {
+      const row = bookings.find((x) => x._id === bookingId);
+      if (!row?.services?.length) return prev;
+      const base = prev[bookingId] ?? buildQtyDraftFromBooking(row);
+      const next = base.map((line) => (line.serviceId === serviceId ? { ...line, quantity: q } : line));
+      return { ...prev, [bookingId]: next };
+    });
+  };
+
+  const saveBookingQuantities = async (b: Booking) => {
+    setSavingQtyBookingId(b._id);
+    try {
+      await api.patch(`/bookings/${b._id}/quantities`, { lines: draftQtyLines(b) });
+      toast.success('Jumlah diperbarui');
+      setQtyDraftByBooking((p) => {
+        const n = { ...p };
+        delete n[b._id];
+        return n;
+      });
+      await loadBookings();
+    } catch (err: unknown) {
+      const m = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(m || 'Gagal menyimpan jumlah');
+    } finally {
+      setSavingQtyBookingId(null);
+    }
+  };
 
   useEffect(() => {
     if (isLoading || !user) return;
@@ -708,6 +747,15 @@ ${getBrowserThermalPrintPageCss()}
                       </Box>
                     </Box>
 
+                    <BookingQuantityEditor
+                      booking={b}
+                      show={showBookingQty}
+                      draftLines={draftQtyLines(b)}
+                      saving={savingQtyBookingId === b._id}
+                      onChangeQuantity={(serviceId, raw) => setQtyLine(b._id, serviceId, raw)}
+                      onSave={() => void saveBookingQuantities(b)}
+                    />
+
                     <Divider className="my-2" />
 
                     <Box className="flex gap-2 flex-wrap">
@@ -834,41 +882,35 @@ ${getBrowserThermalPrintPageCss()}
                       </Box>
                       {b.paymentId && (
                         <Box
-                          className="flex flex-wrap gap-1"
-                          sx={{ mt: 1.5 }}
+                          className="flex items-center gap-0.5"
+                          sx={{ mt: 1.5, minHeight: 36 }}
                         >
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={
-                              reprintBusyId === b._id ? (
-                                <CircularProgress size={14} color="inherit" />
-                              ) : (
-                                <PrintIcon fontSize="small" />
-                              )
-                            }
-                            onClick={() => void handleReprintNotaBrowser(b)}
-                            disabled={reprintBusyId === b._id}
-                            sx={{ textTransform: 'none' }}
-                          >
-                            Cetak browser
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={
-                              reprintBusyId === b._id ? (
-                                <CircularProgress size={14} color="inherit" />
-                              ) : (
-                                <BluetoothIcon fontSize="small" />
-                              )
-                            }
-                            onClick={() => void handleReprintNotaBluetooth(b)}
-                            disabled={reprintBusyId === b._id}
-                            sx={{ textTransform: 'none' }}
-                          >
-                            Cetak Bluetooth
-                          </Button>
+                          {reprintBusyId === b._id ? (
+                            <CircularProgress size={24} />
+                          ) : (
+                            <>
+                              <Tooltip title="Cetak (browser)">
+                                <IconButton
+                                  size="small"
+                                  color="default"
+                                  aria-label="Cetak ulang nota lewat browser"
+                                  onClick={() => void handleReprintNotaBrowser(b)}
+                                >
+                                  <PrintIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Cetak Bluetooth">
+                                <IconButton
+                                  size="small"
+                                  color="default"
+                                  aria-label="Cetak ulang nota lewat Bluetooth"
+                                  onClick={() => void handleReprintNotaBluetooth(b)}
+                                >
+                                  <BluetoothIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
                         </Box>
                       )}
                     </CardContent>
@@ -1192,9 +1234,27 @@ ${getBrowserThermalPrintPageCss()}
                   Terima kasih! 😊
                 </Typography>
               </Box>
-              <Box className="flex gap-2">
-                <Button fullWidth variant="outlined" startIcon={<PrintIcon />} onClick={printReceiptBluetooth} size="small">Cetak Bluetooth</Button>
-                <Button fullWidth variant="outlined" startIcon={<PrintIcon />} onClick={printReceiptBrowser} size="small">Cetak Browser</Button>
+              <Box className="flex justify-center gap-1">
+                <Tooltip title="Cetak Bluetooth">
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={printReceiptBluetooth}
+                    aria-label="Cetak nota lewat Bluetooth"
+                  >
+                    <BluetoothIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Cetak (browser)">
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={printReceiptBrowser}
+                    aria-label="Cetak nota lewat browser"
+                  >
+                    <PrintIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               </Box>
 
               {/* Upload foto hasil  (opsional) */}

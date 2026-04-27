@@ -242,8 +242,8 @@ export default function HistoryPage() {
                         <Box className="flex-1">
                           <Box className="flex items-center justify-between">
                             <Typography fontWeight={500}>{bookingServicesLabel(b)}</Typography>
-                            <Chip label={cfg.label} color={cfg.color} size="small" />
                           </Box>
+                          <Chip label={cfg.label} color={cfg.color} size="small" />
                           <Typography variant="body2" color="text.secondary">
                             {formatDate(b.date)}
                           </Typography>
