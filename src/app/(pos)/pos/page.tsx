@@ -32,6 +32,7 @@ import { parseRupiahInput } from '@/lib/rupiahInput';
 import {
   bookingServicesLabel,
   bookingSubtotalOrLegacy,
+  formatBookingQueueDate,
   formatRpId,
   getReceiptServiceLines,
   type UiBooking,
@@ -137,6 +138,9 @@ function buildReceipt(data: ReceiptData): string {
     LEFT,
     `Tgl : ${date}\n`,
     `No  : #${booking.queueNumber.toString().padStart(4, '0')}\n`,
+    formatBookingQueueDate(booking.date)
+      ? `Tgl booking : ${formatBookingQueueDate(booking.date)}\n`
+      : '',
     divider,
     ...itemParts,
     `Pelanggan : ${booking.customerName}\n`,
@@ -445,6 +449,7 @@ export default function PosPage() {
         <div class="divider"></div>
         <div>Tgl : ${esc(date)}</div>
         <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
+        ${formatBookingQueueDate(booking.date) ? `<div>Tgl booking : ${esc(formatBookingQueueDate(booking.date))}</div>` : ''}
         <div class="divider"></div>
         ${itemsHtml}
         <div class="divider"></div>
@@ -567,7 +572,14 @@ export default function PosPage() {
                 <CardContent>
                   <Box className="flex justify-between items-start mb-2">
                     <Box>
-                      <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexWrap: 'wrap' }}>
+                        <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                        {formatBookingQueueDate(b.date) && (
+                          <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                            {formatBookingQueueDate(b.date)}
+                          </Typography>
+                        )}
+                      </Box>
                       <Typography fontWeight={600}>{b.customerName}</Typography>
                       {posLines.length > 0 ? (
                         <Box component="div" sx={{ mt: 0.5 }}>
@@ -699,7 +711,12 @@ export default function PosPage() {
                   <Card key={b._id} className="opacity-60">
                     <CardContent className="py-3 flex justify-between items-center">
                       <Box>
-                        <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
+                        <Typography fontWeight={600}>
+                          #{b.queueNumber}
+                          {formatBookingQueueDate(b.date) ? ` · ${formatBookingQueueDate(b.date)}` : ''}
+                          {' — '}
+                          {b.customerName}
+                        </Typography>
                         {posLines.length > 0 ? (
                           <Box component="div" sx={{ mt: 0.25 }}>
                             {posLines.map((L, i) => (
@@ -960,10 +977,13 @@ export default function PosPage() {
                 </Typography>
                 <Divider className="my-1" />
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  No  : #{receiptData.booking.queueNumber.toString().padStart(4, '0')}
+                  No : #{receiptData.booking.queueNumber.toString().padStart(4, '0')}
+                  {formatBookingQueueDate(receiptData.booking.date)
+                    ? ` · ${formatBookingQueueDate(receiptData.booking.date)}`
+                    : ''}
                 </Typography>
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  Tgl : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
+                  Tgl bayar : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
                 </Typography>
                 <Divider className="my-1" />
                 {(() => {
@@ -1134,7 +1154,12 @@ export default function PosPage() {
         <DialogContent sx={{ pt: 0 }}>
           {staffAssignDialog.booking && (
             <Typography variant="body2" color="text.secondary" mb={1}>
-              Booking #{staffAssignDialog.booking.queueNumber} — {staffAssignDialog.booking.customerName}
+              Booking #{staffAssignDialog.booking.queueNumber}
+              {formatBookingQueueDate(staffAssignDialog.booking.date)
+                ? ` · ${formatBookingQueueDate(staffAssignDialog.booking.date)}`
+                : ''}
+              {' — '}
+              {staffAssignDialog.booking.customerName}
             </Typography>
           )}
           <List disablePadding>

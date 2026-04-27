@@ -48,6 +48,19 @@ export function formatRpId(n: number): string {
   return n.toLocaleString('id-ID');
 }
 
+/** Tanggal booking / kunjungan (di samping nomor antrian di UI & nota). */
+export function formatBookingQueueDate(iso: string | undefined | null): string {
+  if (iso == null || String(iso).trim() === '') return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  return new Date(iso).toLocaleDateString('id-ID', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 /** Baris rincian nota pembayaran: nama, harga satuan, qty, subtotal. */
 export type ReceiptServiceLine = {
   name: string;

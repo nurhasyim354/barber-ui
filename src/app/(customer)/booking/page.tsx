@@ -37,6 +37,7 @@ import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 import {
   bookingServicesLabel,
   bookingSubtotalOrLegacy,
+  formatBookingQueueDate,
   type UiBooking,
 } from '@/lib/bookingDisplay';
 
@@ -92,7 +93,18 @@ interface StaffQueueRow {
 
 type ActiveBooking = UiBooking & { tenantId?: string; estimatedServedAt?: string | null };
 
-type BookingResult = Pick<UiBooking, '_id' | 'queueNumber' | 'summaryServiceLabel' | 'serviceName' | 'staffName' | 'totalSubtotal' | 'servicePrice' | 'services'>;
+type BookingResult = Pick<
+  UiBooking,
+  | '_id'
+  | 'queueNumber'
+  | 'date'
+  | 'summaryServiceLabel'
+  | 'serviceName'
+  | 'staffName'
+  | 'totalSubtotal'
+  | 'servicePrice'
+  | 'services'
+>;
 
 interface LastDoneVisit {
   _id: string;
@@ -712,12 +724,34 @@ function BookingContent() {
             <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight={600} letterSpacing={1} sx={{ textTransform: 'uppercase', fontSize: '0.65rem' }}>
               Nomor Antrian
             </Typography>
-            <Typography
-              variant="h1" fontWeight={900} color="primary.main"
-              sx={{ fontSize: '5.5rem', lineHeight: 1, letterSpacing: -4 }}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'center',
+                gap: 1.25,
+                flexWrap: 'wrap',
+              }}
             >
-              #{bookingResult.queueNumber}
-            </Typography>
+              <Typography
+                variant="h1" fontWeight={900} color="primary.main"
+                sx={{ fontSize: '5.5rem', lineHeight: 1, letterSpacing: -4 }}
+              >
+                #{bookingResult.queueNumber}
+              </Typography>
+              {(bookingResult.date ?? activeForThisBooking?.date) && (
+                <Typography
+                  variant="subtitle1"
+                  color="text.secondary"
+                  fontWeight={700}
+                  sx={{ lineHeight: 1.2 }}
+                >
+                  {formatBookingQueueDate(
+                    String(bookingResult.date ?? activeForThisBooking?.date ?? ''),
+                  )}
+                </Typography>
+              )}
+            </Box>
           </CardContent>
         </Card>
 
@@ -938,9 +972,16 @@ function BookingContent() {
                 </Typography>
                 {activeBookings.map((ab, idx) => (
                   <Box key={ab._id} sx={idx > 0 ? { mt: 2.5, pt: 2.5, borderTop: 1, borderColor: 'divider' } : {}}>
-                    <Typography variant="h4" fontWeight={900} color="primary" letterSpacing={-1}>
-                      #{ab.queueNumber}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexWrap: 'wrap' }}>
+                      <Typography variant="h4" fontWeight={900} color="primary" letterSpacing={-1}>
+                        #{ab.queueNumber}
+                      </Typography>
+                      {formatBookingQueueDate(ab.date) && (
+                        <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                          {formatBookingQueueDate(ab.date)}
+                        </Typography>
+                      )}
+                    </Box>
                     <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{bookingServicesLabel(ab)}</Typography>
                     {ab.staffName && (
                       <Typography variant="body2" color="text.secondary">

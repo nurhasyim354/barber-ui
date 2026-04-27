@@ -35,6 +35,7 @@ import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import {
   bookingServicesLabel,
   bookingSubtotalOrLegacy,
+  formatBookingQueueDate,
   formatRpId,
   getReceiptServiceLines,
   type UiBooking,
@@ -135,6 +136,9 @@ function buildReceipt(data: ReceiptData): string {
     LEFT,
     `Tgl : ${date}\n`,
     `No  : #${booking.queueNumber.toString().padStart(4, '0')}\n`,
+    formatBookingQueueDate(booking.date)
+      ? `Tgl booking : ${formatBookingQueueDate(booking.date)}\n`
+      : '',
     divider,
     ...itemParts,
     `Pelanggan : ${booking.customerName}\n`,
@@ -448,6 +452,7 @@ export default function StaffQueuePage() {
       <div class="divider"></div>
       <div>Tgl : ${esc(date)}</div>
       <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
+      ${formatBookingQueueDate(booking.date) ? `<div>Tgl booking : ${esc(formatBookingQueueDate(booking.date))}</div>` : ''}
       <div class="divider"></div>
       ${itemsHtml}
       <div class="divider"></div>
@@ -645,8 +650,13 @@ export default function StaffQueuePage() {
                   <CardContent>
                     <Box className="flex justify-between items-start mb-2">
                       <Box>
-                        <Box className="flex items-center gap-2">
+                        <Box className="flex items-center gap-2" sx={{ flexWrap: 'wrap', alignItems: 'baseline' }}>
                           <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                          {formatBookingQueueDate(b.date) && (
+                            <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                              {formatBookingQueueDate(b.date)}
+                            </Typography>
+                          )}
                           {mine ? (
                             <Chip label="Antrian Saya" size="small" color="primary" variant="outlined" />
                           ) : (
@@ -771,7 +781,12 @@ export default function StaffQueuePage() {
                   <Card key={b._id} className="opacity-60">
                     <CardContent className="py-3 flex justify-between items-center">
                       <Box>
-                        <Typography fontWeight={600}>#{b.queueNumber} — {b.customerName}</Typography>
+                        <Typography fontWeight={600}>
+                          #{b.queueNumber}
+                          {formatBookingQueueDate(b.date) ? ` · ${formatBookingQueueDate(b.date)}` : ''}
+                          {' — '}
+                          {b.customerName}
+                        </Typography>
                         {posLines.length > 0 ? (
                           <Box component="div" sx={{ mt: 0.25 }}>
                             {posLines.map((L, i) => (
@@ -1057,10 +1072,13 @@ export default function StaffQueuePage() {
                 <Typography variant="caption" className="text-center block" sx={{ fontFamily: 'inherit' }}> RECEIPT </Typography>
                 <Divider className="my-1" />
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  No  : #{receiptData.booking.queueNumber.toString().padStart(4, '0')}
+                  No : #{receiptData.booking.queueNumber.toString().padStart(4, '0')}
+                  {formatBookingQueueDate(receiptData.booking.date)
+                    ? ` · ${formatBookingQueueDate(receiptData.booking.date)}`
+                    : ''}
                 </Typography>
                 <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  Tgl : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
+                  Tgl bayar : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
                 </Typography>
                 <Divider className="my-1" />
                 {(() => {
