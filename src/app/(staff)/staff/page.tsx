@@ -20,6 +20,7 @@ import PanToolIcon from '@mui/icons-material/PanTool';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import HistoryIcon from '@mui/icons-material/History';
+import BluetoothIcon from '@mui/icons-material/Bluetooth';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { compressImage } from '@/lib/imageUtils';
@@ -40,8 +41,15 @@ import {
   getReceiptServiceLines,
   type UiBooking,
 } from '@/lib/bookingDisplay';
+import {
+  BROWSER_THERMAL_PAPER_WIDTH_MM,
+  buildThermalReceiptEscPos,
+  getBrowserThermalPrintPageCss,
+  openThermalReceiptPrint,
+  sendEscPosToBluetooth,
+} from '@/lib/thermalReceiptPrint';
 
-type Booking = UiBooking & { customerId: string };
+type Booking = UiBooking & { customerId: string; paymentId?: string };
 
 interface ServicePhotoDoc {
   _id: string;
@@ -175,6 +183,7 @@ export default function StaffQueuePage() {
   const [paying, setPaying] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
+  const [reprintBusyId, setReprintBusyId] = useState<string | null>(null);
   const [takingId, setTakingId] = useState<string | null>(null);
   const [isAvailable, setIsAvailable] = useState(true);
   const [togglingAvail, setTogglingAvail] = useState(false);
@@ -192,6 +201,40 @@ export default function StaffQueuePage() {
     () => getTenantUiLabels(user?.tenantType ?? currentTenant?.tenantType),
     [user?.tenantType, currentTenant?.tenantType],
   );
+
+  const fmtRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const showOrigVsPaid = (b: Booking) =>
+    b.status === 'done' && b.paidAmount != null && b.paidAmount !== bookingSubtotalOrLegacy(b);
+
+  const handleReprintNotaBrowser = async (b: Booking) => {
+    if (!b.paymentId) return;
+    setReprintBusyId(b._id);
+    try {
+      const res = await api.get(`/payments/${b.paymentId}/receipt`);
+      openThermalReceiptPrint(res.data, { assigneeLabel: ui.assigneeReceiptLabel, bookingDateIso: b.date });
+    } catch {
+      toast.error('Gagal memuat nota');
+    } finally {
+      setReprintBusyId(null);
+    }
+  };
+
+  const handleReprintNotaBluetooth = async (b: Booking) => {
+    if (!b.paymentId) return;
+    setReprintBusyId(b._id);
+    try {
+      const res = await api.get(`/payments/${b.paymentId}/receipt`);
+      const escPos = buildThermalReceiptEscPos(res.data, {
+        assigneeLabel: ui.assigneeReceiptLabel,
+        bookingDateIso: b.date,
+      });
+      await sendEscPosToBluetooth(escPos);
+    } catch {
+      toast.error('Gagal memuat nota');
+    } finally {
+      setReprintBusyId(null);
+    }
+  };
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -369,52 +412,11 @@ export default function StaffQueuePage() {
   };
 
   const printReceiptBluetooth = async () => {
-    if (!receiptData) { toast.error('Data nota tidak tersedia'); return; }
-    if (!('bluetooth' in navigator)) {
-      toast.error('Browser tidak mendukung Bluetooth.');
+    if (!receiptData) {
+      toast.error('Data nota tidak tersedia');
       return;
     }
-    try {
-      toast.loading('Mencari printer...');
-      type BtDevice = {
-        gatt?: {
-          connect: () => Promise<{
-            getPrimaryService: (uuid: string) => Promise<{
-              getCharacteristic: (uuid: string) => Promise<{
-                writeValue: (data: BufferSource) => Promise<void>;
-              }>;
-            }>;
-          }>;
-        };
-      };
-      const bt = (navigator as Navigator & {
-        bluetooth: { requestDevice: (opts: object) => Promise<BtDevice> };
-      }).bluetooth;
-      const device = await bt.requestDevice({
-        filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
-        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'],
-      });
-      const server = await device.gatt?.connect();
-      const service = await server?.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-      const characteristic = await service?.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-      const text = buildReceipt(receiptData);
-      const encoder = new TextEncoder();
-      const data = encoder.encode(text);
-      const CHUNK = 100;
-      for (let i = 0; i < data.length; i += CHUNK) {
-        await characteristic?.writeValue(data.slice(i, i + CHUNK));
-      }
-      toast.dismiss();
-      toast.success('Nota berhasil dicetak!');
-    } catch (err) {
-      toast.dismiss();
-      const msg = (err as Error).message;
-      if (msg?.includes('cancelled') || msg?.includes('No device')) {
-        toast('Printer tidak dipilih', { icon: '⚠️' });
-      } else {
-        toast.error('Gagal cetak: ' + msg);
-      }
-    }
+    await sendEscPosToBluetooth(buildReceipt(receiptData));
   };
 
   const printReceiptBrowser = () => {
@@ -441,11 +443,7 @@ export default function StaffQueuePage() {
             .join('')}`
         : `<div class="center bold spacer">${esc(bookingServicesLabel(booking))}</div>`;
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0 auto; padding: 4mm; }
-      .center { text-align: center; } .bold { font-weight: bold; } .large { font-size: 16px; }
-      .divider { border-top: 1px dashed #000; margin: 4px 0; } .row { display: flex; justify-content: space-between; } .spacer { margin: 4px 0; }
-      @media print { @page { margin: 0; size: 80mm auto; } }
+${getBrowserThermalPrintPageCss()}
     </style></head><body>
       <div class="center bold large spacer">${esc(shopName)}</div>
       <div class="center spacer"> RECEIPT </div>
@@ -467,7 +465,11 @@ export default function StaffQueuePage() {
       <div class="center">Sampai jumpa lagi 😊</div>
       <div class="center">https://booking.nh-apps.com</div>
     </body></html>`;
-    const w = window.open('', '_blank', 'width=400,height=600');
+    const w = window.open(
+      '',
+      '_blank',
+      `width=${Math.round(BROWSER_THERMAL_PAPER_WIDTH_MM * 3.78) + 40},height=640`,
+    );
     if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { w.print(); }, 300); }
   };
 
@@ -779,44 +781,96 @@ export default function StaffQueuePage() {
                   const posLines = getReceiptServiceLines(b);
                   return (
                   <Card key={b._id} className="opacity-60">
-                    <CardContent className="py-3 flex justify-between items-center">
-                      <Box>
-                        <Typography fontWeight={600}>
-                          #{b.queueNumber}
-                          {formatBookingQueueDate(b.date) ? ` · ${formatBookingQueueDate(b.date)}` : ''}
-                          {' — '}
-                          {b.customerName}
-                        </Typography>
-                        {posLines.length > 0 ? (
-                          <Box component="div" sx={{ mt: 0.25 }}>
-                            {posLines.map((L, i) => (
-                              <Typography key={i} variant="body2" color="text.secondary" component="div">
-                                <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', mr: 0.5 }}>
-                                  {L.qty} x
-                                </Box>
-                                {L.name}
-                                
-                              </Typography>
-                            ))}
-                            {b.staffName && (
-                              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }} component="div">
-                                · {b.staffName}
-                              </Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            {bookingServicesLabel(b)}
-                            {b.staffName && ` · ${b.staffName}`}
+                    <CardContent className="py-3">
+                      <Box className="flex justify-between items-center">
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography fontWeight={600}>
+                            #{b.queueNumber}
+                            {formatBookingQueueDate(b.date) ? ` · ${formatBookingQueueDate(b.date)}` : ''}
+                            {' — '}
+                            {b.customerName}
                           </Typography>
-                        )}
+                          {posLines.length > 0 ? (
+                            <Box component="div" sx={{ mt: 0.25 }}>
+                              {posLines.map((L, i) => (
+                                <Typography key={i} variant="body2" color="text.secondary" component="div">
+                                  <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', mr: 0.5 }}>
+                                    {L.qty} x
+                                  </Box>
+                                  {L.name}
+                                  
+                                </Typography>
+                              ))}
+                              {b.staffName && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }} component="div">
+                                  · {b.staffName}
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              {bookingServicesLabel(b)}
+                              {b.staffName && ` · ${b.staffName}`}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box className="text-right" sx={{ flexShrink: 0, ml: 1 }}>
+                          <CheckCircleIcon color="success" sx={{ display: 'block', ml: 'auto', mb: 0.5 }} />
+                          {showOrigVsPaid(b) ? (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                Tercatat {fmtRp(bookingSubtotalOrLegacy(b))}
+                              </Typography>
+                              <Typography variant="body2" fontWeight={700} color="primary">
+                                Dibayar {fmtRp(b.paidAmount!)}
+                              </Typography>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" fontWeight={500}>
+                              {fmtRp(b.paidAmount ?? bookingSubtotalOrLegacy(b))}
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
-                      <Box className="text-right">
-                        <CheckCircleIcon color="success" />
-                        <Typography variant="body2" fontWeight={500}>
-                          Rp {bookingSubtotalOrLegacy(b).toLocaleString('id-ID')}
-                        </Typography>
-                      </Box>
+                      {b.paymentId && (
+                        <Box
+                          className="flex flex-wrap gap-1"
+                          sx={{ mt: 1.5 }}
+                        >
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={
+                              reprintBusyId === b._id ? (
+                                <CircularProgress size={14} color="inherit" />
+                              ) : (
+                                <PrintIcon fontSize="small" />
+                              )
+                            }
+                            onClick={() => void handleReprintNotaBrowser(b)}
+                            disabled={reprintBusyId === b._id}
+                            sx={{ textTransform: 'none' }}
+                          >
+                            Cetak browser
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={
+                              reprintBusyId === b._id ? (
+                                <CircularProgress size={14} color="inherit" />
+                              ) : (
+                                <BluetoothIcon fontSize="small" />
+                              )
+                            }
+                            onClick={() => void handleReprintNotaBluetooth(b)}
+                            disabled={reprintBusyId === b._id}
+                            sx={{ textTransform: 'none' }}
+                          >
+                            Cetak Bluetooth
+                          </Button>
+                        </Box>
+                      )}
                     </CardContent>
                   </Card>
                 );
