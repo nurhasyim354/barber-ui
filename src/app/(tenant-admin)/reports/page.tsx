@@ -5,6 +5,7 @@ import {
   Box, Card, CardContent, Typography, CircularProgress,
   Avatar, Divider, Chip, Button, TextField,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -166,34 +167,41 @@ export default function ReportsPage() {
         ) : (
           <>
             {/* Summary Card */}
-            <Card className="mb-4 bg-gradient-to-r from-orange-500 to-orange-400">
-              <CardContent>
-                <Typography variant="body2" sx={{ opacity: 0.85 }}>
+            <Card sx={{ mb: 2, overflow: 'hidden' }}>
+              <CardContent
+                sx={(theme) => ({
+                  py: 2.5,
+                  background: `linear-gradient(118deg, ${alpha(theme.palette.primary.dark, 0.96)} 0%, ${theme.palette.primary.main} 52%, ${alpha(theme.palette.primary.light, 0.58)} 100%)`,
+                  color: theme.palette.primary.contrastText,
+                  boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.42)}`,
+                })}
+              >
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
                   Total Pendapatan
                 </Typography>
-                <Typography variant="h5" fontWeight={400}>
+                <Typography variant="h5" fontWeight={600} sx={{ textShadow: '0 1px 2px rgba(0,0,0,0.12)' }}>
                   {fmt(report.summary.totalRevenue)}
                 </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.75, mt: 0.5 }}>
+                <Typography variant="body2" sx={{ opacity: 0.88, mt: 0.5 }}>
                   {report.summary.completedBookings} booking selesai · {report.summary.totalTransactions} transaksi
                 </Typography>
 
 
-                <Box className="flex gap-4">
-                  <Box className="flex items-center gap-1">
-                    <PaymentsIcon sx={{ fontSize: 18, opacity: 0.85 }} />
+                <Box sx={{ display: 'flex', gap: 3, mt: 1.75, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PaymentsIcon sx={{ fontSize: 18, opacity: 0.9 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ opacity: 0.75 }}>Tunai</Typography>
-                      <Typography variant="body2" fontWeight={500} sx={{  }}>
+                      <Typography variant="caption" sx={{ opacity: 0.78 }}>Tunai</Typography>
+                      <Typography variant="body2" fontWeight={600}>
                         {fmt(report.summary.cashTotal)}
                       </Typography>
                     </Box>
                   </Box>
-                  <Box className="flex items-center gap-1">
-                    <QrCodeIcon sx={{ fontSize: 18, opacity: 0.85 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <QrCodeIcon sx={{ fontSize: 18, opacity: 0.9 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ opacity: 0.75 }}>QRIS</Typography>
-                      <Typography variant="body2" fontWeight={500} sx={{ }}>
+                      <Typography variant="caption" sx={{ opacity: 0.78 }}>QRIS</Typography>
+                      <Typography variant="body2" fontWeight={600}>
                         {fmt(report.summary.qrisTotal)}
                       </Typography>
                     </Box>
@@ -203,8 +211,8 @@ export default function ReportsPage() {
             </Card>
 
             {/* Per-staff cards */}
-            <Typography variant="h6" fontWeight={500} className="mb-3 flex items-center gap-2">
-              <EmojiEventsIcon color="warning" />
+            <Typography variant="h6" fontWeight={600} className="mb-3 flex items-center gap-2" color="text.primary">
+              <EmojiEventsIcon sx={{ color: 'warning.main' }} />
               Peringkat Staff
             </Typography>
 
@@ -214,7 +222,18 @@ export default function ReportsPage() {
                   grandTotal > 0 ? Math.round((b.totalRevenue / grandTotal) * 100) : 0;
 
                 return (
-                  <Card key={b.staffId || i} className={i === 0 ? 'border-2 border-yellow-400' : ''}>
+                  <Card
+                    key={b.staffId || i}
+                    sx={(theme) =>
+                      i === 0
+                        ? {
+                            border: '2px solid',
+                            borderColor: 'warning.main',
+                            boxShadow: `0 4px 18px ${alpha(theme.palette.warning.main, 0.22)}, inset 0 1px 0 ${alpha('#ffffff', 0.72)}`,
+                          }
+                        : {}
+                    }
+                  >
                     <CardContent>
                       <Box className="flex items-center gap-3">
                         <Box className="relative">
@@ -248,16 +267,42 @@ export default function ReportsPage() {
                           <Typography variant="body2" color="text.secondary">
                             {b.totalTransactions} transaksi
                           </Typography>
-                          <Chip label={`${revenueShare}%`} size="small" color="default" variant="outlined" />
+                          <Chip
+                            label={`${revenueShare}%`}
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                            sx={{ mt: 0.5 }}
+                          />
                         </Box>
                       </Box>
 
-                      {/* Revenue bar */}
-                      <Box className="mt-3 h-2 rounded-full bg-orange-100 overflow-hidden">
+                      <Box sx={{ mt: 2 }}>
                         <Box
-                          className="h-2 rounded-full bg-orange-500"
-                          sx={{ width: `${revenueShare}%`, transition: 'width 0.6s ease' }}
-                        />
+                          sx={(theme) => ({
+                            height: 10,
+                            borderRadius: 99,
+                            overflow: 'hidden',
+                            backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.1),
+                            border: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`,
+                            boxShadow: `inset 0 2px 4px ${alpha('#000822', theme.palette.mode === 'dark' ? 0.18 : 0.06)}`,
+                          })}
+                        >
+                          <Box
+                            sx={(theme) => ({
+                              height: '100%',
+                              width: `${revenueShare}%`,
+                              minWidth: revenueShare > 0 ? '4%' : 0,
+                              borderRadius: 99,
+                              transition: 'width 0.65s cubic-bezier(0.4, 0, 0.2, 1)',
+                              backgroundImage: `linear-gradient(90deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 42%, ${theme.palette.primary.dark} 100%)`,
+                              boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.45)}, 0 0 14px ${alpha(theme.palette.primary.main, 0.35)}`,
+                            })}
+                          />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                          Bagian dari total pendapatan periode ini
+                        </Typography>
                       </Box>
                     </CardContent>
                   </Card>

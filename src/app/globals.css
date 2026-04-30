@@ -3,30 +3,29 @@
 @tailwind utilities;
 
 /**
- * Radius UI — tombol, kartu, dan Box MUI (IconButton/Fab tidak memakai .MuiButton-root).
+ * Radius & token Aero (Vista-ish)
  */
 :root {
-  --app-radius-button: 2px;
-  --app-radius-card: 2px;
-  --app-radius-box: 2px;
+  --app-radius-button: 8px;
+  --app-radius-card: 10px;
+  --app-radius-box: 8px;
+  --aero-body-gradient: linear-gradient(175deg, #9bc1e8 0%, #beddf7 42%, #d9edfb 72%, #eaf6ff 100%);
 }
 
 html, body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-html .MuiButton-root {
-  border-radius: var(--app-radius-button) !important;
+html .MuiButton-root:not(.MuiIconButton-root) {
+  border-radius: var(--app-radius-button);
 }
 
 html .MuiCard-root {
-  border-radius: var(--app-radius-card) !important;
-}
-
-html .MuiBox-root {
-  border-radius: var(--app-radius-box) !important;
+  border-radius: var(--app-radius-card);
 }
 
 * {

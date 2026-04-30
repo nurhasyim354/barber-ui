@@ -24,27 +24,40 @@ export const tailwindScreens = {
 };
 
 /**
- * Palette default aplikasi (selaras dengan DEFAULT_TENANT_THEME / theme.ts).
- * Warna tenant dinamis tetap dari API; ini untuk tema dasar & Tailwind `brand`.
+ * Palette default — Windows Vista Aero Glass: biru langit, blur kaca,
+ * tepi kilap putih halus (tanpa tema tenant eksplisit).
  */
 export const defaultBrandPalette = {
-  primary: '#8B3A2A',
-  primaryLight: '#B5503D',
-  primaryDark: '#5C2218',
-  secondary: '#2C3A47',
-  secondaryLight: '#3E5268',
-  secondaryDark: '#1A2530',
-  background: '#F0EDE8',
-  paper: '#FFFFFF',
-  divider: '#DDD9D3',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#555555',
-  textDisabled: '#AAAAAA',
-  error: '#C62828',
-  warning: '#E65100',
-  success: '#2E7D32',
-  info: '#1565C0',
+  primary: '#3788D9',
+  primaryLight: '#8FD0FF',
+  primaryDark: '#2563AE',
+  secondary: '#1E4873',
+  secondaryLight: '#2B5F8F',
+  secondaryDark: '#163A59',
+  background: '#BFD8EF',
+  paper: '#F7FBFF',
+  divider: 'rgba(58, 132, 210, 0.28)',
+  textPrimary: '#102A43',
+  textSecondary: '#3E5F7C',
+  textDisabled: '#8AA3B8',
+  error: '#C42B1F',
+  warning: '#CC5500',
+  success: '#1F8438',
+  info: '#2E8FD9',
 } as const;
+
+/** Latar bergaya Aero (gradient besar di body; warna fallback = background palette) */
+export const aeroVistaBodyGradient =
+  'linear-gradient(175deg, #9BC1E8 0%, #BEDDF7 42%, #D9EDFB 72%, #EAF6FF 100%)';
+
+/** Stack font — Vista/Windows pertama */
+export const uiFontStack =
+  '"Segoe UI", "Segoe UI Variable", "Candara", "DejaVu Sans", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif';
+
+export const fontSmoothCss = {
+  WebkitFontSmoothing: 'antialiased' as const,
+  MozOsxFontSmoothing: 'grayscale' as const,
+};
 
 /** Layout halaman — maxWidth mengikuti prop MUI `Container` */
 export const UI_LAYOUT = {

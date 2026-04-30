@@ -69,10 +69,8 @@ function TenantThemeInner({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Reads tenantId from URL search params or the auth store, fetches the
- * tenant's theme, and overrides the MUI ThemeProvider for all children.
- * Falls back silently to the default dark theme when no tenantId is found
- * or the tenant has no custom theme configured.
+ * Membaca tenantId dari URL atau auth, mengambil tema outlet, lalu menimpa ThemeProvider.
+ * Tanpa tenantId: memakai tema dasar aplikasi (Aero glass / biru Vista di root theme).
  */
 export default function TenantThemeProvider({ children }: { children: React.ReactNode }) {
   return (

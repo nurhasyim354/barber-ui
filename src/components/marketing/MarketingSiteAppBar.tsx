@@ -53,7 +53,15 @@ export default function MarketingSiteAppBar({ showBack, backHref, pageHint }: Ma
       position="sticky"
       color="transparent"
       elevation={0}
-      sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
+      sx={{
+        borderBottom: 1,
+        borderColor: 'divider',
+        backdropFilter: 'blur(26px) saturate(170%)',
+        WebkitBackdropFilter: 'blur(26px) saturate(170%)',
+        backgroundImage:
+          'linear-gradient(180deg, rgba(255,255,255,0.58) 0%, rgba(223,239,251,0.52) 100%)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.72)',
+      }}
     >
       <Toolbar sx={{ maxWidth: 1200, mx: 'auto', width: '100%', gap: 0.5, flexWrap: 'nowrap' }}>
         {showBack ? (

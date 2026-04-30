@@ -30,7 +30,7 @@ export default function PageHeader({ title, back, backHref, onBack, right }: Pro
     router.back();
   };
   return (
-    <AppBar position="sticky" color="primary" elevation={0}>
+    <AppBar position="sticky" color="transparent" elevation={0}>
       <Toolbar>
         {back && (
           <IconButton edge="start" color="inherit" onClick={handleBack} aria-label="Kembali">
@@ -40,7 +40,7 @@ export default function PageHeader({ title, back, backHref, onBack, right }: Pro
         <Typography
           variant="h6"
           component="h1"
-          className="flex-1 font-bold"
+          className="flex-1 font-semibold"
           noWrap
           sx={{ minWidth: 0, fontSize: { xs: '1rem', sm: '1.25rem' } }}
         >

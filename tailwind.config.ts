@@ -13,11 +13,11 @@ const config: Config = {
       screens: tailwindScreens,
       colors: {
         brand: {
-          50: '#fff8f0',
-          100: '#ffe8d0',
+          50: '#e9f5ff',
+          100: '#cde9fc',
           500: defaultBrandPalette.primary,
           600: defaultBrandPalette.primaryDark,
-          700: defaultBrandPalette.primaryDark,
+          700: defaultBrandPalette.secondaryDark,
         },
       },
     },
