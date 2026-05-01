@@ -12,7 +12,7 @@ export interface ThermalReceipt {
   queueNumber: number;
   customerName: string;
   staffName: string | null;
-  items: { name: string; qty: number; price: number; subtotal: number }[];
+  items: { name: string; qty: number; price: number; subtotal: number; unit?: string | null }[];
   subtotal: number;
   total: number;
   paymentMethod: string;
@@ -63,7 +63,102 @@ export function getBrowserThermalPrintPageCss(): string {
   `;
 }
 
-// —— ESC/POS (printer thermal Bluetooth, sama urutan dengan alur bayar di POS) ——
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function fmtId(n: number): string {
+  return n.toLocaleString('id-ID');
+}
+
+function fmtThermalQty(q: number): string {
+  return Number(q).toLocaleString('id-ID', { maximumFractionDigits: 4 });
+}
+
+export type ThermalReceiptPrintOpts = {
+  assigneeLabel: string;
+  bookingDateIso?: string | null;
+};
+
+/**
+ * HTML isi `<body>` untuk nota thermal — dipakai cetak browser, `srcDoc` iframe pratinjau, dll.
+ */
+export function buildThermalReceiptBodyInnerHtml(
+  receipt: ThermalReceipt,
+  opts: ThermalReceiptPrintOpts,
+): string {
+  const bq = opts.bookingDateIso && formatBookingQueueDate(opts.bookingDateIso);
+  const bookingDateLine = bq ? `<div>Tgl booking : ${escHtml(bq)}</div>` : '';
+  const itemsHtml =
+    receipt.items.length > 0
+      ? `<div class="bold" style="margin-bottom:4px">Layanan</div>${receipt.items
+          .map(
+            (it) =>
+              `<div style="margin-bottom:6px"><div class="bold">${escHtml(it.name)}</div>` +
+              `<div class="row"><span>Rp ${fmtId(it.price)} x ${fmtThermalQty(it.qty)}${it.unit ? ' ' + escHtml(it.unit) : ''}</span>` +
+              `<span>= Rp ${fmtId(it.subtotal)}</span></div></div>`,
+          )
+          .join('')}`
+      : '';
+  const addrBlock =
+    receipt.storeAddress || receipt.storePhone
+      ? `<div class="center spacer" style="font-size:10px; line-height:1.4">${
+          receipt.storeAddress ? escHtml(receipt.storeAddress) : ''
+        }${receipt.storeAddress && receipt.storePhone ? '<br/>' : ''}${
+          receipt.storePhone ? escHtml(receipt.storePhone) : ''
+        }</div>`
+      : '';
+  const notesBlock = receipt.notes ? `<div>Catatan   : ${escHtml(receipt.notes)}</div>` : '';
+
+  return `
+  <div class="center bold large spacer">${escHtml(receipt.storeName)}</div>
+  ${addrBlock}
+  <div class="center spacer" style="font-size:10px">${escHtml(receipt.receiptNumber)}</div>
+  <div class="center spacer"> RECEIPT </div>
+  <div class="divider"></div>
+  <div>Tgl : ${escHtml(receipt.paidAt)}</div>
+  <div>No  : #${receipt.queueNumber.toString().padStart(4, '0')}</div>
+  ${bookingDateLine}
+  <div class="divider"></div>
+  ${itemsHtml}
+  <div class="divider"></div>
+  <div>Pelanggan : ${escHtml(receipt.customerName)}</div>
+  ${receipt.staffName ? `<div>${escHtml(opts.assigneeLabel)}    : ${escHtml(receipt.staffName)}</div>` : ''}
+  ${receipt.cashierName ? `<div>Kasir     : ${escHtml(receipt.cashierName)}</div>` : ''}
+  ${notesBlock}
+  <div class="divider"></div>
+  <div class="center bold large spacer">TOTAL: Rp ${fmtId(receipt.total)}</div>
+  <div>Metode    : ${escHtml(receipt.paymentMethod)}</div>
+  <div>Dibayar   : Rp ${fmtId(receipt.amountPaid)}</div>
+  <div>Kembalian : Rp ${fmtId(receipt.change)}</div>
+  <div class="divider"></div>
+  <div class="center spacer">${escHtml(receipt.footer)}</div>
+  <div class="spacer"></div>
+  <div class="spacer"></div>
+`.trim();
+}
+
+/** Dokumen HTML lengkap untuk cetak / iframe pratinjau nota thermal. */
+export function buildThermalReceiptPrintHtmlDocument(
+  receipt: ThermalReceipt,
+  opts: ThermalReceiptPrintOpts,
+): string {
+  const inner = buildThermalReceiptBodyInnerHtml(receipt, opts);
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>${getBrowserThermalPrintPageCss()}</style>
+</head>
+<body>${inner}</body>
+</html>`;
+}
+
+// —— ESC/POS (printer thermal Bluetooth) ——
 const ESC = '\x1B';
 const GS = '\x1D';
 const RESET = ESC + '@';
@@ -81,7 +176,7 @@ const LINE_FEED = '\n';
  */
 export function buildThermalReceiptEscPos(
   receipt: ThermalReceipt,
-  opts: { assigneeLabel: string; bookingDateIso?: string | null },
+  opts: ThermalReceiptPrintOpts,
 ): string {
   const divider = '--------------------------------\n';
   const dashes = '- - - - - - - - - - - - - - - -\n';
@@ -92,7 +187,7 @@ export function buildThermalReceiptEscPos(
       itemParts.push(LEFT, `${it.name}\n`);
       itemParts.push(
         LEFT,
-        `  Rp ${formatRpId(it.price)} x ${it.qty} = Rp ${formatRpId(it.subtotal)}\n`,
+        `  Rp ${formatRpId(it.price)} x ${fmtThermalQty(it.qty)}${it.unit ? ' ' + it.unit : ''} = Rp ${formatRpId(it.subtotal)}\n`,
       );
     }
     itemParts.push(divider);
@@ -116,9 +211,7 @@ export function buildThermalReceiptEscPos(
   if (receipt.storeAddress) addrBlock.push(LEFT, `${receipt.storeAddress}\n`);
   if (receipt.storePhone) addrBlock.push(LEFT, `${receipt.storePhone}\n`);
 
-  const changeLine = receipt.change > 0
-    ? `Kembalian : Rp ${receipt.change.toLocaleString('id-ID')}\n`
-    : '';
+  const changeLine = `Kembalian : Rp ${receipt.change.toLocaleString('id-ID')}\n`;
 
   return [
     RESET,
@@ -150,7 +243,7 @@ export function buildThermalReceiptEscPos(
     BOLD_OFF,
     LEFT,
     `Metode    : ${receipt.paymentMethod}\n`,
-    `Bayar     : Rp ${receipt.amountPaid.toLocaleString('id-ID')}\n`,
+    `Dibayar   : Rp ${receipt.amountPaid.toLocaleString('id-ID')}\n`,
     changeLine,
     divider,
     CENTER,
@@ -220,76 +313,8 @@ export async function sendEscPosToBluetooth(text: string): Promise<void> {
 /**
  * Buka jendela cetak untuk kertas thermal **58mm** dari payload nota API.
  */
-export function openThermalReceiptPrint(
-  receipt: ThermalReceipt,
-  opts: { assigneeLabel: string; bookingDateIso?: string | null },
-): void {
-  const esc = (s: string) =>
-    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const fmt = (n: number) => n.toLocaleString('id-ID');
-  const bq = opts.bookingDateIso && formatBookingQueueDate(opts.bookingDateIso);
-  const bookingDateLine = bq ? `<div>Tgl booking : ${esc(bq)}</div>` : '';
-  const itemsHtml =
-    receipt.items.length > 0
-      ? `<div class="bold" style="margin-bottom:4px">Layanan</div>${receipt.items
-          .map(
-            (it) =>
-              `<div style="margin-bottom:6px"><div class="bold">${esc(it.name)}</div>` +
-              `<div class="row"><span>Rp ${fmt(it.price)} x ${it.qty}</span>` +
-              `<span>= Rp ${fmt(it.subtotal)}</span></div></div>`,
-          )
-          .join('')}`
-      : '';
-  const changeLine = receipt.change > 0
-    ? `<div>Kembalian : Rp ${fmt(receipt.change)}</div>`
-    : '';
-  const addrBlock =
-    (receipt.storeAddress || receipt.storePhone)
-      ? `<div class="center spacer" style="font-size:10px; line-height:1.4">${
-        receipt.storeAddress ? esc(receipt.storeAddress) : ''
-      }${receipt.storeAddress && receipt.storePhone ? '<br/>' : ''}${
-        receipt.storePhone ? esc(receipt.storePhone) : ''
-      }</div>`
-      : '';
-  const notesBlock = receipt.notes
-    ? `<div>Catatan   : ${esc(receipt.notes)}</div>`
-    : '';
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-${getBrowserThermalPrintPageCss()}
-  </style>
-</head>
-<body>
-  <div class="center bold large spacer">${esc(receipt.storeName)}</div>
-  ${addrBlock}
-  <div class="center spacer" style="font-size:10px">${esc(receipt.receiptNumber)}</div>
-  <div class="center spacer"> RECEIPT </div>
-  <div class="divider"></div>
-  <div>Tgl : ${esc(receipt.paidAt)}</div>
-  <div>No  : #${receipt.queueNumber.toString().padStart(4, '0')}</div>
-  ${bookingDateLine}
-  <div class="divider"></div>
-  ${itemsHtml}
-  <div class="divider"></div>
-  <div>Pelanggan : ${esc(receipt.customerName)}</div>
-  ${receipt.staffName ? `<div>${esc(opts.assigneeLabel)}    : ${esc(receipt.staffName)}</div>` : ''}
-  ${receipt.cashierName ? `<div>Kasir     : ${esc(receipt.cashierName)}</div>` : ''}
-  ${notesBlock}
-  <div class="divider"></div>
-  <div class="center bold large spacer">TOTAL: Rp ${fmt(receipt.total)}</div>
-  <div>Metode    : ${esc(receipt.paymentMethod)}</div>
-  <div>Bayar     : Rp ${fmt(receipt.amountPaid)}</div>
-  ${changeLine}
-  <div class="divider"></div>
-  <div class="center spacer">${esc(receipt.footer)}</div>
-  <div class="spacer"></div>
-  <div class="spacer"></div>
-</body>
-</html>`;
+export function openThermalReceiptPrint(receipt: ThermalReceipt, opts: ThermalReceiptPrintOpts): void {
+  const html = buildThermalReceiptPrintHtmlDocument(receipt, opts);
 
   const w = window.open(
     '',

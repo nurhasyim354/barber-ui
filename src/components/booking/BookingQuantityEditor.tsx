@@ -1,7 +1,15 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Box, Button, TextField, Typography } from '@mui/material';
+import toast from 'react-hot-toast';
 import type { UiBooking, UiBookingServiceLine } from '@/lib/bookingDisplay';
+import {
+  BOOKING_QTY_DECIMAL_HINT,
+  effectiveBookingLineQty,
+  formatBookingQtyDisplay,
+  parseBookingQuantityInput,
+} from '@/lib/bookingQty';
 
 export type QtyLine = { serviceId: string; quantity: number };
 
@@ -10,7 +18,7 @@ export function buildQtyDraftFromBooking(b: Pick<UiBooking, 'services'>): QtyLin
     .filter((s) => Boolean(s.serviceId))
     .map((s) => ({
       serviceId: s.serviceId as string,
-      quantity: Math.max(1, Math.min(99, Math.floor(s.quantity) || 1)),
+      quantity: effectiveBookingLineQty(s.quantity),
     }));
 }
 
@@ -36,6 +44,12 @@ export function BookingQuantityEditor({
   onChangeQuantity,
   onSave,
 }: Props) {
+  const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setDraftTexts({});
+  }, [booking._id, JSON.stringify(draftLines)]);
+
   if (!show || !booking.services?.length) return null;
   if (booking.status === 'done' || booking.status === 'cancelled') return null;
   if (!draftLines.length) return null;
@@ -51,24 +65,52 @@ export function BookingQuantityEditor({
         borderColor: 'divider',
       }}
     >
-      <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 1 }}>
+      <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 0.25 }}>
         Jumlah per layanan
       </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.35 }}>
+        {BOOKING_QTY_DECIMAL_HINT}
+      </Typography>
       {draftLines.map((line) => {
-        const name =
-          booking.services!.find((s) => (s.serviceId ?? '') === line.serviceId)?.serviceName ?? line.serviceId;
+        const row = booking.services!.find((s) => (s.serviceId ?? '') === line.serviceId);
+        const name = row?.serviceName ?? line.serviceId;
+        const unit = row?.unit;
+        const display =
+          draftTexts[line.serviceId] !== undefined
+            ? draftTexts[line.serviceId]
+            : formatBookingQtyDisplay(line.quantity);
         return (
-          <Box key={line.serviceId} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Box
+            key={line.serviceId}
+            sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1, flexWrap: 'wrap' }}
+          >
             <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap title={name}>
               {name}
+              {unit ? (
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                  ({unit})
+                </Typography>
+              ) : null}
             </Typography>
             <TextField
               size="small"
-              type="number"
               disabled={saving}
-              value={line.quantity}
-              onChange={(e) => onChangeQuantity(line.serviceId, parseInt(e.target.value, 10))}
-              inputProps={{ min: 1, max: 99, style: { width: 64 } }}
+              value={display}
+              onChange={(e) =>
+                setDraftTexts((t) => ({ ...t, [line.serviceId]: e.target.value }))
+              }
+              onBlur={() => {
+                const raw = draftTexts[line.serviceId];
+                if (raw === undefined) return;
+                const p = parseBookingQuantityInput(raw);
+                setDraftTexts(({ [line.serviceId]: _, ...rest }) => rest);
+                if (p != null) {
+                  onChangeQuantity(line.serviceId, p);
+                } else {
+                  toast.error(`Qty tidak valid. ${BOOKING_QTY_DECIMAL_HINT}`);
+                }
+              }}
+              inputProps={{ inputMode: 'decimal', style: { width: 88 } }}
             />
           </Box>
         );

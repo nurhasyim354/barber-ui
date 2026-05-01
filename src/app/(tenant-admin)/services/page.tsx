@@ -31,9 +31,20 @@ interface Service {
   durationMinutes: number;
   isActive: boolean;
   photoUrl?: string | null;
+  stockQty?: number | null;
+  /** Satuan qty opsional (kg, pcs, …). */
+  unit?: string | null;
 }
 
-const defaultForm = { name: '', description: '', price: '', durationMinutes: '30', photoUrl: '' };
+const defaultForm = {
+  name: '',
+  description: '',
+  price: '',
+  durationMinutes: '30',
+  photoUrl: '',
+  stockQty: '' as string,
+  unit: '',
+};
 
 export default function ServicesPage() {
   const { user, isLoading, loadFromStorage, logout } = useAuthStore();
@@ -70,7 +81,7 @@ export default function ServicesPage() {
   }, []);
 
   const openAdd = () => {
-    setForm(defaultForm);
+    setForm({ ...defaultForm });
     setDialog({ open: true, editing: null });
   };
 
@@ -81,6 +92,11 @@ export default function ServicesPage() {
       price: String(svc.price),
       durationMinutes: String(svc.durationMinutes),
       photoUrl: svc.photoUrl || '',
+      stockQty:
+        svc.stockQty != null && Number.isFinite(Number(svc.stockQty))
+          ? String(Math.min(999999, Math.max(0, Math.floor(Number(svc.stockQty)))))
+          : '',
+      unit: svc.unit?.trim() || '',
     });
     setDialog({ open: true, editing: svc });
   };
@@ -105,6 +121,11 @@ export default function ServicesPage() {
     setSaving(true);
     try {
       const photoPayload = form.photoUrl.trim() ? form.photoUrl : null;
+      const stockQtyPayload =
+        form.stockQty.trim() === ''
+          ? null
+          : Math.min(999999, Math.max(0, parseInt(form.stockQty, 10) || 0));
+      const unitPayload = form.unit.trim() === '' ? null : form.unit.trim().slice(0, 24);
       if (dialog.editing) {
         await api.patch(`/services/${dialog.editing._id}`, {
           name: form.name,
@@ -112,6 +133,8 @@ export default function ServicesPage() {
           price: Number(form.price),
           durationMinutes: Number(form.durationMinutes),
           photoUrl: photoPayload,
+          stockQty: stockQtyPayload,
+          unit: unitPayload,
         });
         toast.success('Layanan diupdate');
       } else {
@@ -121,6 +144,8 @@ export default function ServicesPage() {
           price: Number(form.price),
           durationMinutes: Number(form.durationMinutes),
           ...(photoPayload ? { photoUrl: photoPayload } : {}),
+          ...(stockQtyPayload != null ? { stockQty: stockQtyPayload } : {}),
+          ...(unitPayload != null ? { unit: unitPayload } : {}),
         });
         toast.success('Layanan ditambahkan');
       }
@@ -242,6 +267,16 @@ export default function ServicesPage() {
                           className="mt-1"
                         >
                           Rp {svc.price.toLocaleString('id-ID')} · {svc.durationMinutes} menit
+                          {svc.unit ? (
+                            <Typography component="span" variant="caption" display="block" color="text.secondary">
+                              Satuan: {svc.unit}
+                            </Typography>
+                          ) : null}
+                          {typeof svc.stockQty === 'number' && (
+                            <Typography component="span" variant="caption" display="block" color="text.secondary">
+                              Stok terlacak: {svc.stockQty}
+                            </Typography>
+                          )}
                         </Typography>
                       </Box>
                       <Box className="flex items-center gap-1">
@@ -372,6 +407,23 @@ export default function ServicesPage() {
             value={form.durationMinutes}
             onChange={(e) => setForm({ ...form, durationMinutes: e.target.value })}
             inputProps={{ min: 5, step: 5 }}
+          />
+          <TextField
+            fullWidth
+            label="Satuan (opsional)"
+            placeholder="Mis. kg, pcs, bks"
+            value={form.unit}
+            onChange={(e) => setForm({ ...form, unit: e.target.value.slice(0, 24) })}
+            helperText="Tampil di booking & nota bila diisi. Qty bisa desimal (titik atau koma)."
+          />
+          <TextField
+            fullWidth
+            label="Stok (opsional)"
+            type="number"
+            value={form.stockQty}
+            onChange={(e) => setForm({ ...form, stockQty: e.target.value.replace(/\D/g, '') })}
+            inputProps={{ min: 0, max: 999999 }}
+            helperText="Kosongkan jika stok tidak dilacak. Saat dibayar, stok berkurang sesuai qty booking."
           />
         </DialogContent>
         <DialogActions className="p-4">

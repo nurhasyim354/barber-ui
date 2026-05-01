@@ -1,9 +1,13 @@
+import { effectiveBookingLineQty } from './bookingQty';
+
 /** Bentuk layanan di respons API booking hari ini / riwayat (multi-layanan). */
 export type UiBookingServiceLine = {
   serviceId?: string;
   serviceName: string;
   unitPrice: number;
   quantity: number;
+  /** Satuan snapshot dari katalog (kg, pcs, …); opsional. */
+  unit?: string | null;
   lineSubtotal?: number;
 };
 
@@ -67,6 +71,7 @@ export type ReceiptServiceLine = {
   unitPrice: number;
   qty: number;
   subtotal: number;
+  unit?: string | null;
 };
 
 /**
@@ -77,12 +82,18 @@ export function getReceiptServiceLines(
 ): ReceiptServiceLine[] {
   if (b.services && b.services.length > 0) {
     return b.services.map((line) => {
-      const q = Math.max(1, Math.floor(line.quantity || 1));
+      const q = effectiveBookingLineQty(line.quantity);
       const sub =
         line.lineSubtotal != null && Number.isFinite(line.lineSubtotal)
           ? line.lineSubtotal
           : Math.round(line.unitPrice * q);
-      return { name: line.serviceName, unitPrice: line.unitPrice, qty: q, subtotal: sub };
+      return {
+        name: line.serviceName,
+        unitPrice: line.unitPrice,
+        qty: q,
+        subtotal: sub,
+        ...(line.unit != null && String(line.unit).trim() !== '' ? { unit: line.unit } : {}),
+      };
     });
   }
   const tot = bookingSubtotalOrLegacy(b);

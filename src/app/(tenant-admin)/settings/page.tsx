@@ -56,6 +56,8 @@ interface TenantSettings {
   dailyBookingQuota?: number | null;
   /** Halaman /booking: tampil field qty per layanan */
   showBookingQty?: boolean | null;
+  /** Izinkan akun staff (`staff`) membuat booking lewat API */
+  allowStaffCreateBooking?: boolean | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -88,6 +90,7 @@ export default function SettingsPage() {
   /** string kosong = tidak dibatasi */
   const [dailyBookingQuota, setDailyBookingQuota] = useState('');
   const [showBookingQty, setShowBookingQty] = useState(false);
+  const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -123,6 +126,7 @@ export default function SettingsPage() {
       if (dq == null || dq <= 0 || Number.isNaN(Number(dq))) setDailyBookingQuota('');
       else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
       setShowBookingQty(t.showBookingQty === true);
+      setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -167,6 +171,7 @@ export default function SettingsPage() {
         customerAppointmentReminderMinutes,
         dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
         showBookingQty,
+        allowStaffCreateBooking,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -388,6 +393,23 @@ export default function SettingsPage() {
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                 Jika dimatikan, setiap layanan dianggap qty 1; pelanggan tidak melihat field kuantitas.
               </Typography>
+              <FormControlLabel
+                sx={{ mt: 2, display: 'flex', alignItems: 'flex-start' }}
+                control={(
+                  <Switch
+                    checked={allowStaffCreateBooking}
+                    onChange={(_, v) => setAllowStaffCreateBooking(v)}
+                  />
+                )}
+                label={(
+                  <Box>
+                    <Typography variant="body2">Izinkan staff membuat booking</Typography>
+                    <Typography variant="caption" color="text.secondary" component="span" display="block">
+                      Jika dimatikan, akun staff hanya mengelola antrian; pembuatan booking dari aplikasi pelanggan tidak berubah.
+                    </Typography>
+                  </Box>
+                )}
+              />
             </CardContent>
           </Card>
 

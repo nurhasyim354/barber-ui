@@ -21,6 +21,7 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import HistoryIcon from '@mui/icons-material/History';
 import BluetoothIcon from '@mui/icons-material/Bluetooth';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { compressImage } from '@/lib/imageUtils';
@@ -35,19 +36,23 @@ import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import { BookingQuantityEditor, buildQtyDraftFromBooking } from '@/components/booking/BookingQuantityEditor';
 import {
+  BOOKING_QTY_MIN,
+  clampBookingQtyParsedOrFallback,
+  formatBookingQtyDisplay,
+} from '@/lib/bookingQty';
+import {
   bookingServicesLabel,
   bookingSubtotalOrLegacy,
   formatBookingQueueDate,
-  formatRpId,
   getReceiptServiceLines,
   type UiBooking,
 } from '@/lib/bookingDisplay';
 import {
-  BROWSER_THERMAL_PAPER_WIDTH_MM,
   buildThermalReceiptEscPos,
-  getBrowserThermalPrintPageCss,
+  buildThermalReceiptPrintHtmlDocument,
   openThermalReceiptPrint,
   sendEscPosToBluetooth,
+  type ThermalReceipt,
 } from '@/lib/thermalReceiptPrint';
 
 type Booking = UiBooking & { customerId: string; paymentId?: string };
@@ -64,20 +69,7 @@ interface Tenant {
   name: string;
   address?: string;
   tenantType?: string;
-}
-
-interface Payment {
-  _id: string;
-  method: string;
-  amount: number;
-  status: string;
-  paidAt: string;
-}
-
-interface ReceiptData {
-  booking: Booking;
-  payment: Payment;
-  shopName: string;
+  allowStaffCreateBooking?: boolean;
 }
 
 const statusColor: Record<string, 'warning' | 'info' | 'success' | 'error'> = {
@@ -93,77 +85,6 @@ const statusLabel: Record<string, string> = {
   done: 'Selesai',
   cancelled: 'Batal',
 };
-
-const ESC = '\x1B';
-const GS = '\x1D';
-const RESET = ESC + '@';
-const CENTER = ESC + 'a\x01';
-const LEFT = ESC + 'a\x00';
-const BOLD_ON = ESC + 'E\x01';
-const BOLD_OFF = ESC + 'E\x00';
-const DOUBLE_HEIGHT = GS + '!\x01';
-const NORMAL_SIZE = GS + '!\x00';
-const CUT = GS + 'V\x41\x00';
-const LINE_FEED = '\n';
-
-function buildReceipt(data: ReceiptData): string {
-  const { booking, payment, shopName } = data;
-  const date = new Date(payment.paidAt).toLocaleString('id-ID', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-  const divider = '--------------------------------\n';
-  const dashes = '- - - - - - - - - - - - - - - -\n';
-  const recLines = getReceiptServiceLines(booking);
-  const itemParts: string[] = [];
-  if (recLines.length > 0) {
-    itemParts.push(LEFT, BOLD_ON, 'Layanan\n', BOLD_OFF, divider);
-    for (const L of recLines) {
-      itemParts.push(LEFT, `${L.name}\n`);
-      itemParts.push(
-        LEFT,
-        `  Rp ${formatRpId(L.unitPrice)} x ${L.qty} = Rp ${formatRpId(L.subtotal)}\n`,
-      );
-    }
-    itemParts.push(divider);
-  } else {
-    itemParts.push(
-      CENTER,
-      BOLD_ON,
-      bookingServicesLabel(booking) + LINE_FEED,
-      BOLD_OFF,
-      LEFT,
-      divider,
-    );
-  }
-
-  return [
-    RESET, CENTER, BOLD_ON, DOUBLE_HEIGHT,
-    shopName + LINE_FEED,
-    NORMAL_SIZE, BOLD_OFF,
-    ' RECEIPT \n', dashes,
-    LEFT,
-    `Tgl : ${date}\n`,
-    `No  : #${booking.queueNumber.toString().padStart(4, '0')}\n`,
-    formatBookingQueueDate(booking.date)
-      ? `Tgl booking : ${formatBookingQueueDate(booking.date)}\n`
-      : '',
-    divider,
-    ...itemParts,
-    `Pelanggan : ${booking.customerName}\n`,
-    booking.staffName ? `Staff    : ${booking.staffName}\n` : '',
-    booking.notes ? `Catatan   : ${booking.notes}\n` : '',
-    divider, CENTER, BOLD_ON,
-    `TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}\n`,
-    BOLD_OFF, LEFT,
-    `Metode    : ${payment.method === 'cash' ? 'Tunai' : 'QRIS'}\n`,
-    divider, CENTER,
-    'Terima kasih sudah berkunjung!\n',
-    'Sampai jumpa lagi\n',
-    'https://booking.nh-apps.com\n',
-    LINE_FEED, LINE_FEED, LINE_FEED, CUT,
-  ].join('');
-}
 
 export default function StaffQueuePage() {
   const { user, isLoading, loadFromStorage, setAuth, token } = useAuthStore();
@@ -181,11 +102,13 @@ export default function StaffQueuePage() {
   const [qtyDraftByBooking, setQtyDraftByBooking] = useState<Record<string, { serviceId: string; quantity: number }[]>>({});
   const [savingQtyBookingId, setSavingQtyBookingId] = useState<string | null>(null);
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
-  const [payAmountInput, setPayAmountInput] = useState('');
+  const [payInvoiceInput, setPayInvoiceInput] = useState('');
+  const [payCashTenderedInput, setPayCashTenderedInput] = useState('');
   const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
   const [qrisErrorBanner, setQrisErrorBanner] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
-  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [thermalReceipt, setThermalReceipt] = useState<ThermalReceipt | null>(null);
+  const [receiptBookingDateIso, setReceiptBookingDateIso] = useState<string | null>(null);
   const [receiptDialog, setReceiptDialog] = useState(false);
   const [reprintBusyId, setReprintBusyId] = useState<string | null>(null);
   const [takingId, setTakingId] = useState<string | null>(null);
@@ -331,7 +254,7 @@ export default function StaffQueuePage() {
   const draftQtyLines = (b: Booking) => qtyDraftByBooking[b._id] ?? buildQtyDraftFromBooking(b);
 
   const setQtyLine = (bookingId: string, serviceId: string, raw: number) => {
-    const q = Math.max(1, Math.min(99, Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1));
+    const q = clampBookingQtyParsedOrFallback(raw, BOOKING_QTY_MIN);
     setQtyDraftByBooking((prev) => {
       const row = bookings.find((x) => x._id === bookingId);
       if (!row?.services?.length) return prev;
@@ -403,33 +326,50 @@ export default function StaffQueuePage() {
     lastBookingRef.current = b;
     setPayStep('select');
     setQrisErrorBanner(null);
-    setPayAmountInput(String(bookingSubtotalOrLegacy(b)));
+    setPayInvoiceInput(String(bookingSubtotalOrLegacy(b)));
+    setPayCashTenderedInput(String(bookingSubtotalOrLegacy(b)));
     setPayDialog({ open: true, booking: b });
   };
+
+  const receiptPrintOpts = { assigneeLabel: ui.assigneeReceiptLabel, bookingDateIso: receiptBookingDateIso };
 
   const handlePayment = async (method: 'cash' | 'qris') => {
     const booking = lastBookingRef.current;
     if (!booking) return;
-    const amount = parseRupiahInput(payAmountInput);
-    if (amount == null) {
-      toast.error('Masukkan jumlah pembayaran yang valid (minimal Rp 1)');
+    const invoiceAmount = parseRupiahInput(payInvoiceInput);
+    if (invoiceAmount == null) {
+      toast.error('Masukkan nominal transaksi yang valid (minimal Rp 1)');
       return;
+    }
+    let cashTendered: number | undefined;
+    if (method === 'cash') {
+      const t = parseRupiahInput(payCashTenderedInput);
+      if (t == null) {
+        toast.error('Masukkan uang tunai diterima yang valid');
+        return;
+      }
+      if (t < invoiceAmount) {
+        toast.error('Uang tunai diterima tidak boleh kurang dari nominal transaksi');
+        return;
+      }
+      cashTendered = t;
     }
     setPaying(true);
     try {
-      const res = await api.post('/payments', { bookingId: booking._id, method, amount });
-      const payment: Payment = res.data;
+      const res = await api.post('/payments', {
+        bookingId: booking._id,
+        method,
+        amount: invoiceAmount,
+        ...(method === 'cash' ? { cashTendered } : {}),
+      });
+      const receiptRes = await api.get(`/payments/${res.data._id}/receipt`);
+      setThermalReceipt(receiptRes.data);
+      setReceiptBookingDateIso(booking.date ?? null);
 
-      let shopName = currentTenant?.name || 'Outlet';
-      try {
-        const tenantRes = await api.get(`/tenants/${user!.tenantId}`);
-        shopName = tenantRes.data?.name || shopName;
-      } catch { /* use default */ }
-
-      setReceiptData({ booking, payment, shopName });
       toast.success('Pembayaran berhasil!');
       setPayDialog({ open: false, booking: null });
-      setPayAmountInput('');
+      setPayInvoiceInput('');
+      setPayCashTenderedInput('');
       setReceiptDialog(true);
       setQrisErrorBanner(null);
       loadBookings();
@@ -451,65 +391,16 @@ export default function StaffQueuePage() {
   };
 
   const printReceiptBluetooth = async () => {
-    if (!receiptData) {
+    if (!thermalReceipt) {
       toast.error('Data nota tidak tersedia');
       return;
     }
-    await sendEscPosToBluetooth(buildReceipt(receiptData));
+    await sendEscPosToBluetooth(buildThermalReceiptEscPos(thermalReceipt, receiptPrintOpts));
   };
 
   const printReceiptBrowser = () => {
-    if (!receiptData) return;
-    const { booking, payment, shopName } = receiptData;
-    const assigneeLabel = ui.assigneeReceiptLabel;
-    const date = new Date(payment.paidAt).toLocaleString('id-ID', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
-    const esc = (s: string) =>
-      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const recLines = getReceiptServiceLines(booking);
-    const itemsHtml =
-      recLines.length > 0
-        ? `<div class="bold" style="margin-bottom:4px">Layanan</div>${recLines
-            .map(
-              (L) =>
-                `<div style="margin-bottom:6px"><div class="bold">${esc(L.name)}</div>` +
-                `<div class="row" style="display:flex;justify-content:space-between;gap:8px">` +
-                `<span>Rp ${formatRpId(L.unitPrice)} x ${L.qty}</span>` +
-                `<span>= Rp ${formatRpId(L.subtotal)}</span></div></div>`,
-            )
-            .join('')}`
-        : `<div class="center bold spacer">${esc(bookingServicesLabel(booking))}</div>`;
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-${getBrowserThermalPrintPageCss()}
-    </style></head><body>
-      <div class="center bold large spacer">${esc(shopName)}</div>
-      <div class="center spacer"> RECEIPT </div>
-      <div class="divider"></div>
-      <div>Tgl : ${esc(date)}</div>
-      <div>No  : #${booking.queueNumber.toString().padStart(4, '0')}</div>
-      ${formatBookingQueueDate(booking.date) ? `<div>Tgl booking : ${esc(formatBookingQueueDate(booking.date))}</div>` : ''}
-      <div class="divider"></div>
-      ${itemsHtml}
-      <div class="divider"></div>
-      <div>Pelanggan : ${esc(booking.customerName)}</div>
-      ${booking.staffName ? `<div>${esc(assigneeLabel)}    : ${esc(booking.staffName)}</div>` : ''}
-      ${booking.notes ? `<div>Catatan   : ${esc(booking.notes)}</div>` : ''}
-      <div class="divider"></div>
-      <div class="center bold large spacer">TOTAL: Rp ${payment.amount.toLocaleString('id-ID')}</div>
-      <div>Metode    : ${payment.method === 'cash' ? 'Tunai' : 'QRIS'}</div>
-      <div class="divider"></div>
-      <div class="center spacer">Terima kasih sudah berkunjung!</div>
-      <div class="center">Sampai jumpa lagi 😊</div>
-      <div class="center">https://booking.nh-apps.com</div>
-    </body></html>`;
-    const w = window.open(
-      '',
-      '_blank',
-      `width=${Math.round(BROWSER_THERMAL_PAPER_WIDTH_MM * 3.78) + 40},height=640`,
-    );
-    if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { w.print(); }, 300); }
+    if (!thermalReceipt) return;
+    openThermalReceiptPrint(thermalReceipt, receiptPrintOpts);
   };
 
   const handleSelectPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -563,6 +454,13 @@ ${getBrowserThermalPrintPageCss()}
         title={`Antrian — ${currentTenant?.name || 'Pilih Salon'}`}
         right={
           <Box className="flex items-center gap-1">
+            {currentTenant?.allowStaffCreateBooking === true && (
+              <Tooltip title="Booking baru">
+                <IconButton color="inherit" size="small" onClick={() => router.push('/staff/booking')}>
+                  <AddCircleOutlineIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <IconButton color="inherit" size="small" onClick={() => { loadTenants(); setTenantDialogOpen(true); }}>
               <StorefrontIcon />
             </IconButton>
@@ -716,7 +614,8 @@ ${getBrowserThermalPrintPageCss()}
                                 sx={{ lineHeight: 1.5 }}
                               >
                                 <Box component="span" sx={{ fontWeight: 700, color: 'primary.main', mr: 0.75 }}>
-                                  {L.qty} x
+                                  {formatBookingQtyDisplay(L.qty)}
+                                {L.unit ? ` ${L.unit}` : ''} ×
                                 </Box>
                                 {L.name}
                                 
@@ -843,7 +742,8 @@ ${getBrowserThermalPrintPageCss()}
                               {posLines.map((L, i) => (
                                 <Typography key={i} variant="body2" color="text.secondary" component="div">
                                   <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', mr: 0.5 }}>
-                                    {L.qty} x
+                                    {formatBookingQtyDisplay(L.qty)}
+                                {L.unit ? ` ${L.unit}` : ''} ×
                                   </Box>
                                   {L.name}
                                   
@@ -969,7 +869,8 @@ ${getBrowserThermalPrintPageCss()}
         open={payDialog.open}
         onClose={() => {
           setPayDialog({ open: false, booking: null });
-          setPayAmountInput('');
+          setPayInvoiceInput('');
+          setPayCashTenderedInput('');
           setPayStep('select');
           setQrisErrorBanner(null);
         }}
@@ -984,16 +885,37 @@ ${getBrowserThermalPrintPageCss()}
                 <Box className="text-center mb-4">
                   <TextField
                     fullWidth
-                    label="Jumlah bayar (Rp)"
-                    value={payAmountInput}
-                    onChange={(e) => setPayAmountInput(e.target.value.replace(/\D/g, ''))}
+                    label="Nominal transaksi (Rp)"
+                    value={payInvoiceInput}
+                    onChange={(e) => setPayInvoiceInput(e.target.value.replace(/\D/g, ''))}
                     inputProps={{ inputMode: 'numeric' }}
                     helperText={
-                      `Harga layanan: Rp ${bookingSubtotalOrLegacy(payDialog.booking).toLocaleString('id-ID')}`
+                      `Subtotal layanan: Rp ${bookingSubtotalOrLegacy(payDialog.booking).toLocaleString('id-ID')}`
                     }
                     sx={{ mb: 1.5, mt: 2 }}
                     autoFocus
                   />
+                  <TextField
+                    fullWidth
+                    label="Uang tunai diterima (Rp)"
+                    value={payCashTenderedInput}
+                    onChange={(e) => setPayCashTenderedInput(e.target.value.replace(/\D/g, ''))}
+                    inputProps={{ inputMode: 'numeric' }}
+                    helperText="Untuk QRIS tidak dipakai; untuk tunai harus ≥ nominal transaksi"
+                    sx={{ mb: 1 }}
+                  />
+                  {(() => {
+                    const inv = parseRupiahInput(payInvoiceInput);
+                    const cash = parseRupiahInput(payCashTenderedInput);
+                    if (inv != null && cash != null && cash >= inv) {
+                      return (
+                        <Typography variant="body2" color="primary" fontWeight={600} sx={{ mb: 1 }}>
+                          Kembalian: Rp {(cash - inv).toLocaleString('id-ID')}
+                        </Typography>
+                      );
+                    }
+                    return null;
+                  })()}
                   <Typography color="text.secondary" variant="body2">
                     {payDialog.booking.customerName} — {bookingServicesLabel(payDialog.booking)}
                   </Typography>
@@ -1038,7 +960,8 @@ ${getBrowserThermalPrintPageCss()}
               <Button
                 onClick={() => {
                   setPayDialog({ open: false, booking: null });
-                  setPayAmountInput('');
+                  setPayInvoiceInput('');
+                  setPayCashTenderedInput('');
                   setPayStep('select');
                   setQrisErrorBanner(null);
                 }}
@@ -1104,7 +1027,7 @@ ${getBrowserThermalPrintPageCss()}
                     : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
                 </Typography>
                 <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
-                  Rp {(parseRupiahInput(payAmountInput) ?? (payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0) ?? 0).toLocaleString('id-ID')}
+                  Rp {(parseRupiahInput(payInvoiceInput) ?? (payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0) ?? 0).toLocaleString('id-ID')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {payDialog.booking?.customerName} — {payDialog.booking ? bookingServicesLabel(payDialog.booking) : '—'}
@@ -1159,80 +1082,23 @@ ${getBrowserThermalPrintPageCss()}
           <br />Pembayaran Berhasil!
         </DialogTitle>
         <DialogContent>
-          {receiptData && (
+          {thermalReceipt && (
             <Box className="bg-gray-50 rounded-xl p-4">
-              <Box className="font-mono text-xs bg-white border rounded-lg p-3 mb-4" sx={{ fontFamily: 'Courier New, monospace', lineHeight: 1.6 }}>
-                <Typography variant="body2" className="text-center font-bold" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: 13 }}>
-                  {receiptData.shopName}
-                </Typography>
-                <Typography variant="caption" className="text-center block" sx={{ fontFamily: 'inherit' }}> RECEIPT </Typography>
-                <Divider className="my-1" />
-                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  No : #{receiptData.booking.queueNumber.toString().padStart(4, '0')}
-                  {formatBookingQueueDate(receiptData.booking.date)
-                    ? ` · ${formatBookingQueueDate(receiptData.booking.date)}`
-                    : ''}
-                </Typography>
-                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  Tgl bayar : {new Date(receiptData.payment.paidAt).toLocaleString('id-ID')}
-                </Typography>
-                <Divider className="my-1" />
-                {(() => {
-                  const lines = getReceiptServiceLines(receiptData.booking);
-                  if (lines.length > 0) {
-                    return (
-                      <>
-                        <Typography
-                          variant="caption"
-                          sx={{ fontFamily: 'inherit', fontWeight: 700, display: 'block', mb: 0.75 }}
-                        >
-                          Layanan
-                        </Typography>
-                        {lines.map((L, i) => (
-                          <Box key={i} sx={{ mb: 1.25 }}>
-                            <Typography
-                              variant="caption"
-                              sx={{ fontFamily: 'inherit', fontWeight: 600, display: 'block' }}
-                            >
-                              {L.name}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ fontFamily: 'inherit', display: 'block', lineHeight: 1.45 }}
-                            >
-                              Rp {formatRpId(L.unitPrice)} x {L.qty} = Rp {formatRpId(L.subtotal)}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </>
-                    );
-                  }
-                  return (
-                    <Typography variant="body2" className="text-center font-bold block" sx={{ fontFamily: 'inherit', fontWeight: 700 }}>
-                      {bookingServicesLabel(receiptData.booking)}
-                    </Typography>
-                  );
-                })()}
-                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  Pelanggan: {receiptData.booking.customerName}
-                </Typography>
-                {receiptData.booking.staffName && (
-                  <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                    {ui.assigneeReceiptLabel}: {receiptData.booking.staffName}
-                  </Typography>
-                )}
-                <Divider className="my-1" />
-                <Typography variant="body2" className="text-center font-bold block" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: 13 }}>
-                  TOTAL: Rp {receiptData.payment.amount.toLocaleString('id-ID')}
-                </Typography>
-                <Typography variant="caption" sx={{ fontFamily: 'inherit' }} className="block">
-                  Metode: {receiptData.payment.method === 'cash' ? 'Tunai' : 'QRIS'}
-                </Typography>
-                <Divider className="my-1" />
-                <Typography variant="caption" className="text-center block" sx={{ fontFamily: 'inherit' }}>
-                  Terima kasih! 😊
-                </Typography>
+              <Box
+                sx={{
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  mb: 2,
+                  bgcolor: 'white',
+                }}
+              >
+                <iframe
+                  title="Pratinjau nota"
+                  srcDoc={buildThermalReceiptPrintHtmlDocument(thermalReceipt, receiptPrintOpts)}
+                  style={{ width: '100%', height: 380, border: 'none', display: 'block' }}
+                />
               </Box>
               <Box className="flex justify-center gap-1">
                 <Tooltip title="Cetak Bluetooth">
@@ -1290,7 +1156,7 @@ ${getBrowserThermalPrintPageCss()}
                 <Button
                   fullWidth variant="contained" color="success" size="small"
                   startIcon={uploadingPhotos ? <CircularProgress size={14} color="inherit" /> : <CameraAltIcon />}
-                  onClick={() => receiptData && handleUploadPhotos(receiptData.booking._id)}
+                  onClick={() => lastBookingRef.current && handleUploadPhotos(lastBookingRef.current._id)}
                   disabled={uploadingPhotos}
                 >
                   {uploadingPhotos ? 'Menyimpan...' : `Simpan ${uploadPhotos.length} Foto`}
@@ -1300,7 +1166,18 @@ ${getBrowserThermalPrintPageCss()}
           )}
         </DialogContent>
         <DialogActions className="p-4">
-          <Button fullWidth variant="contained" onClick={() => { setReceiptDialog(false); setUploadPhotos([]); }}>Selesai</Button>
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => {
+              setReceiptDialog(false);
+              setThermalReceipt(null);
+              setReceiptBookingDateIso(null);
+              setUploadPhotos([]);
+            }}
+          >
+            Selesai
+          </Button>
         </DialogActions>
       </Dialog>
 

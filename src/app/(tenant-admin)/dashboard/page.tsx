@@ -5,6 +5,7 @@ import {
   Box, Card, CardContent, Typography, CircularProgress,
   Grid, IconButton, Divider, Button,
   Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText,
+  Alert, ListItem, ListItemIcon,
 } from '@mui/material';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PeopleIcon from '@mui/icons-material/People';
@@ -17,6 +18,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import InventoryIcon from '@mui/icons-material/Inventory2';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -32,6 +34,9 @@ interface RevenueSummary {
   qrisTotal: number;
   completedBookings: number;
 }
+
+/** Stok terlacak di katalog; tampil peringatan di dashboard admin outlet */
+const LOW_STOCK_THRESHOLD = 5;
 
 interface StatCardProps {
   title: string;
@@ -66,6 +71,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lowStockServices, setLowStockServices] = useState<{ _id: string; name: string; stockQty: number }[]>([]);
   const [adminOutlets, setAdminOutlets] = useState<{ _id: string; name: string }[]>([]);
   const [outletDialogOpen, setOutletDialogOpen] = useState(false);
   const [switchingOutlet, setSwitchingOutlet] = useState(false);
@@ -78,14 +84,48 @@ export default function DashboardPage() {
     } catch { /* abaikan */ }
   }, []);
 
+  const loadRevenue = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/revenue/today');
+      setSummary(res.data);
+    } catch {
+      toast.error('Gagal memuat data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadLowStockServices = useCallback(async () => {
+    try {
+      const res = await api.get('/services');
+      const rows = (
+        res.data as { _id: string; name: string; isActive: boolean; stockQty?: number | null }[]
+      )
+        .filter(
+          (s) =>
+            s.isActive &&
+            typeof s.stockQty === 'number' &&
+            s.stockQty <= LOW_STOCK_THRESHOLD,
+        )
+        .map((s) => ({ _id: s._id, name: s.name, stockQty: s.stockQty as number }));
+      setLowStockServices(rows);
+    } catch {
+      setLowStockServices([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
     if (user.role === 'customer') { router.replace('/booking'); return; }
     if (user.role === 'super_admin') { router.replace('/admin/tenants'); return; }
     loadRevenue();
-    if (user.role === 'tenant_admin') void loadAdminOutlets();
-  }, [user, isLoading, loadAdminOutlets]);
+    if (user.role === 'tenant_admin') {
+      void loadAdminOutlets();
+      void loadLowStockServices();
+    }
+  }, [user, isLoading, loadAdminOutlets, loadLowStockServices, loadRevenue]);
 
   const handleSwitchAdminOutlet = async (tenantId: string) => {
     if (!token) return;
@@ -101,6 +141,7 @@ export default function DashboardPage() {
       if (name) toast.success(`Outlet aktif: ${name}`);
       setOutletDialogOpen(false);
       void loadRevenue();
+      void loadLowStockServices();
       void loadAdminOutlets();
     } catch {
       toast.error('Gagal pindah outlet');
@@ -108,18 +149,6 @@ export default function DashboardPage() {
       setSwitchingOutlet(false);
     }
   };
-
-  const loadRevenue = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/revenue/today');
-      setSummary(res.data);
-    } catch {
-      toast.error('Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
   const today = new Date().toLocaleDateString('id-ID', {
@@ -143,7 +172,13 @@ export default function DashboardPage() {
             <IconButton color="inherit" onClick={() => router.push('/settings')}>
               <SettingsIcon />
             </IconButton>
-            <IconButton color="inherit" onClick={loadRevenue}>
+            <IconButton
+              color="inherit"
+              onClick={() => {
+                void loadRevenue();
+                if (user?.role === 'tenant_admin') void loadLowStockServices();
+              }}
+            >
               <RefreshIcon />
             </IconButton>
             <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>
@@ -157,6 +192,31 @@ export default function DashboardPage() {
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>
       ) : (
         <PageContainer>
+          {lowStockServices.length > 0 && (
+            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }} icon={<InventoryIcon />}>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                Menu / barang akan habis (stok ≤ {LOW_STOCK_THRESHOLD})
+              </Typography>
+              <List dense disablePadding sx={{ pt: 0.5 }}>
+                {lowStockServices.map((s) => (
+                  <ListItem key={s._id} disablePadding sx={{ py: 0.25 }}>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <InventoryIcon fontSize="small" color="warning" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={s.name}
+                      secondary={`Sisa stok: ${s.stockQty}`}
+                      primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+              <Button size="small" variant="outlined" color="inherit" sx={{ mt: 1 }} onClick={() => router.push('/services')}>
+                Kelola layanan
+              </Button>
+            </Alert>
+          )}
+
           <Card
             sx={{
               mb: 3,

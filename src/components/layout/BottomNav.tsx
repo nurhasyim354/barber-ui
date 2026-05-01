@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import BottomNavigation from '@mui/material/BottomNavigation';
 import BottomNavigationAction from '@mui/material/BottomNavigationAction';
@@ -11,8 +12,10 @@ import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import PersonIcon from '@mui/icons-material/Person';
 import ListAltIcon from '@mui/icons-material/ListAlt';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { useAuthStore } from '@/store/authStore';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import api from '@/lib/api';
 
 export function CustomerBottomNav({ tenantType }: { tenantType?: string | null }) {
   const pathname = usePathname();
@@ -54,28 +57,71 @@ export function StaffBottomNav() {
   const { logout, user } = useAuthStore();
   const L = getTenantUiLabels(user?.tenantType);
 
-  const routes = ['/staff', '/staff/history'];
-  const value = routes.findIndex((r) => pathname === r || pathname.startsWith(r + '/'));
+  const [mayCreateBooking, setMayCreateBooking] = useState(false);
+
+  useEffect(() => {
+    if (user?.role !== 'staff' || !user.tenantId) {
+      setMayCreateBooking(false);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(`/tenants/${user.tenantId}`)
+      .then((r) => {
+        if (!cancelled) setMayCreateBooking(r.data?.allowStaffCreateBooking === true);
+      })
+      .catch(() => {
+        if (!cancelled) setMayCreateBooking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role, user?.tenantId]);
+
+  let navValue = 0;
+  if (mayCreateBooking) {
+    if (pathname.startsWith('/staff/booking')) navValue = 1;
+    else if (pathname.startsWith('/staff/history')) navValue = 2;
+    else navValue = 0;
+  } else if (pathname.startsWith('/staff/history')) {
+    navValue = 1;
+  }
+
+  const handleNavChange = (_: unknown, v: number) => {
+    if (mayCreateBooking) {
+      if (v === 0) router.push('/staff');
+      else if (v === 1) router.push('/staff/booking');
+      else if (v === 2) router.push('/staff/history');
+      else {
+        logout();
+        router.push('/login');
+      }
+    } else if (v === 0) router.push('/staff');
+    else if (v === 1) router.push('/staff/history');
+    else {
+      logout();
+      router.push('/login');
+    }
+  };
 
   return (
     <Paper elevation={8} className="fixed bottom-0 left-0 right-0 safe-bottom z-50">
       <BottomNavigation
-        value={value === -1 ? 0 : value}
-        onChange={(_, v) => {
-          if (v === 0) router.push('/staff');
-          else if (v === 1) router.push('/staff/history');
-          else { logout(); router.push('/login'); }
-        }}
+        value={navValue}
+        onChange={handleNavChange}
         showLabels
         sx={{
           '& .MuiBottomNavigationAction-label': {
             fontSize: { xs: '0.65rem', sm: '0.75rem' },
             opacity: 1,
           },
-          '& .MuiBottomNavigationAction-root': { minWidth: { xs: 0, sm: 80 }, px: { xs: 0.5, sm: 1 } },
+          '& .MuiBottomNavigationAction-root': { minWidth: { xs: 0, sm: 72 }, px: { xs: 0.35, sm: 0.75 } },
         }}
       >
         <BottomNavigationAction label="Antrian" icon={<ListAltIcon />} />
+        {mayCreateBooking ? (
+          <BottomNavigationAction label="Booking" icon={<AddCircleOutlineIcon />} />
+        ) : null}
         <BottomNavigationAction label={L.navCustomerHistory} icon={<HistoryIcon />} />
         <BottomNavigationAction label="Keluar" icon={<LogoutIcon />} />
       </BottomNavigation>
