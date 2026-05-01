@@ -10,6 +10,7 @@ export const TENANT_TYPES = [
   'ppob',
   'jasa_umum',
   'restaurant',
+  'toko',
 ] as const;
 export type TenantType = (typeof TENANT_TYPES)[number];
 
@@ -33,6 +34,7 @@ export const TENANT_TYPE_OPTIONS: { value: TenantType; label: string }[] = [
   { value: 'ppob', label: 'PPOB, Pulsa & Token' },
   { value: 'jasa_umum', label: 'Studio / jasa umum' },
   { value: 'restaurant', label: 'Restoran & kafe' },
+  { value: 'toko', label: 'Toko / Warung' },
 ];
 
 export interface TenantUiLabels {
@@ -204,6 +206,23 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Pelayan *',
     deleteStaffTitle: 'Hapus Pelayan?',
     assigneeReceiptLabel: 'Pelayan',
+  },
+  toko: {
+    navStaff: 'karyawan',
+    navServices: 'Barang',
+    navCustomerBooking: 'Order',
+    navCustomerHistory: 'Riwayat',
+    bookingPageTitle: '📋 Order',
+    historyPageTitle: 'Riwayat Order',
+    staffTeamTitle: 'Karyawan',
+    staffSingular: 'Karyawan',
+    addStaffTitle: 'Tambah Karyawan',
+    editStaffTitle: 'Edit Karyawan',
+    specialtyPlaceholder: 'Contoh: Marketing',
+    bookingNotesPlaceholder: 'Contoh: detail singkat kebutuhan, preferensi jadwal',
+    staffNameFieldLabel: 'Nama Karyawan *',
+    deleteStaffTitle: 'Hapus Karyawan?',
+    assigneeReceiptLabel: 'Karyawan',
   },
 };
 

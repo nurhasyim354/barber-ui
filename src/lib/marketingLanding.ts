@@ -11,7 +11,9 @@ export type BusinessVerticalId =
   | 'carwash'
   | 'ppob'
   | 'jasa_umum'
-  | 'restaurant';
+  | 'restaurant'
+  | 'toko'
+  ;
 
 export interface BusinessVertical {
   id: BusinessVerticalId;
@@ -96,6 +98,15 @@ export const BUSINESS_VERTICALS: BusinessVertical[] = [
     shortLabel: 'Restoran',
     description: 'Reservasi meja, paket makan, antrian kasir, dan nota transparan.',
     defaultMonthlyRevenue: 45_000_000,
+    upliftMin: 0.08,
+    upliftMax: 0.22,
+  },
+  {
+    id: 'toko',
+    label: 'Toko / Warung',
+    shortLabel: 'Toko',
+    description: 'Order, atur stok barang, dan nota transparan.',
+    defaultMonthlyRevenue: 10_000_000,
     upliftMin: 0.08,
     upliftMax: 0.22,
   },

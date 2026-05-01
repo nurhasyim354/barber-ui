@@ -132,6 +132,7 @@ const verticalIcons: Record<BusinessVerticalId, React.ReactNode> = {
   ppob: <PaymentsIcon sx={{ fontSize: 40 }} />,
   jasa_umum: <HandymanIcon sx={{ fontSize: 40 }} />,
   restaurant: <RestaurantIcon sx={{ fontSize: 40 }} />,
+  toko: <HandymanIcon sx={{ fontSize: 40 }} />,
 };
 
 const TENANT_BENEFITS: { icon: React.ReactNode; title: string; body: string }[] = [
