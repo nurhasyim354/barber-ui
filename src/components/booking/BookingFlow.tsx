@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
@@ -76,6 +76,8 @@ interface TenantInfo {
   showBookingQty?: boolean;
   /** Staff booking UI: izin outlet */
   allowStaffCreateBooking?: boolean;
+  /** true = QR/booking hanya lewat OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
+  requireLoginOnCreateBooking?: boolean;
 }
 
 interface ServicePhotoDoc {
@@ -248,15 +250,55 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [staffQueueLoading, setStaffQueueLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  /** QR dengan tenantId di URL: tunggu GET info outlet sebelum branch OTP vs tamu. */
+  const [qrTenantReady, setQrTenantReady] = useState(() => !tenantIdParam);
+  const [guestFormName, setGuestFormName] = useState('');
+  const [guestFormPhone, setGuestFormPhone] = useState(customerPhoneParam ?? '');
+  /** Diset true jika user tamu menekan aksi booking tanpa mengisi nama (toast + helper). */
+  const [guestBookingNameAttempted, setGuestBookingNameAttempted] = useState(false);
+  const guestNameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const guestBookingFlow =
+    !user &&
+    isQrFlow &&
+    qrTenantReady &&
+    !!tenant &&
+    tenant.requireLoginOnCreateBooking !== true &&
+    !!tenantIdParam;
+
+  const guestNameNeedsAttention =
+    guestBookingFlow &&
+    !guestFormName.trim() &&
+    (selectedServices.length > 0 || guestBookingNameAttempted);
+
+  useEffect(() => {
+    if (guestFormName.trim()) setGuestBookingNameAttempted(false);
+  }, [guestFormName]);
+
+  const assertGuestHasName = (): boolean => {
+    if (!guestBookingFlow) return true;
+    if (guestFormName.trim()) return true;
+    toast.error('Nama wajib diisi');
+    setGuestBookingNameAttempted(true);
+    guestNameInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    guestNameInputRef.current?.focus?.();
+    return false;
+  };
+
   // ── Init ───────────────────────────────────────────────────────────────────
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
-  // Fetch public tenant info for QR flow
   useEffect(() => {
-    if (!tenantIdParam) return;
-    api.get(`/tenants/${tenantIdParam}`)
+    if (!tenantIdParam) {
+      setQrTenantReady(true);
+      return;
+    }
+    setQrTenantReady(false);
+    api
+      .get(`/tenants/${tenantIdParam}`)
       .then((r) => setTenant(r.data))
-      .catch(() => {});
+      .catch(() => setTenant(null))
+      .finally(() => setQrTenantReady(true));
   }, [tenantIdParam]);
 
   // Auth routing
@@ -424,7 +466,19 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
   // Auto-reload antrian / status booking
   useEffect(() => {
-    if (!user || !effectiveTenantId) return;
+    if (!effectiveTenantId) return;
+    if (guestBookingFlow) {
+      const id = setInterval(() => {
+        api
+          .get(`/tenants/${effectiveTenantId}/staff/queue`)
+          .then((r) => {
+            if (Array.isArray(r.data)) setStaffQueue(r.data);
+          })
+          .catch(() => {});
+      }, QUEUE_AUTO_RELOAD_MS);
+      return () => clearInterval(id);
+    }
+    if (!user) return;
     if (isStaffVariant && user.role !== 'staff') return;
     if (!isStaffVariant && user.role !== 'customer') return;
     const id = setInterval(() => {
@@ -439,13 +493,13 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       }
     }, QUEUE_AUTO_RELOAD_MS);
     return () => clearInterval(id);
-  }, [user, effectiveTenantId, bookStep, loadBookingData, isStaffVariant]);
+  }, [user, effectiveTenantId, bookStep, loadBookingData, isStaffVariant, guestBookingFlow]);
 
   /** Prefetch antrian staff agar langkah pilih staff tidak gagal diam-diam (hanya alur pelanggan) */
   useEffect(() => {
     if (isStaffVariant) return;
-    if (!user || !effectiveTenantId || bookStep !== 'service' || selectedServices.length === 0) return;
-    if (user.role !== 'customer') return;
+    if (!effectiveTenantId || bookStep !== 'service' || selectedServices.length === 0) return;
+    if ((!user || user.role !== 'customer') && !guestBookingFlow) return;
     if (tenant?.subscriptionOverdue) return;
     const cap = tenant?.dailyBookingQuota;
     const used = tenant?.todayActiveBookingCount ?? 0;
@@ -471,7 +525,25 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     tenant?.todayActiveBookingCount,
     tenant,
     isStaffVariant,
+    guestBookingFlow,
   ]);
+
+  useEffect(() => {
+    if (!guestBookingFlow || !tenantIdParam) return;
+    setPageLoading(true);
+    Promise.all([
+      api.get(`/public/tenants/${tenantIdParam}/services`),
+      api.get(`/tenants/${tenantIdParam}/staff/queue`).catch(() => ({ data: [] as StaffQueueRow[] })),
+    ])
+      .then(([svcRes, qRes]) => {
+        setServices(Array.isArray(svcRes.data) ? svcRes.data : []);
+        setStaffQueue(Array.isArray(qRes.data) ? qRes.data : []);
+      })
+      .catch(() => {
+        toast.error('Gagal memuat layanan');
+      })
+      .finally(() => setPageLoading(false));
+  }, [guestBookingFlow, tenantIdParam]);
 
   // ── Registration actions ───────────────────────────────────────────────────
   const handleSendOtp = async () => {
@@ -600,6 +672,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       return;
     }
     if (selectedServices.length === 0) { toast.error('Pilih minimal satu layanan'); return; }
+    if (!assertGuestHasName()) return;
     setSelectedStaff(null);
     setBookStep('staff');
     setStaffQueueLoading(true);
@@ -662,25 +735,35 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       return;
     }
     if (selectedServices.length === 0) return;
+    if (!assertGuestHasName()) return;
     setSubmitting(true);
     try {
-      const res = await api.post('/bookings', {
-        tenantId: effectiveTenantId,
-        items: selectedServices.map((s) => ({ serviceId: s._id, quantity: qFor(s._id) })),
-        staffId: isStaffVariant ? user?.staffId ?? undefined : selectedStaff?.staffId,
-        notes,
-        ...(isStaffVariant && selectedBookingCustomer
-          ? { customerId: selectedBookingCustomer._id }
-          : {}),
-      });
+      const res = guestBookingFlow && tenantIdParam
+        ? await api.post(`/public/tenants/${tenantIdParam}/bookings`, {
+            guestName: guestFormName.trim(),
+            guestPhone: guestFormPhone.trim() || undefined,
+            items: selectedServices.map((s) => ({ serviceId: s._id, quantity: qFor(s._id) })),
+            staffId: selectedStaff?.staffId,
+            notes,
+          })
+        : await api.post('/bookings', {
+            tenantId: effectiveTenantId,
+            items: selectedServices.map((s) => ({ serviceId: s._id, quantity: qFor(s._id) })),
+            staffId: isStaffVariant ? user?.staffId ?? undefined : selectedStaff?.staffId,
+            notes,
+            ...(isStaffVariant && selectedBookingCustomer
+              ? { customerId: selectedBookingCustomer._id }
+              : {}),
+          });
       const result = res.data as BookingResult;
       setDialogOpen(false);
       setNotes('');
 
       if (isQrFlow) {
-        // QR flow: show dedicated confirmed screen (+ ETA dari riwayat setelah reload)
         setBookingResult(result);
-        void loadBookingData();
+        if (!guestBookingFlow) {
+          void loadBookingData();
+        }
       } else if (isStaffVariant) {
         const okMsg = selectedBookingCustomer
           ? `Booking untuk ${selectedBookingCustomer.name} berhasil! Nomor antrian: #${result.queueNumber}`
@@ -717,8 +800,25 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     );
   }
 
-  // ── QR Registration (not yet authenticated) ───────────────────────────────
-  if (!user && isQrFlow) {
+  if (!user && isQrFlow && !qrTenantReady) {
+    return (
+      <Box sx={{ minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
+        <CircularProgress color="primary" />
+      </Box>
+    );
+  }
+
+  if (!user && isQrFlow && qrTenantReady && !tenant) {
+    return (
+      <Box sx={{ minHeight: '100svh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center' }}>
+        <QrCodeScannerIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+        <Typography color="text.secondary">Outlet tidak ditemukan atau tidak tersedia.</Typography>
+      </Box>
+    );
+  }
+
+  // ── QR Registration (not yet authenticated, outlet wajib login) ─────────────
+  if (!user && isQrFlow && tenant?.requireLoginOnCreateBooking === true) {
     return (
       <Box
         sx={{
@@ -840,7 +940,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   }
 
   // ── No tenant and no QR → redirect already handled; safety fallback ────────
-  if (!user) {
+  if (!user && !guestBookingFlow) {
     return (
       <Box sx={{ minHeight: '100svh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center' }}>
         <QrCodeScannerIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
@@ -849,7 +949,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     );
   }
 
-  // ── QR Flow Confirmed Screen ───────────────────────────────────────────────
+  // ── QR Flow Confirmed Screen (login atau tamu) ─────────────────────────────
   if (isQrFlow && bookingResult) {
     const activeForThisBooking = activeBookings.find((b) => b._id === bookingResult._id);
     return (
@@ -988,11 +1088,39 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           </CardContent>
         </Card>
 
+        {!user && (
+          <Alert severity="info" sx={{ mb: 2, maxWidth: 340, textAlign: 'left', borderRadius: 2 }}>
+            <Typography variant="body2" fontWeight={600} gutterBottom>
+              Lihat status antrian
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Silakan login untuk melihat status antrian dan perkembangan booking Anda di aplikasi.
+            </Typography>
+          </Alert>
+        )}
+
+        {!user && tenantIdParam && (
+          <Button
+            variant="contained"
+            fullWidth
+            startIcon={<LockIcon />}
+            onClick={() =>
+              router.push(
+                `/login?redirect=${encodeURIComponent(`/booking?tenantId=${tenantIdParam}&type=booking`)}`,
+              )
+            }
+            sx={{ mb: 1.5, borderRadius: 3, maxWidth: 340, py: 1.2, fontWeight: 700 }}
+          >
+            Masuk
+          </Button>
+        )}
+
         <Button
-          variant="contained" onClick={() => router.push('/history')}
-          sx={{ mb: 1.5, borderRadius: 3, px: 4, py: 1.2, fontWeight: 700 }}
+          variant={user ? 'contained' : 'outlined'}
+          onClick={() => router.push(user ? '/history' : '/')}
+          sx={{ mb: 1.5, borderRadius: 3, px: 4, py: 1.2, fontWeight: 700, maxWidth: 340 }}
         >
-          Lihat Riwayat
+          {user ? 'Lihat Riwayat' : 'Selesai'}
         </Button>
         <Button variant="text" color="inherit" sx={{ color: 'text.secondary' }} onClick={() => {
           setSelectedServices([]); setSelectedStaff(null);
@@ -1078,6 +1206,43 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               {tenant.address}
             </Typography>
           )}
+        </Box>
+      )}
+
+      {guestBookingFlow && (
+        <Box sx={{ px: 2, pt: 2, pb: 1.5, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Booking tanpa akun — nama wajib; nomor HP opsional (diperlukan untuk melihat status antrian).
+          </Typography>
+          <TextField
+            fullWidth
+            required
+            label="Nama"
+            value={guestFormName}
+            onChange={(e) => setGuestFormName(e.target.value)}
+            inputRef={guestNameInputRef}
+            error={guestNameNeedsAttention}
+            helperText={guestNameNeedsAttention ? 'Nama wajib diisi' : undefined}
+            sx={{ mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start"><PersonIcon color="action" /></InputAdornment>
+              ),
+            }}
+          />
+          <TextField
+            fullWidth
+            label="Nomor HP (isi jika ingin melihat status antrian)"
+            placeholder="08xx xxxx xxxx"
+            value={guestFormPhone}
+            onChange={(e) => setGuestFormPhone(e.target.value.replace(/\D/g, ''))}
+            inputMode="tel"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start"><PhoneIcon color="action" /></InputAdornment>
+              ),
+            }}
+          />
         </Box>
       )}
 
@@ -1652,7 +1817,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                         outletQuotaFull ||
                         tenantSlotsExceededForCart
                       }
-                      onClick={() => { setSelectedStaff(null); setDialogOpen(true); }}
+                      onClick={() => {
+                        if (!assertGuestHasName()) return;
+                        setSelectedStaff(null);
+                        setDialogOpen(true);
+                      }}
                     >
                       Booking Tanpa Pilih Staf
                     </Button>
@@ -1685,6 +1854,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                         key={b.staffId}
                         onClick={() => {
                           if (cardDisabled) return;
+                          if (!assertGuestHasName()) return;
                           setSelectedStaff(b);
                           setDialogOpen(true);
                         }}
@@ -1769,6 +1939,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                   <Box
                     onClick={() => {
                       if (tenant?.subscriptionOverdue || outletQuotaFull || tenantSlotsExceededForCart) return;
+                      if (!assertGuestHasName()) return;
                       setSelectedStaff(null);
                       setDialogOpen(true);
                     }}
@@ -2076,7 +2247,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         </Tooltip>
       )}
 
-      {bottomNav ?? <CustomerBottomNav tenantType={tenant?.tenantType ?? user?.tenantType} />}
+      {bottomNav ?? (
+        guestBookingFlow ? null : (
+          <CustomerBottomNav tenantType={tenant?.tenantType ?? user?.tenantType} />
+        )
+      )}
     </Box>
   );
 }

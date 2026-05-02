@@ -59,6 +59,8 @@ interface TenantSettings {
   showBookingQty?: boolean | null;
   /** Izinkan akun staff (`staff`) membuat booking lewat API */
   allowStaffCreateBooking?: boolean | null;
+  /** true = halaman booking pelanggan (QR) wajib OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
+  requireLoginOnCreateBooking?: boolean | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -92,6 +94,7 @@ export default function SettingsPage() {
   const [dailyBookingQuota, setDailyBookingQuota] = useState('');
   const [showBookingQty, setShowBookingQty] = useState(false);
   const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
+  const [requireLoginOnCreateBooking, setRequireLoginOnCreateBooking] = useState(false);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -128,6 +131,7 @@ export default function SettingsPage() {
       else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
       setShowBookingQty(t.showBookingQty === true);
       setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
+      setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -173,6 +177,7 @@ export default function SettingsPage() {
         dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
         showBookingQty,
         allowStaffCreateBooking,
+        requireLoginOnCreateBooking,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -411,6 +416,24 @@ export default function SettingsPage() {
                     <Typography variant="body2">Izinkan staff membuat booking</Typography>
                     <Typography variant="caption" color="text.secondary" component="span" display="block">
                       Jika dimatikan, akun staff hanya mengelola antrian; pembuatan booking dari aplikasi pelanggan tidak berubah.
+                    </Typography>
+                  </Box>
+                )}
+              />
+              <FormControlLabel
+                sx={{ mt: 2, display: 'flex', alignItems: 'flex-start' }}
+                control={(
+                  <Switch
+                    checked={requireLoginOnCreateBooking}
+                    onChange={(_, v) => setRequireLoginOnCreateBooking(v)}
+                  />
+                )}
+                label={(
+                  <Box>
+                    <Typography variant="body2">Wajib login OTP untuk booking (QR / pelanggan)</Typography>
+                    <Typography variant="caption" color="text.secondary" component="span" display="block">
+                      Jika dimatikan, pengunjung QR bisa booking sebagai tamu dengan nama (HP opsional). Jika diaktifkan,
+                      alur lama dengan OTP tetap dipakai.
                     </Typography>
                   </Box>
                 )}

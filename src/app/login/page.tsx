@@ -16,6 +16,17 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 
+function safeInternalRedirect(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const decoded = decodeURIComponent(raw);
+    if (!decoded.startsWith('/') || decoded.startsWith('//')) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 type LoginIdentityOption = {
   userId: string;
   role: string;
@@ -47,7 +58,13 @@ export default function LoginPage() {
       if (user.role === 'super_admin') router.replace('/admin/tenants');
       else if (user.role === 'tenant_admin') router.replace('/dashboard');
       else if (user.role === 'staff') router.replace('/staff');
-      else router.replace('/booking');
+      else {
+        let next: string | null = null;
+        if (typeof window !== 'undefined') {
+          next = safeInternalRedirect(new URLSearchParams(window.location.search).get('redirect'));
+        }
+        router.replace(next ?? '/booking');
+      }
     }
   }, [user, router]);
 

@@ -55,8 +55,13 @@ import {
   sendEscPosToBluetooth,
   type ThermalReceipt,
 } from '@/lib/thermalReceiptPrint';
+import { PaymentBookingDetailCard } from '@/components/payment/PaymentBookingDetailCard';
 
-type Booking = UiBooking & { customerId: string; paymentId?: string };
+type Booking = UiBooking & {
+  customerId?: string | null;
+  customerPhone?: string | null;
+  paymentId?: string;
+};
 
 interface ServicePhotoDoc {
   _id: string;
@@ -103,7 +108,6 @@ export default function StaffQueuePage() {
   const [qtyDraftByBooking, setQtyDraftByBooking] = useState<Record<string, { serviceId: string; quantity: number }[]>>({});
   const [savingQtyBookingId, setSavingQtyBookingId] = useState<string | null>(null);
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
-  const [payInvoiceInput, setPayInvoiceInput] = useState('');
   const [payCashTenderedInput, setPayCashTenderedInput] = useState('');
   const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
   const [qrisErrorBanner, setQrisErrorBanner] = useState<string | null>(null);
@@ -370,7 +374,6 @@ export default function StaffQueuePage() {
     lastBookingRef.current = b;
     setPayStep('select');
     setQrisErrorBanner(null);
-    setPayInvoiceInput(String(bookingSubtotalOrLegacy(b)));
     setPayCashTenderedInput(String(bookingSubtotalOrLegacy(b)));
     setPayDialog({ open: true, booking: b });
   };
@@ -380,9 +383,9 @@ export default function StaffQueuePage() {
   const handlePayment = async (method: 'cash' | 'qris') => {
     const booking = lastBookingRef.current;
     if (!booking) return;
-    const invoiceAmount = parseRupiahInput(payInvoiceInput);
-    if (invoiceAmount == null) {
-      toast.error('Masukkan nominal transaksi yang valid (minimal Rp 1)');
+    const invoiceAmount = bookingSubtotalOrLegacy(booking);
+    if (!Number.isFinite(invoiceAmount) || invoiceAmount < 1) {
+      toast.error('Total transaksi tidak valid');
       return;
     }
     let cashTendered: number | undefined;
@@ -393,7 +396,7 @@ export default function StaffQueuePage() {
         return;
       }
       if (t < invoiceAmount) {
-        toast.error('Uang tunai diterima tidak boleh kurang dari nominal transaksi');
+        toast.error('Uang tunai diterima tidak boleh kurang dari total');
         return;
       }
       cashTendered = t;
@@ -412,7 +415,6 @@ export default function StaffQueuePage() {
 
       toast.success('Pembayaran berhasil!');
       setPayDialog({ open: false, booking: null });
-      setPayInvoiceInput('');
       setPayCashTenderedInput('');
       setReceiptDialog(true);
       setQrisErrorBanner(null);
@@ -825,7 +827,7 @@ export default function StaffQueuePage() {
                       {b.paymentId && (
                         <Box
                           className="flex items-center gap-0.5"
-                          sx={{ mt: 1.5, minHeight: 36 }}
+                          sx={{ mt: 1.5, minHeight: 48 }}
                         >
                           {reprintBusyId === b._id ? (
                             <CircularProgress size={24} />
@@ -843,12 +845,13 @@ export default function StaffQueuePage() {
                               </Tooltip>
                               <Tooltip title="Cetak Bluetooth">
                                 <IconButton
-                                  size="small"
+                                  size="large"
                                   color="default"
                                   aria-label="Cetak ulang nota lewat Bluetooth"
                                   onClick={() => void handleReprintNotaBluetooth(b)}
+                                  sx={{ width: 48, height: 48 }}
                                 >
-                                  <BluetoothIcon fontSize="small" />
+                                  <BluetoothIcon sx={{ fontSize: 28 }} />
                                 </IconButton>
                               </Tooltip>
                             </>
@@ -911,63 +914,80 @@ export default function StaffQueuePage() {
         open={payDialog.open}
         onClose={() => {
           setPayDialog({ open: false, booking: null });
-          setPayInvoiceInput('');
           setPayCashTenderedInput('');
           setPayStep('select');
           setQrisErrorBanner(null);
         }}
         fullWidth
         maxWidth="xs"
+        PaperProps={{
+          sx: {
+            maxHeight: 'min(560px, 90dvh)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          },
+        }}
       >
         {payStep === 'select' ? (
           <>
             <DialogTitle fontWeight={500}>Pilih Metode Bayar</DialogTitle>
-            <DialogContent>
+            <DialogContent
+              sx={{
+                flex: '1 1 auto',
+                overflowY: 'auto',
+                minHeight: 0,
+                px: 2,
+                pt: 1,
+                pb: 2,
+              }}
+            >
               {payDialog.booking && (
-                <Box className="text-center mb-4">
-                  <TextField
-                    fullWidth
-                    label="Nominal transaksi (Rp)"
-                    value={payInvoiceInput}
-                    onChange={(e) => setPayInvoiceInput(e.target.value.replace(/\D/g, ''))}
-                    inputProps={{ inputMode: 'numeric' }}
-                    helperText={
-                      `Subtotal layanan: Rp ${bookingSubtotalOrLegacy(payDialog.booking).toLocaleString('id-ID')}`
-                    }
-                    sx={{ mb: 1.5, mt: 2 }}
-                    autoFocus
-                  />
-                  <TextField
-                    fullWidth
-                    label="Uang tunai diterima (Rp)"
-                    value={payCashTenderedInput}
-                    onChange={(e) => setPayCashTenderedInput(e.target.value.replace(/\D/g, ''))}
-                    inputProps={{ inputMode: 'numeric' }}
-                    helperText="Untuk QRIS tidak dipakai; untuk tunai harus ≥ nominal transaksi"
-                    sx={{ mb: 1 }}
-                  />
-                  {(() => {
-                    const inv = parseRupiahInput(payInvoiceInput);
-                    const cash = parseRupiahInput(payCashTenderedInput);
-                    if (inv != null && cash != null && cash >= inv) {
-                      return (
-                        <Typography variant="body2" color="primary" fontWeight={600} sx={{ mb: 1 }}>
-                          Kembalian: Rp {(cash - inv).toLocaleString('id-ID')}
-                        </Typography>
-                      );
-                    }
-                    return null;
-                  })()}
-                  <Typography color="text.secondary" variant="body2">
-                    {payDialog.booking.customerName} — {bookingServicesLabel(payDialog.booking)}
-                  </Typography>
-                  {payDialog.booking.staffName && (
-                    <Typography variant="body2" color="text.secondary">
-                      {ui.assigneeReceiptLabel}: {payDialog.booking.staffName}
-                    </Typography>
-                  )}
-                </Box>
+                <PaymentBookingDetailCard
+                  booking={payDialog.booking}
+                  assigneeLabel={ui.assigneeReceiptLabel}
+                  customerPhone={payDialog.booking.customerPhone}
+                />
               )}
+            </DialogContent>
+            <Box
+              sx={{
+                flexShrink: 0,
+                px: 2,
+                pt: 1.5,
+                pb: 2,
+                bgcolor: 'background.paper',
+                borderTop: 1,
+                borderColor: 'divider',
+                boxShadow: (theme) =>
+                  theme.palette.mode === 'dark'
+                    ? '0 -8px 24px rgba(0,0,0,0.45)'
+                    : '0 -8px 24px rgba(0,0,0,0.08)',
+              }}
+            >
+              <TextField
+                fullWidth
+                label="Uang tunai diterima (Rp)"
+                value={payCashTenderedInput}
+                onChange={(e) => setPayCashTenderedInput(e.target.value.replace(/\D/g, ''))}
+                inputProps={{ inputMode: 'numeric' }}
+                helperText="Untuk QRIS tidak dipakai; untuk tunai harus ≥ total di atas"
+                sx={{ mb: 1 }}
+                autoFocus
+              />
+              {(() => {
+                const inv =
+                  payDialog.booking != null ? bookingSubtotalOrLegacy(payDialog.booking) : null;
+                const cash = parseRupiahInput(payCashTenderedInput);
+                if (inv != null && inv >= 1 && cash != null && cash >= inv) {
+                  return (
+                    <Typography variant="body2" color="primary" fontWeight={600} sx={{ mb: 1 }}>
+                      Kembalian: Rp {(cash - inv).toLocaleString('id-ID')}
+                    </Typography>
+                  );
+                }
+                return null;
+              })()}
               <Box className="flex gap-3">
                 <Button
                   fullWidth
@@ -975,9 +995,9 @@ export default function StaffQueuePage() {
                   size="large"
                   onClick={() => handlePayment('cash')}
                   disabled={paying}
-                  sx={{ py: 3, flexDirection: 'column', gap: 1 }}
+                  sx={{ py: 2.5, flexDirection: 'column', gap: 1 }}
                 >
-                  <PaymentsIcon sx={{ fontSize: 40 }} />
+                  <PaymentsIcon sx={{ fontSize: 36 }} />
                   Tunai
                 </Button>
                 <Button
@@ -986,23 +1006,24 @@ export default function StaffQueuePage() {
                   size="large"
                   onClick={() => setPayStep('qris-confirm')}
                   disabled={paying}
-                  sx={{ py: 3, flexDirection: 'column', gap: 1 }}
+                  sx={{ py: 2.5, flexDirection: 'column', gap: 1 }}
                 >
-                  <QrCodeIcon sx={{ fontSize: 40 }} />
+                  <QrCodeIcon sx={{ fontSize: 36 }} />
                   QRIS
                 </Button>
               </Box>
               {paying && (
-                <Box className="flex justify-center mt-4">
+                <Box className="flex justify-center mt-2">
                   <CircularProgress />
                 </Box>
               )}
-            </DialogContent>
-            <DialogActions>
               <Button
+                fullWidth
+                variant="text"
+                color="inherit"
+                sx={{ mt: 1 }}
                 onClick={() => {
                   setPayDialog({ open: false, booking: null });
-                  setPayInvoiceInput('');
                   setPayCashTenderedInput('');
                   setPayStep('select');
                   setQrisErrorBanner(null);
@@ -1010,7 +1031,7 @@ export default function StaffQueuePage() {
               >
                 Batal
               </Button>
-            </DialogActions>
+            </Box>
           </>
         ) : (
           <>
@@ -1022,6 +1043,13 @@ export default function StaffQueuePage() {
                 <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setQrisErrorBanner(null)}>
                   {qrisErrorBanner}
                 </Alert>
+              )}
+              {payDialog.booking && (
+                <PaymentBookingDetailCard
+                  booking={payDialog.booking}
+                  assigneeLabel={ui.assigneeReceiptLabel}
+                  customerPhone={payDialog.booking.customerPhone}
+                />
               )}
               <Box className="text-center py-2">
                 {qrisImageBase64 ? (
@@ -1069,10 +1097,7 @@ export default function StaffQueuePage() {
                     : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
                 </Typography>
                 <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
-                  Rp {(parseRupiahInput(payInvoiceInput) ?? (payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0) ?? 0).toLocaleString('id-ID')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {payDialog.booking?.customerName} — {payDialog.booking ? bookingServicesLabel(payDialog.booking) : '—'}
+                  Rp {(payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0).toLocaleString('id-ID')}
                 </Typography>
               </Box>
 
@@ -1142,15 +1167,16 @@ export default function StaffQueuePage() {
                   style={{ width: '100%', height: 380, border: 'none', display: 'block' }}
                 />
               </Box>
-              <Box className="flex justify-center gap-1">
+              <Box className="flex justify-center gap-2">
                 <Tooltip title="Cetak Bluetooth">
                   <IconButton
-                    size="small"
+                    size="large"
                     color="primary"
                     onClick={printReceiptBluetooth}
                     aria-label="Cetak nota lewat Bluetooth"
+                    sx={{ width: 56, height: 56 }}
                   >
-                    <BluetoothIcon fontSize="small" />
+                    <BluetoothIcon sx={{ fontSize: 32 }} />
                   </IconButton>
                 </Tooltip>
                 <Tooltip title="Cetak (browser)">
