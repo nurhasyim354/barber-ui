@@ -30,6 +30,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
+import SwitchOutletControl from '@/components/account/SwitchOutletControl';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
@@ -1041,12 +1042,20 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               : undefined
         }
         right={
-          visitedTenants.length > 1 && bookStep !== 'staff' && !isStaffVariant ? (
-            <Button color="inherit" size="small" startIcon={<QrCodeScannerIcon />}
-              onClick={() => setTenantSelectorOpen(true)}
-            >
-              Ganti Salon
-            </Button>
+          (!isStaffVariant && user?.role === 'customer') ||
+          (visitedTenants.length > 1 && bookStep !== 'staff' && !isStaffVariant) ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {!isStaffVariant && user?.role === 'customer' && (
+                <SwitchOutletControl onSwitched={() => void loadBookingData()} />
+              )}
+              {visitedTenants.length > 1 && bookStep !== 'staff' && !isStaffVariant ? (
+                <Button color="inherit" size="small" startIcon={<QrCodeScannerIcon />}
+                  onClick={() => setTenantSelectorOpen(true)}
+                >
+                  Ganti Salon
+                </Button>
+              ) : null}
+            </Box>
           ) : undefined
         }
       />

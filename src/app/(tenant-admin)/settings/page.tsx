@@ -25,6 +25,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { defaultBrandPalette } from '@/lib/uiStyleConfig';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
+import SwitchOutletControl from '@/components/account/SwitchOutletControl';
 
 interface TenantTheme {
   primaryColor: string;
@@ -252,7 +253,11 @@ export default function SettingsPage() {
 
   return (
     <AppPageShell variant="withBottomNav">
-      <PageHeader title="Pengaturan Tenant" back />
+      <PageHeader
+        title="Pengaturan Tenant"
+        back
+        right={<SwitchOutletControl />}
+      />
 
       {loading ? (
         <Box className="flex justify-center mt-12"><CircularProgress /></Box>

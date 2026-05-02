@@ -34,6 +34,7 @@ import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { parseRupiahInput } from '@/lib/rupiahInput';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
+import SwitchOutletControl from '@/components/account/SwitchOutletControl';
 import { BookingQuantityEditor, buildQtyDraftFromBooking } from '@/components/booking/BookingQuantityEditor';
 import {
   BOOKING_QTY_MIN,
@@ -178,25 +179,68 @@ export default function StaffQueuePage() {
   /** Jangan pakai [user] utuh — pembaruan profil (/auth/me) mengganti referensi user dan memicu loop jika memuat ulang antrian + loading. */
   useEffect(() => {
     if (isLoading) return;
-    if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'staff') { router.replace('/'); return; }
-    if (!user.tenantId) {
-      loadTenants();
-      setTenantDialogOpen(true);
-    } else {
-      loadCurrentTenant(user.tenantId);
-      loadBookings();
+    if (!user) {
+      router.replace('/login');
+      return;
     }
+    if (user.role !== 'staff') {
+      router.replace('/');
+      return;
+    }
+    if (!user.tenantId) {
+      let cancelled = false;
+      (async () => {
+        setTenantLoading(true);
+        try {
+          const res = await api.get<Array<{ tenantId: string; name: string }>>('/auth/my-switchable-tenants');
+          if (cancelled) return;
+          const list = res.data ?? [];
+          setTenants(
+            list.map((r) => ({
+              _id: r.tenantId,
+              name: r.name,
+            })),
+          );
+          if (list.length === 1) {
+            const resSwitch = await api.post('/auth/switch-tenant', { tenantId: list[0].tenantId });
+            if (cancelled) return;
+            setAuth(resSwitch.data.user, resSwitch.data.token);
+            const tRes = await api.get(`/tenants/${list[0].tenantId}`);
+            if (!cancelled) setCurrentTenant(tRes.data);
+          } else if (list.length > 1) {
+            setTenantDialogOpen(true);
+          } else if (!cancelled) {
+            toast.error('Belum terdaftar sebagai staff di outlet manapun');
+          }
+        } catch {
+          if (!cancelled) toast.error('Gagal memuat outlet');
+        } finally {
+          if (!cancelled) setTenantLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+    loadCurrentTenant(user.tenantId);
+    loadBookings();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hanya tenantId/role; hindari re-fetch saat phone/pendingPhone berubah
   }, [isLoading, user?.tenantId, user?.role]);
 
   const loadTenants = useCallback(async () => {
     setTenantLoading(true);
     try {
-      const res = await api.get('/staff/my-tenants');
-      setTenants(res.data);
+      const res = await api.get<Array<{ tenantId: string; name: string }>>('/auth/my-switchable-tenants');
+      const list = res.data ?? [];
+      setTenants(
+        list.map((r) => ({
+          _id: r.tenantId,
+          name: r.name,
+        })),
+      );
     } catch {
       toast.error('Gagal memuat daftar salon');
+      setTenants([]);
     } finally {
       setTenantLoading(false);
     }
@@ -461,10 +505,8 @@ export default function StaffQueuePage() {
                 </IconButton>
               </Tooltip>
             )}
-            <IconButton color="inherit" size="small" onClick={() => { loadTenants(); setTenantDialogOpen(true); }}>
-              <StorefrontIcon />
-            </IconButton>
-            <IconButton color="inherit" onClick={() => loadBookings()}>
+            <SwitchOutletControl alwaysShowIcon onSwitched={() => void loadBookings()} />
+            <IconButton color="inherit" size="small" onClick={() => { void loadBookings(); }}>
               <RefreshIcon />
             </IconButton>
           </Box>
