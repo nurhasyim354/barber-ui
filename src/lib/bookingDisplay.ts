@@ -28,6 +28,8 @@ export type UiBooking = {
   notes?: string;
   staffId?: string;
   staffName?: string;
+  /** Posisi (1…N); hadir saat outlet mengaktifkan pemilihan posisi di booking */
+  seatPosition?: number | null;
   date: string;
 };
 

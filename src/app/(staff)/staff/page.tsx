@@ -78,9 +78,10 @@ interface Tenant {
   allowStaffCreateBooking?: boolean;
 }
 
-const statusColor: Record<string, 'warning' | 'info' | 'success' | 'error'> = {
+const statusColor: Record<string, 'warning' | 'info' | 'secondary' | 'success' | 'error'> = {
   waiting: 'warning',
   in_progress: 'info',
+  waiting_for_payment: 'secondary',
   done: 'success',
   cancelled: 'error',
 };
@@ -88,6 +89,7 @@ const statusColor: Record<string, 'warning' | 'info' | 'success' | 'error'> = {
 const statusLabel: Record<string, string> = {
   waiting: 'Menunggu',
   in_progress: 'Dilayani',
+  waiting_for_payment: 'Menunggu bayar',
   done: 'Selesai',
   cancelled: 'Batal',
 };
@@ -635,6 +637,11 @@ export default function StaffQueuePage() {
                       <Box>
                         <Box className="flex items-center gap-2" sx={{ flexWrap: 'wrap', alignItems: 'baseline' }}>
                           <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                          {b.seatPosition != null &&
+                            Number.isFinite(Number(b.seatPosition)) &&
+                            Number(b.seatPosition) >= 1 && (
+                            <Chip label={`Posisi ${Number(b.seatPosition)}`} size="small" variant="outlined" color="secondary" />
+                          )}
                           {formatBookingQueueDate(b.date) && (
                             <Typography variant="body2" color="text.secondary" fontWeight={700}>
                               {formatBookingQueueDate(b.date)}
@@ -721,6 +728,16 @@ export default function StaffQueuePage() {
                           onClick={() => handleUpdateStatus(b._id, 'in_progress')}
                         >
                           Mulai Layani
+                        </Button>
+                      )}
+                      {mine && b.status === 'in_progress' && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="secondary"
+                          onClick={() => handleUpdateStatus(b._id, 'waiting_for_payment')}
+                        >
+                          Siap bayar
                         </Button>
                       )}
                       {mine && b.status === 'in_progress' && (

@@ -73,9 +73,10 @@ interface StaffOption {
   photoUrl?: string | null;
 }
 
-const statusColor: Record<string, 'warning' | 'info' | 'success' | 'error'> = {
+const statusColor: Record<string, 'warning' | 'info' | 'secondary' | 'success' | 'error'> = {
   waiting: 'warning',
   in_progress: 'info',
+  waiting_for_payment: 'secondary',
   done: 'success',
   cancelled: 'error',
 };
@@ -83,6 +84,7 @@ const statusColor: Record<string, 'warning' | 'info' | 'success' | 'error'> = {
 const statusLabel: Record<string, string> = {
   waiting: 'Menunggu',
   in_progress: 'Dilayani',
+  waiting_for_payment: 'Menunggu bayar',
   done: 'Selesai',
   cancelled: 'Batal',
 };
@@ -460,6 +462,16 @@ export default function PosPage() {
                     <Box>
                       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexWrap: 'wrap' }}>
                         <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                        {b.seatPosition != null &&
+                          Number.isFinite(Number(b.seatPosition)) &&
+                          Number(b.seatPosition) >= 1 && (
+                          <Chip
+                            label={`Posisi ${Number(b.seatPosition)}`}
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                          />
+                        )}
                         {formatBookingQueueDate(b.date) && (
                           <Typography variant="body2" color="text.secondary" fontWeight={700}>
                             {formatBookingQueueDate(b.date)}
@@ -542,6 +554,16 @@ export default function PosPage() {
                       },
                     }}
                   >
+                    {b.status === 'in_progress' && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color="secondary"
+                        onClick={() => handleUpdateStatus(b._id, 'waiting_for_payment')}
+                      >
+                        Siap bayar
+                      </Button>
+                    )}
                     {b.status === 'waiting' && (
                       <Button
                         variant="outlined"

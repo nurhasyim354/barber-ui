@@ -7,6 +7,7 @@ import {
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Avatar, Divider, LinearProgress, Checkbox,
   InputAdornment, Alert, Fab, Tooltip, Paper,
+  ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
@@ -78,6 +79,8 @@ interface TenantInfo {
   allowStaffCreateBooking?: boolean;
   /** true = QR/booking hanya lewat OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
   requireLoginOnCreateBooking?: boolean;
+  /** Jumlah posisi di form booking; null atau <1 = tanpa pemilihan posisi */
+  bookingSeatCount?: number | null;
 }
 
 interface ServicePhotoDoc {
@@ -126,6 +129,7 @@ type BookingResult = Pick<
   | 'totalSubtotal'
   | 'servicePrice'
   | 'services'
+  | 'seatPosition'
 >;
 
 interface LastDoneVisit {
@@ -156,9 +160,25 @@ const waitLabel = (m: number) => {
 const waitColor = (m: number): 'success' | 'warning' | 'error' =>
   m === 0 ? 'success' : m <= 15 ? 'warning' : 'error';
 const statusColor = (s: string) =>
-  s === 'waiting' ? 'warning' : s === 'in_progress' ? 'info' : s === 'done' ? 'success' : 'default';
+  s === 'waiting'
+    ? 'warning'
+    : s === 'in_progress'
+      ? 'info'
+      : s === 'waiting_for_payment'
+        ? 'secondary'
+        : s === 'done'
+          ? 'success'
+          : 'default';
 const statusLabel = (s: string) =>
-  s === 'waiting' ? 'Menunggu' : s === 'in_progress' ? 'Sedang dilayani' : s === 'done' ? 'Selesai' : s;
+  s === 'waiting'
+    ? 'Menunggu'
+    : s === 'in_progress'
+      ? 'Sedang dilayani'
+      : s === 'waiting_for_payment'
+        ? 'Menunggu bayar'
+        : s === 'done'
+          ? 'Selesai'
+          : s;
 
 const formatEstimatedServe = (iso: string) =>
   new Date(iso).toLocaleString('id-ID', {
@@ -232,6 +252,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<StaffQueueRow | null>(null);
   const [notes, setNotes] = useState('');
+  /** Pilih posisi 1…N ketika outlet mengaktifkan `bookingSeatCount`. */
+  const [bookingSeatPick, setBookingSeatPick] = useState(1);
   const [bookStep, setBookStep] = useState<'service' | 'staff'>('service');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeBookings, setActiveBookings] = useState<ActiveBooking[]>([]);
@@ -360,6 +382,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     setBookStep('service');
   }, [selectedBookingCustomer?._id, isStaffVariant]);
 
+  useEffect(() => {
+    const n = tenant?.bookingSeatCount;
+    if (typeof n === 'number' && n >= 1) setBookingSeatPick(1);
+  }, [tenant?._id, tenant?.bookingSeatCount]);
+
   // OTP countdown
   useEffect(() => {
     if (countdown <= 0) return;
@@ -393,7 +420,9 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           const actives = todayRows.filter(
             (b) =>
               b.customerId === selectedBookingCustomer._id &&
-              (b.status === 'waiting' || b.status === 'in_progress'),
+              (b.status === 'waiting' ||
+                b.status === 'in_progress' ||
+                b.status === 'waiting_for_payment'),
           );
           actives.sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
           setActiveBookings(actives);
@@ -415,7 +444,9 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         const actives = historyItems.filter(
           (b) =>
             (!effectiveTenantId || b.tenantId === effectiveTenantId) &&
-            (b.status === 'waiting' || b.status === 'in_progress'),
+            (b.status === 'waiting' ||
+              b.status === 'in_progress' ||
+              b.status === 'waiting_for_payment'),
         );
         actives.sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
         setActiveBookings(actives);
@@ -625,6 +656,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     () => selectedServices.reduce((sum, s) => sum + s.durationMinutes * qFor(s._id), 0),
     [selectedServices, serviceQty],
   );
+  const seatSlotCount = useMemo(() => {
+    if (!tenant || typeof tenant.bookingSeatCount !== 'number') return null;
+    if (tenant.bookingSeatCount < 1) return null;
+    return Math.min(50, Math.floor(tenant.bookingSeatCount));
+  }, [tenant]);
   const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
 
   const outletQuotaFull =
@@ -745,6 +781,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             items: selectedServices.map((s) => ({ serviceId: s._id, quantity: qFor(s._id) })),
             staffId: selectedStaff?.staffId,
             notes,
+            ...(seatSlotCount != null ? { seatPosition: bookingSeatPick } : {}),
           })
         : await api.post('/bookings', {
             tenantId: effectiveTenantId,
@@ -754,6 +791,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             ...(isStaffVariant && selectedBookingCustomer
               ? { customerId: selectedBookingCustomer._id }
               : {}),
+            ...(seatSlotCount != null ? { seatPosition: bookingSeatPick } : {}),
           });
       const result = res.data as BookingResult;
       setDialogOpen(false);
@@ -1047,6 +1085,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               <Box display="flex" justifyContent="space-between" mb={1}>
                 <Typography variant="body2" color="text.secondary">{bookingLabels.staffSingular}</Typography>
                 <Typography variant="body2" fontWeight={500}>{bookingResult.staffName}</Typography>
+              </Box>
+            )}
+            {bookingResult.seatPosition != null && Number.isFinite(Number(bookingResult.seatPosition)) && (
+              <Box display="flex" justifyContent="space-between" mb={1}>
+                <Typography variant="body2" color="text.secondary">Posisi</Typography>
+                <Typography variant="body2" fontWeight={500}>Nomor {Number(bookingResult.seatPosition)}</Typography>
               </Box>
             )}
             <Divider sx={{ my: 1.5, opacity: 0.5, borderColor: 'rgba(0,0,0,0.08)' }} />
@@ -1380,7 +1424,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     )}
                     <Chip
                       label={statusLabel(ab.status)}
-                      color={statusColor(ab.status) as 'warning' | 'info' | 'success' | 'default'}
+                      color={statusColor(ab.status) as 'warning' | 'info' | 'secondary' | 'success' | 'default'}
                       size="small"
                       sx={{ mt: 1.5, fontWeight: 700 }}
                     />
@@ -2061,6 +2105,42 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                   />
                 ))}
               </Box>
+            </Box>
+          )}
+
+          {seatSlotCount != null && seatSlotCount >= 1 && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography
+                variant="overline"
+                display="block"
+                sx={{
+                  fontWeight: 700, letterSpacing: 1,
+                  fontSize: '0.62rem',
+                  color: 'text.secondary',
+                  mb: 1,
+                }}
+              >
+                Pilih posisi
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                fullWidth
+                size="small"
+                value={bookingSeatPick}
+                onChange={(_, val) => {
+                  if (val != null) setBookingSeatPick(val);
+                }}
+                sx={{ flexWrap: 'wrap', gap: 0.5, '& .MuiToggleButtonGroup-grouped': { flex: '1 1 auto' } }}
+              >
+                {Array.from({ length: seatSlotCount }, (_, i) => i + 1).map((n) => (
+                  <ToggleButton key={n} value={n} sx={{ minWidth: 44 }}>
+                    {n}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.4 }}>
+                Nomor sama tidak bisa untuk dua antrian aktif bersamaan.
+              </Typography>
             </Box>
           )}
 
