@@ -34,7 +34,7 @@ type Props = {
 };
 
 /**
- * Form qty per baris (butuh `tenant.showBookingQty` + `booking.services[]` + status waiting/in_progress).
+ * Form qty per baris (butuh `tenant.showBookingQty` + `booking.services[]` + status waiting/in_progress; tidak untuk siap bayar/selesai).
  */
 export function BookingQuantityEditor({
   booking,
@@ -51,7 +51,13 @@ export function BookingQuantityEditor({
   }, [booking._id, JSON.stringify(draftLines)]);
 
   if (!show || !booking.services?.length) return null;
-  if (booking.status === 'done' || booking.status === 'cancelled') return null;
+  if (
+    booking.status === 'done' ||
+    booking.status === 'cancelled' ||
+    booking.status === 'waiting_for_payment'
+  ) {
+    return null;
+  }
   if (!draftLines.length) return null;
 
   return (

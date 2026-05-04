@@ -46,9 +46,10 @@ interface TenantPublic {
   tenantType?: string;
 }
 
-const statusConfig: Record<string, { label: string; color: 'warning' | 'info' | 'success' | 'error' | 'default' }> = {
+const statusConfig: Record<string, { label: string; color: 'warning' | 'info' | 'secondary' | 'success' | 'error' | 'default' }> = {
   waiting: { label: 'Menunggu', color: 'warning' },
   in_progress: { label: 'Sedang dilayani', color: 'info' },
+  waiting_for_payment: { label: 'Menunggu pembayaran', color: 'secondary' },
   done: { label: 'Selesai', color: 'success' },
   cancelled: { label: 'Dibatalkan', color: 'error' },
 };

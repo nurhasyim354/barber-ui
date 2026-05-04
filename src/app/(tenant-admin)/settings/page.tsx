@@ -26,6 +26,7 @@ import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { defaultBrandPalette } from '@/lib/uiStyleConfig';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import SwitchOutletControl from '@/components/account/SwitchOutletControl';
+import { BOOKING_SEAT_COUNT_MAX, BOOKING_SEAT_COUNT_MIN } from '@/lib/bookingSeatLimits';
 
 interface TenantTheme {
   primaryColor: string;
@@ -55,6 +56,8 @@ interface TenantSettings {
   customerAppointmentReminderMinutes?: number | null;
   /** Batas antrian aktif per hari (menunggu + sedang dilayani); null = tidak dibatasi */
   dailyBookingQuota?: number | null;
+  /** Jumlah posisi di form booking; rentang lihat `@/lib/bookingSeatLimits` (sinkron API). `null` = pemilihan posisi tidak dipakai */
+  bookingSeatCount?: number | null;
   /** Halaman /booking: tampil field qty per layanan */
   showBookingQty?: boolean | null;
   /** Izinkan akun staff (`staff`) membuat booking lewat API */
@@ -92,6 +95,7 @@ export default function SettingsPage() {
   const [customerAppointmentReminderMinutes, setCustomerAppointmentReminderMinutes] = useState(0);
   /** string kosong = tidak dibatasi */
   const [dailyBookingQuota, setDailyBookingQuota] = useState('');
+  const [bookingSeatCount, setBookingSeatCount] = useState('');
   const [showBookingQty, setShowBookingQty] = useState(false);
   const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
   const [requireLoginOnCreateBooking, setRequireLoginOnCreateBooking] = useState(false);
@@ -129,6 +133,9 @@ export default function SettingsPage() {
       const dq = t.dailyBookingQuota;
       if (dq == null || dq <= 0 || Number.isNaN(Number(dq))) setDailyBookingQuota('');
       else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
+      const bsc = t.bookingSeatCount;
+      if (bsc == null || bsc < 1 || Number.isNaN(Number(bsc))) setBookingSeatCount('');
+      else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, Math.max(BOOKING_SEAT_COUNT_MIN, Math.floor(Number(bsc))))));
       setShowBookingQty(t.showBookingQty === true);
       setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
       setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
@@ -175,6 +182,13 @@ export default function SettingsPage() {
         customerReturnReminderDays,
         customerAppointmentReminderMinutes,
         dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
+        bookingSeatCount:
+          bookingSeatCount.trim() === ''
+            ? null
+            : Math.min(
+                BOOKING_SEAT_COUNT_MAX,
+                Math.max(BOOKING_SEAT_COUNT_MIN, parseInt(bookingSeatCount, 10) || BOOKING_SEAT_COUNT_MIN),
+              ),
         showBookingQty,
         allowStaffCreateBooking,
         requireLoginOnCreateBooking,
@@ -382,6 +396,21 @@ export default function SettingsPage() {
                 inputProps={{ min: 1, max: 9999 }}
                 placeholder="Tidak dibatasi"
                 helperText="Anda juga bisa set batas per staff di menu Kelola Staff."
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="Jumlah Kursi / Lokasi untuk booking"
+                value={bookingSeatCount}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  if (v === '') setBookingSeatCount('');
+                  else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, parseInt(v, 10))));
+                }}
+                inputProps={{ min: BOOKING_SEAT_COUNT_MIN, max: BOOKING_SEAT_COUNT_MAX }}
+                placeholder="Tidak dipakai"
+                sx={{ mt: 2 }}
+                helperText={`Jika diisi (${BOOKING_SEAT_COUNT_MIN}–${BOOKING_SEAT_COUNT_MAX}), pelanggan wajib pilih nomor posisi saat booking; tidak boleh bentrok antara antrian menunggu / sedang dilayani pada hari yang sama.`}
               />
             </CardContent>
           </Card>

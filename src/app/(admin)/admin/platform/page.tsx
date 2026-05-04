@@ -86,7 +86,7 @@ export default function AdminPlatformPage() {
       return;
     }
     if (user.role !== 'super_admin') {
-      router.replace('/login');
+      router.replace(user.delegatedFromSuperAdmin ? '/dashboard' : '/login');
       return;
     }
     void load();

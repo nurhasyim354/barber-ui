@@ -2,6 +2,7 @@
 
 import Box, { type BoxProps } from '@mui/material/Box';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
+import SuperAdminDelegationBanner from './SuperAdminDelegationBanner';
 
 type ShellVariant = 'withBottomNav' | 'adminFooter' | 'reportFooter';
 
@@ -16,7 +17,8 @@ export default function AppPageShell({ variant = 'withBottomNav', sx, children, 
   const base = UI_LAYOUT.pageShell[variant];
   return (
     <Box sx={{ ...base, ...sx }} {...rest}>
-      {children}     
+      <SuperAdminDelegationBanner />
+      {children}
     </Box>
   );
 }
