@@ -26,6 +26,7 @@ import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { defaultBrandPalette } from '@/lib/uiStyleConfig';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import SwitchOutletControl from '@/components/account/SwitchOutletControl';
+import { BOOKING_SEAT_COUNT_MAX, BOOKING_SEAT_COUNT_MIN } from '@/lib/bookingSeatLimits';
 
 interface TenantTheme {
   primaryColor: string;
@@ -55,7 +56,7 @@ interface TenantSettings {
   customerAppointmentReminderMinutes?: number | null;
   /** Batas antrian aktif per hari (menunggu + sedang dilayani); null = tidak dibatasi */
   dailyBookingQuota?: number | null;
-  /** Jumlah posisi di form booking (1–50); null = pemilihan posisi tidak dipakai */
+  /** Jumlah posisi di form booking; rentang lihat `@/lib/bookingSeatLimits` (sinkron API). `null` = pemilihan posisi tidak dipakai */
   bookingSeatCount?: number | null;
   /** Halaman /booking: tampil field qty per layanan */
   showBookingQty?: boolean | null;
@@ -134,7 +135,7 @@ export default function SettingsPage() {
       else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
       const bsc = t.bookingSeatCount;
       if (bsc == null || bsc < 1 || Number.isNaN(Number(bsc))) setBookingSeatCount('');
-      else setBookingSeatCount(String(Math.min(50, Math.max(1, Math.floor(Number(bsc))))));
+      else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, Math.max(BOOKING_SEAT_COUNT_MIN, Math.floor(Number(bsc))))));
       setShowBookingQty(t.showBookingQty === true);
       setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
       setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
@@ -181,7 +182,13 @@ export default function SettingsPage() {
         customerReturnReminderDays,
         customerAppointmentReminderMinutes,
         dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
-        bookingSeatCount: bookingSeatCount.trim() === '' ? null : Math.min(50, Math.max(1, parseInt(bookingSeatCount, 10) || 1)),
+        bookingSeatCount:
+          bookingSeatCount.trim() === ''
+            ? null
+            : Math.min(
+                BOOKING_SEAT_COUNT_MAX,
+                Math.max(BOOKING_SEAT_COUNT_MIN, parseInt(bookingSeatCount, 10) || BOOKING_SEAT_COUNT_MIN),
+              ),
         showBookingQty,
         allowStaffCreateBooking,
         requireLoginOnCreateBooking,
@@ -393,17 +400,17 @@ export default function SettingsPage() {
               <TextField
                 fullWidth
                 type="number"
-                label="Posisi aktif untuk booking"
+                label="Jumlah Kursi / Lokasi untuk booking"
                 value={bookingSeatCount}
                 onChange={(e) => {
                   const v = e.target.value.replace(/\D/g, '');
                   if (v === '') setBookingSeatCount('');
-                  else setBookingSeatCount(String(Math.min(50, parseInt(v, 10))));
+                  else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, parseInt(v, 10))));
                 }}
-                inputProps={{ min: 1, max: 50 }}
+                inputProps={{ min: BOOKING_SEAT_COUNT_MIN, max: BOOKING_SEAT_COUNT_MAX }}
                 placeholder="Tidak dipakai"
                 sx={{ mt: 2 }}
-                helperText="Jika diisi (1–50), pelanggan wajib pilih nomor posisi saat booking; tidak boleh bentrok antara antrian menunggu / sedang dilayani pada hari yang sama."
+                helperText={`Jika diisi (${BOOKING_SEAT_COUNT_MIN}–${BOOKING_SEAT_COUNT_MAX}), pelanggan wajib pilih nomor posisi saat booking; tidak boleh bentrok antara antrian menunggu / sedang dilayani pada hari yang sama.`}
               />
             </CardContent>
           </Card>

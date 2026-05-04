@@ -7,7 +7,7 @@ import {
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Avatar, Divider, LinearProgress, Checkbox,
   InputAdornment, Alert, Fab, Tooltip, Paper,
-  ToggleButton, ToggleButtonGroup,
+  FormControl, InputLabel, Select, MenuItem, FormHelperText,
 } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
@@ -79,7 +79,7 @@ interface TenantInfo {
   allowStaffCreateBooking?: boolean;
   /** true = QR/booking hanya lewat OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
   requireLoginOnCreateBooking?: boolean;
-  /** Jumlah posisi di form booking; null atau <1 = tanpa pemilihan posisi */
+  /** Jumlah posisi di form booking; `null` = tanpa pemilihan posisi (API: `GET /tenants/:id` selalu number | null). */
   bookingSeatCount?: number | null;
 }
 
@@ -254,6 +254,9 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [notes, setNotes] = useState('');
   /** Pilih posisi 1…N ketika outlet mengaktifkan `bookingSeatCount`. */
   const [bookingSeatPick, setBookingSeatPick] = useState(1);
+  /** Dari GET publik occupied-seat-positions saat dialog konfirmasi dibuka */
+  const [occupiedSeatPositions, setOccupiedSeatPositions] = useState<number[]>([]);
+  const [seatAvailabilityLoading, setSeatAvailabilityLoading] = useState(false);
   const [bookStep, setBookStep] = useState<'service' | 'staff'>('service');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeBookings, setActiveBookings] = useState<ActiveBooking[]>([]);
@@ -335,16 +338,13 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         router.replace('/');
         return;
       }
-      void loadBookingData();
       return;
     }
     if (user.role !== 'customer') {
       router.replace('/dashboard');
       return;
     }
-    void loadBookingData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, isQrFlow, isStaffVariant]);
+  }, [user, authLoading, isQrFlow, isStaffVariant, router]);
 
   useEffect(() => {
     if (!isStaffVariant || !effectiveTenantId || !user?.tenantId) return;
@@ -384,7 +384,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
   useEffect(() => {
     const n = tenant?.bookingSeatCount;
-    if (typeof n === 'number' && n >= 1) setBookingSeatPick(1);
+    if (n == null || typeof n !== 'number' || !Number.isFinite(n) || n < 1) return;
+    setBookingSeatPick(1);
   }, [tenant?._id, tenant?.bookingSeatCount]);
 
   // OTP countdown
@@ -403,10 +404,10 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     if (!silent) setPageLoading(true);
     try {
       if (isStaffVariant) {
-        const [svcRes, tenantRes, todayRes] = await Promise.all([
+        const [svcRes, tenantRes, todayWrapped] = await Promise.all([
           api.get(`/tenants/${effectiveTenantId}/services`),
           api.get(`/tenants/${effectiveTenantId}`),
-          api.get('/bookings/today'),
+          api.get('/bookings/today').catch(() => ({ data: [] as ActiveBooking[] })),
         ]);
         setServices(svcRes.data);
         setTenant(tenantRes.data);
@@ -415,7 +416,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           router.replace('/staff');
           return;
         }
-        const todayRows: ActiveBooking[] = Array.isArray(todayRes.data) ? todayRes.data : [];
+        const todayRows: ActiveBooking[] = Array.isArray(todayWrapped.data) ? todayWrapped.data : [];
         if (selectedBookingCustomer) {
           const actives = todayRows.filter(
             (b) =>
@@ -433,14 +434,16 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         setLastDoneVisit(null);
         setVisitedTenants([]);
       } else {
-        const [svcRes, histRes, tenantRes] = await Promise.all([
+        const [svcRes, tenantRes, histWrapped] = await Promise.all([
           api.get(`/tenants/${effectiveTenantId}/services`),
-          api.get('/bookings/history?limit=100'),
           api.get(`/tenants/${effectiveTenantId}`),
+          api
+            .get('/bookings/history?limit=100')
+            .catch(() => ({ data: { data: [] as ActiveBooking[] } })),
         ]);
         setServices(svcRes.data);
         setTenant(tenantRes.data);
-        const historyItems: ActiveBooking[] = histRes.data?.data ?? [];
+        const historyItems: ActiveBooking[] = histWrapped.data?.data ?? [];
         const actives = historyItems.filter(
           (b) =>
             (!effectiveTenantId || b.tenantId === effectiveTenantId) &&
@@ -483,11 +486,21 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     }
   }, [effectiveTenantId, isQrFlow, isStaffVariant, selectedBookingCustomer, router]);
 
-  // Reload booking data when outlet / pelanggan (staff) berubah
+  // Muat data booking + outlet setelah auth & effectiveTenantId siap (history/today boleh gagal tanpa memblokir tenant)
   useEffect(() => {
-    if (user && effectiveTenantId) void loadBookingData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveTenantId, selectedBookingCustomer?._id, isStaffVariant]);
+    if (authLoading) return;
+    if (!user || !effectiveTenantId) return;
+    if (isStaffVariant && user.role !== 'staff') return;
+    if (!isStaffVariant && user.role !== 'customer') return;
+    void loadBookingData();
+  }, [
+    authLoading,
+    user,
+    effectiveTenantId,
+    selectedBookingCustomer?._id,
+    isStaffVariant,
+    loadBookingData,
+  ]);
 
   /** Staff membuat booking: tidak ada langkah pilih staff */
   useEffect(() => {
@@ -500,6 +513,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     if (!effectiveTenantId) return;
     if (guestBookingFlow) {
       const id = setInterval(() => {
+        void api
+          .get(`/tenants/${effectiveTenantId}`)
+          .then((r) => {
+            setTenant(r.data);
+          })
+          .catch(() => {});
         api
           .get(`/tenants/${effectiveTenantId}/staff/queue`)
           .then((r) => {
@@ -562,6 +581,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   useEffect(() => {
     if (!guestBookingFlow || !tenantIdParam) return;
     setPageLoading(true);
+    void api
+      .get(`/tenants/${tenantIdParam}`)
+      .then((r) => {
+        setTenant(r.data);
+      })
+      .catch(() => {});
     Promise.all([
       api.get(`/public/tenants/${tenantIdParam}/services`),
       api.get(`/tenants/${tenantIdParam}/staff/queue`).catch(() => ({ data: [] as StaffQueueRow[] })),
@@ -656,12 +681,76 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     () => selectedServices.reduce((sum, s) => sum + s.durationMinutes * qFor(s._id), 0),
     [selectedServices, serviceQty],
   );
+  /** Jumlah slot kursi = nilai `tenant.bookingSeatCount` dari outlet (telah dinormalisasi API). */
   const seatSlotCount = useMemo(() => {
-    if (!tenant || typeof tenant.bookingSeatCount !== 'number') return null;
-    if (tenant.bookingSeatCount < 1) return null;
-    return Math.min(50, Math.floor(tenant.bookingSeatCount));
+    const n = tenant?.bookingSeatCount;
+    if (n == null || typeof n !== 'number' || !Number.isFinite(n) || n < 1) return null;
+    return Math.floor(n);
   }, [tenant]);
+  const availableSeatSlots = useMemo(() => {
+    if (seatSlotCount == null) return [];
+    return Array.from({ length: seatSlotCount }, (_, i) => i + 1).filter(
+      (n) => !occupiedSeatPositions.includes(n),
+    );
+  }, [seatSlotCount, occupiedSeatPositions]);
+  const seatPickerBlocksSubmit =
+    seatSlotCount != null && (seatAvailabilityLoading || availableSeatSlots.length === 0);
   const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
+
+  /** Snapshot outlet terbaru (bookingSeatCount, kuota, tagihan) sebelum konfirmasi — hindari state stale. */
+  useEffect(() => {
+    if (!dialogOpen || !effectiveTenantId) return;
+    let cancelled = false;
+    void api
+      .get(`/tenants/${effectiveTenantId}`)
+      .then((res) => {
+        if (!cancelled) setTenant(res.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, effectiveTenantId]);
+
+  useEffect(() => {
+    if (!dialogOpen || seatSlotCount == null || !effectiveTenantId) {
+      if (!dialogOpen) {
+        setOccupiedSeatPositions([]);
+        setSeatAvailabilityLoading(false);
+      }
+      return;
+    }
+    let cancelled = false;
+    setSeatAvailabilityLoading(true);
+    void api
+      .get<{ occupiedSeatPositions?: number[] }>(
+        `/public/tenants/${effectiveTenantId}/occupied-seat-positions`,
+      )
+      .then((res) => {
+        if (cancelled) return;
+        const raw = res.data?.occupiedSeatPositions;
+        const list = Array.isArray(raw)
+          ? raw.filter((x): x is number => typeof x === 'number' && Number.isFinite(x)).map(Math.floor)
+          : [];
+        setOccupiedSeatPositions(list);
+      })
+      .catch(() => {
+        if (!cancelled) setOccupiedSeatPositions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSeatAvailabilityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, seatSlotCount, effectiveTenantId]);
+
+  useEffect(() => {
+    if (seatSlotCount == null) return;
+    setBookingSeatPick((prev) =>
+      availableSeatSlots.includes(prev) ? prev : (availableSeatSlots[0] ?? 1),
+    );
+  }, [seatSlotCount, availableSeatSlots]);
 
   const outletQuotaFull =
     !!tenant?.dailyBookingQuota &&
@@ -772,6 +861,20 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     }
     if (selectedServices.length === 0) return;
     if (!assertGuestHasName()) return;
+    if (seatSlotCount != null) {
+      if (seatAvailabilityLoading) {
+        toast.error('Tunggu sebentar, memuat ketersediaan kursi.');
+        return;
+      }
+      if (availableSeatSlots.length === 0) {
+        toast.error('Semua nomor kursi sedang dipakai.');
+        return;
+      }
+      if (!availableSeatSlots.includes(bookingSeatPick)) {
+        toast.error('Pilih nomor kursi yang masih tersedia.');
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const res = guestBookingFlow && tenantIdParam
@@ -2110,37 +2213,40 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
           {seatSlotCount != null && seatSlotCount >= 1 && (
             <Box sx={{ mb: 2.5 }}>
-              <Typography
-                variant="overline"
-                display="block"
-                sx={{
-                  fontWeight: 700, letterSpacing: 1,
-                  fontSize: '0.62rem',
-                  color: 'text.secondary',
-                  mb: 1,
-                }}
-              >
-                Pilih posisi
-              </Typography>
-              <ToggleButtonGroup
-                exclusive
-                fullWidth
-                size="small"
-                value={bookingSeatPick}
-                onChange={(_, val) => {
-                  if (val != null) setBookingSeatPick(val);
-                }}
-                sx={{ flexWrap: 'wrap', gap: 0.5, '& .MuiToggleButtonGroup-grouped': { flex: '1 1 auto' } }}
-              >
-                {Array.from({ length: seatSlotCount }, (_, i) => i + 1).map((n) => (
-                  <ToggleButton key={n} value={n} sx={{ minWidth: 44 }}>
-                    {n}
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.4 }}>
-                Nomor sama tidak bisa untuk dua antrian aktif bersamaan.
-              </Typography>
+              {seatAvailabilityLoading ? (
+                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CircularProgress size={16} /> Memuat kursi yang tersedia…
+                </Typography>
+              ) : availableSeatSlots.length === 0 ? (
+                <Alert severity="warning" sx={{ borderRadius: 2.5 }}>
+                  Semua nomor kursi sedang dipakai antrian aktif hari ini. Booking tidak bisa dilanjutkan sampai ada antrian yang selesai atau dibatalkan.
+                </Alert>
+              ) : (
+                <FormControl fullWidth>
+                  <InputLabel id="booking-seat-select-label">Nomor kursi</InputLabel>
+                  <Select
+                    labelId="booking-seat-select-label"
+                    id="booking-seat-select"
+                    label="Nomor kursi"
+                    value={
+                      availableSeatSlots.includes(bookingSeatPick)
+                        ? bookingSeatPick
+                        : availableSeatSlots[0]
+                    }
+                    onChange={(e) => setBookingSeatPick(Number(e.target.value))}
+                    sx={{ borderRadius: 2.5 }}
+                  >
+                    {availableSeatSlots.map((n) => (
+                      <MenuItem key={n} value={n}>
+                        {n}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>
+                    Nomor yang sudah dipakai tidak ditampilkan; satu nomor tidak boleh dua antrian aktif bersamaan.
+                  </FormHelperText>
+                </FormControl>
+              )}
             </Box>
           )}
 
@@ -2174,6 +2280,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               !!tenant?.subscriptionOverdue ||
               outletQuotaFull ||
               tenantSlotsExceededForCart ||
+              seatPickerBlocksSubmit ||
               (!!selectedStaff && staffQuotaExceeded(selectedStaff, totalCartQty)) ||
               (!!selectedStaff && selectedStaff.isAvailable === false)
             }

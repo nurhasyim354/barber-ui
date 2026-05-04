@@ -7,6 +7,7 @@ import {
   DialogActions, Divider, IconButton, List, ListItemButton,
   ListItemAvatar, Avatar, ListItemText, Radio, Alert, TextField, Tooltip,
   Link,
+  Fab,
 } from '@mui/material';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -340,7 +341,7 @@ export default function PosPage() {
         setQrisErrorBanner(
           serverMsg
             ? `${serverMsg} — jika perlu, catat pembayaran tunai.`
-            : 'Pembayaran QRIS belum tercatat. Gunakan tombol Ganti ke Tunai di bawah jika pelanggan membayar tunai.',
+            : 'Pembayaran QRIS belum tercatat. Gunakan tombol Tunai di bawah jika pelanggan bayar tunai.',
         );
       } else {
         setQrisErrorBanner(null);
@@ -767,7 +768,7 @@ export default function PosPage() {
         maxWidth="xs"
         PaperProps={{
           sx: {
-            maxHeight: 'min(560px, 90dvh)',
+            maxHeight: 'min(680px, 92dvh)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -880,103 +881,186 @@ export default function PosPage() {
           </>
         ) : (
           <>
-            <DialogTitle fontWeight={500} sx={{ textAlign: 'center', pb: 0 }}>
+            <DialogTitle fontWeight={500} sx={{ textAlign: 'center', pb: 1, pt: 2, flexShrink: 0 }}>
               Konfirmasi Pembayaran QRIS
             </DialogTitle>
-            <DialogContent>
-              {qrisErrorBanner && (
-                <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setQrisErrorBanner(null)}>
-                  {qrisErrorBanner}
-                </Alert>
-              )}
-              {payDialog.booking && (
-                <PaymentBookingDetailCard
-                  booking={payDialog.booking}
-                  assigneeLabel={ui.assigneeReceiptLabel}
-                  customerPhone={payDialog.booking.customerPhone}
-                />
-              )}
-              {/* QRIS waiting screen */}
-              <Box className="text-center py-2">
-                {/* QRIS image or placeholder */}
-                {qrisImageBase64 ? (
+            <Box
+              sx={{
+                flex: '1 1 auto',
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  flex: '1 1 auto',
+                  minHeight: 0,
+                  px: 2,
+                  pt: 0,
+                  pb: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                {qrisErrorBanner && (
+                  <Alert severity="warning" sx={{ mb: 1.5, flexShrink: 0 }} onClose={() => setQrisErrorBanner(null)}>
+                    {qrisErrorBanner}
+                  </Alert>
+                )}
+                {payDialog.booking && (
                   <Box
                     sx={{
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 2,
-                      overflow: 'hidden',
-                      mb: 2,
-                      bgcolor: 'white',
-                      p: 1,
+                      flex: '1 1 auto',
+                      minHeight: { xs: 240, sm: 300 },
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      mb: 1.5,
+                      pr: 0.5,
+                      WebkitOverflowScrolling: 'touch',
                     }}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={qrisImageBase64}
-                      alt="QRIS"
-                      style={{ width: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }}
+                    <PaymentBookingDetailCard
+                      booking={payDialog.booking}
+                      assigneeLabel={ui.assigneeReceiptLabel}
+                      customerPhone={payDialog.booking.customerPhone}
                     />
                   </Box>
-                ) : (
-                  <Box
-                    sx={{
-                      width: 80, height: 80, borderRadius: '20px',
-                      bgcolor: 'rgba(192,57,43,0.1)', border: '2px solid',
-                      borderColor: 'primary.main',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      mx: 'auto', mb: 2,
-                    }}
-                  >
-                    <QrCodeIcon sx={{ fontSize: 48, color: 'primary.main' }} />
-                  </Box>
                 )}
+                <Box sx={{ flexShrink: 0, textAlign: 'center', pt: 0.5 }}>
+                  {qrisImageBase64 ? (
+                    <Box
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        mb: 1.5,
+                        bgcolor: 'white',
+                        p: 1,
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={qrisImageBase64}
+                        alt="QRIS"
+                        style={{ width: '100%', maxHeight: 150, objectFit: 'contain', display: 'block' }}
+                      />
+                    </Box>
+                  ) : (
+                    <Box
+                      sx={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: '16px',
+                        bgcolor: 'rgba(192,57,43,0.1)',
+                        border: '2px solid',
+                        borderColor: 'primary.main',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mx: 'auto',
+                        mb: 1.5,
+                      }}
+                    >
+                      <QrCodeIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+                    </Box>
+                  )}
 
-                <Typography variant="body2" color="text.secondary" mb={2}>
-                  {qrisImageBase64
-                    ? 'Minta pelanggan scan QR di atas'
-                    : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
-                </Typography>
-                <Typography variant="h5" fontWeight={900} color="primary" mb={1}>
-                  Rp {(payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0).toLocaleString('id-ID')}
-                </Typography>
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    {qrisImageBase64
+                      ? 'Minta pelanggan scan QR di atas'
+                      : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
+                  </Typography>
+                  <Typography variant="h5" fontWeight={900} color="primary">
+                    Rp {(payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0).toLocaleString('id-ID')}
+                  </Typography>
+                </Box>
               </Box>
 
-              <Divider sx={{ my: 2 }} />
-
-              {/* Primary: confirm QRIS paid */}
-              <Button
-                fullWidth variant="contained" size="large"
-                color="success"
-                onClick={() => handlePayment('qris')}
-                disabled={paying}
-                startIcon={paying ? <CircularProgress size={20} color="inherit" /> : <CheckCircleIcon />}
-                sx={{ mb: 1.5, py: 1.5 }}
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  px: 2,
+                  pt: 2,
+                  pb: 2.25,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.25,
+                  bgcolor: 'background.paper',
+                  borderTop: 1,
+                  borderColor: 'divider',
+                  boxShadow: (theme) =>
+                    theme.palette.mode === 'dark'
+                      ? '0 -10px 36px rgba(0,0,0,0.55)'
+                      : '0 -10px 36px rgba(0,0,0,0.12)',
+                }}
               >
-                {paying ? 'Memproses…' : 'QRIS Sudah Dibayar'}
-              </Button>
-
-              {/* Fallback: switch to cash */}
-              <Button
-                fullWidth variant="contained" size="large"
-                onClick={() => { setQrisErrorBanner(null); void handlePayment('cash'); }}
-                disabled={paying}
-                startIcon={<PaymentsIcon />}
-                color="secondary"
-                sx={{ mb: 1 }}
-              >
-                Ganti ke Tunai
-              </Button>
-            </DialogContent>
-            <DialogActions>
-              <Button
-                onClick={() => { setPayStep('select'); setQrisErrorBanner(null); }}
-                disabled={paying}
-                color="inherit"
-              >
-                ← Kembali
-              </Button>
-            </DialogActions>
+                <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'stretch' }}>
+                  <Fab
+                    variant="extended"
+                    color="success"
+                    disabled={paying}
+                    onClick={() => handlePayment('qris')}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      borderRadius: 2,
+                      py: 1.25,
+                      justifyContent: 'center',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.8125rem',
+                      boxShadow: (t) => (t.palette.mode === 'dark' ? 4 : 3),
+                    }}
+                  >
+                    {paying ? (
+                      <CircularProgress size={20} color="inherit" sx={{ mr: 0.75 }} />
+                    ) : (
+                      <CheckCircleIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                    )}
+                    {paying ? 'Memproses…' : 'QRIS OK'}
+                  </Fab>
+                  <Fab
+                    variant="extended"
+                    color="secondary"
+                    disabled={paying}
+                    onClick={() => {
+                      setQrisErrorBanner(null);
+                      void handlePayment('cash');
+                    }}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      borderRadius: 2,
+                      py: 1.25,
+                      justifyContent: 'center',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.8125rem',
+                      boxShadow: (t) => (t.palette.mode === 'dark' ? 3 : 2),
+                    }}
+                  >
+                    <PaymentsIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                    Tunai
+                  </Fab>
+                </Box>
+                <Button
+                  fullWidth
+                  variant="text"
+                  color="inherit"
+                  disabled={paying}
+                  onClick={() => {
+                    setPayStep('select');
+                    setQrisErrorBanner(null);
+                  }}
+                >
+                  ← Kembali
+                </Button>
+              </Box>
+            </Box>
           </>
         )}
       </Dialog>
