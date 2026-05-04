@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, type AuthUser } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
@@ -42,12 +42,13 @@ export default function AdminTenantDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
-  const { user, isLoading, loadFromStorage } = useAuthStore();
+  const { user, isLoading, loadFromStorage, setAuth } = useAuthStore();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [enteringTenant, setEnteringTenant] = useState(false);
   const [row, setRow] = useState<TenantDetail | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -65,7 +66,7 @@ export default function AdminTenantDetailPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'super_admin') { router.replace('/login'); return; }
+    if (user.role !== 'super_admin') { router.replace(user.delegatedFromSuperAdmin ? '/dashboard' : '/login'); return; }
   }, [user, isLoading, router]);
 
   const load = useCallback(async () => {
@@ -137,6 +138,20 @@ export default function AdminTenantDetailPage() {
     }
   };
 
+  const handleEnterAsTenantAdmin = async () => {
+    setEnteringTenant(true);
+    try {
+      const res = await api.post<{ token: string; user: AuthUser }>('/auth/super-admin/enter-tenant', { tenantId: id });
+      setAuth(res.data.user, res.data.token);
+      toast.success(`Membuka dashboard: ${row?.name ?? 'outlet'}`);
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal membuka outlet');
+    } finally {
+      setEnteringTenant(false);
+    }
+  };
+
   if (loading || !row) {
     return (
       <AppPageShell variant="adminFooter">
@@ -174,6 +189,17 @@ export default function AdminTenantDetailPage() {
             dan layanan default di-seed otomatis.
           </Alert>
         )}
+
+        <Button
+          variant="outlined"
+          color="primary"
+          fullWidth
+          sx={{ mb: 2 }}
+          disabled={enteringTenant}
+          onClick={() => void handleEnterAsTenantAdmin()}
+        >
+          {enteringTenant ? <CircularProgress size={22} /> : 'Kelola fitur outlet (seperti admin outlet)'}
+        </Button>
 
         <Card>
           <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

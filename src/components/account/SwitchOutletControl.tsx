@@ -54,7 +54,7 @@ export default function SwitchOutletControl({ onSwitched, alwaysShowIcon }: Prop
 
   useEffect(() => {
     const u = useAuthStore.getState().user;
-    if (!u || u.role === 'super_admin') {
+    if (!u || u.role === 'super_admin' || u.delegatedFromSuperAdmin) {
       setRows([]);
       return;
     }
@@ -74,11 +74,12 @@ export default function SwitchOutletControl({ onSwitched, alwaysShowIcon }: Prop
     return () => {
       cancelled = true;
     };
-  }, [user?._id, user?.tenantId, user?.role]);
+  }, [user?._id, user?.tenantId, user?.role, user?.delegatedFromSuperAdmin]);
 
   const showIcon =
     user &&
     user.role !== 'super_admin' &&
+    !user.delegatedFromSuperAdmin &&
     rows.length > 0 &&
     (alwaysShowIcon ||
       rows.length > 1 ||
@@ -87,7 +88,7 @@ export default function SwitchOutletControl({ onSwitched, alwaysShowIcon }: Prop
   const handleOpen = () => {
     setOpen(true);
     const u = useAuthStore.getState().user;
-    if (!u || u.role === 'super_admin') return;
+    if (!u || u.role === 'super_admin' || u.delegatedFromSuperAdmin) return;
     setLoadingList(true);
     api
       .get<SwitchableTenantRow[]>('/auth/my-switchable-tenants')

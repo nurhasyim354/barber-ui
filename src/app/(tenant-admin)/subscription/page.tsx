@@ -54,6 +54,30 @@ interface PaymentInstructions {
   supportWhatsAppHref: string | null;
 }
 
+interface PaymentGatewayView {
+  enabled: boolean;
+  provider: 'midtrans';
+  clientKey: string;
+  snapJsUrl: string;
+  isProduction: boolean;
+}
+
+declare global {
+  interface Window {
+    snap?: {
+      pay: (
+        token: string,
+        opts?: {
+          onSuccess?: () => void;
+          onPending?: () => void;
+          onError?: () => void;
+          onClose?: () => void;
+        },
+      ) => void;
+    };
+  }
+}
+
 const statusChip: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
   free: { label: 'Gratis', color: 'success' },
   pending: { label: 'Belum Bayar', color: 'warning' },
@@ -90,6 +114,10 @@ export default function SubscriptionPage() {
   const [payRef, setPayRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [paymentGateway, setPaymentGateway] = useState<PaymentGatewayView | null>(null);
+  const [snapReady, setSnapReady] = useState(false);
+  const [snapPayBusy, setSnapPayBusy] = useState(false);
+
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
   useEffect(() => {
     if (isLoading) return;
@@ -106,6 +134,7 @@ export default function SubscriptionPage() {
       setBilling(res.data.billing);
       setPlans(res.data.plans);
       setPaymentInstructions(res.data.paymentInstructions ?? null);
+      setPaymentGateway(res.data.paymentGateway ?? null);
     } catch {
       toast.error('Gagal memuat info langganan');
     } finally {
@@ -142,6 +171,65 @@ export default function SubscriptionPage() {
       toast.error('Gagal mengirim referensi');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!paymentGateway?.enabled) {
+      setSnapReady(false);
+      return;
+    }
+    const cid = paymentGateway.clientKey;
+    const src = paymentGateway.snapJsUrl;
+    const markerId = 'midtrans-snap-loader';
+    document.getElementById(markerId)?.remove();
+    setSnapReady(false);
+    const script = document.createElement('script');
+    script.id = markerId;
+    script.src = src;
+    script.async = true;
+    script.setAttribute('data-client-key', cid);
+    script.onload = () => setSnapReady(true);
+    script.onerror = () => toast.error('Gagal memuat Midtrans Snap');
+    document.body.appendChild(script);
+  }, [paymentGateway?.enabled, paymentGateway?.clientKey, paymentGateway?.snapJsUrl]);
+
+  const handlePayMidtrans = async () => {
+    if (!billing || !paymentGateway?.enabled) return;
+    if (!snapReady || typeof window.snap?.pay !== 'function') {
+      toast.error('Snap belum siap — tunggu sebentar atau muat ulang halaman.');
+      return;
+    }
+    setSnapPayBusy(true);
+    try {
+      const res = await api.post<{ snapToken: string }>('subscription/midtrans/snap-token', {
+        billingId: billing._id,
+      });
+      window.snap.pay(res.data.snapToken, {
+        onSuccess: () => {
+          setSnapPayBusy(false);
+          toast.success('Pembayaran selesai. Status akan diperbarui setelah konfirmasi Midtrans.');
+          void loadCurrent();
+        },
+        onPending: () => {
+          setSnapPayBusy(false);
+          toast('Pembayaran tertunda — selesaikan di aplikasi pembayaran Anda.', { icon: '⏳' });
+          void loadCurrent();
+        },
+        onError: () => {
+          setSnapPayBusy(false);
+          toast.error('Pembayaran dibatalkan atau gagal.');
+        },
+        onClose: () => {
+          setSnapPayBusy(false);
+          void loadCurrent();
+        },
+      });
+    } catch (err: unknown) {
+      setSnapPayBusy(false);
+      toast.error(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal memulai Midtrans',
+      );
     }
   };
 
@@ -194,9 +282,25 @@ export default function SubscriptionPage() {
                   Cara pembayaran langganan
                 </Typography>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Anda dapat membayar dengan <strong>transfer bank</strong> atau <strong>QRIS</strong>. Setelah itu
-                  kirim nomor referensi lewat tombol &quot;Kirim Bukti / Referensi Pembayaran&quot; agar tim mengonfirmasi.
+                  {paymentGateway?.enabled ? (
+                    <>
+                      Anda dapat membayar secara <strong>online (Midtrans)</strong>, atau{' '}
+                      <strong>transfer bank</strong> / <strong>QRIS</strong> lalu kirim nomor referensi manual.
+                      Setelah transfer manual kirim nomor referensi melalui tombol di bawah agar tim mengonfirmasi.
+                    </>
+                  ) : (
+                    <>
+                      Anda dapat membayar dengan <strong>transfer bank</strong> atau <strong>QRIS</strong>. Setelah itu
+                      kirim nomor referensi lewat tombol &quot;Kirim Bukti / Referensi Pembayaran&quot; agar tim mengonfirmasi.
+                    </>
+                  )}
                 </Typography>
+
+                {paymentGateway?.enabled && (
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    Pembayaran online Midtrans aktif untuk tagihan Anda. Lunasi dari kartu/dompet digital mendukung Midtrans Snap.
+                  </Alert>
+                )}
 
                 <Box mb={3}>
                   <Box className="flex items-center gap-1 mb-1">
@@ -320,12 +424,33 @@ export default function SubscriptionPage() {
                   )}
 
                   {(billing.status === 'pending' || billing.status === 'overdue') && billing.amount > 0 && !billing.paymentRef && (
-                    <Button
-                      fullWidth variant="contained" sx={{ mt: 2 }}
-                      onClick={() => setPayDialog(true)}
-                    >
-                      Kirim Bukti / Referensi Pembayaran
-                    </Button>
+                    paymentGateway?.enabled ? (
+                      <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          color="secondary"
+                          disabled={snapPayBusy || !snapReady}
+                          onClick={() => void handlePayMidtrans()}
+                        >
+                          {snapPayBusy || !snapReady ? (
+                            <CircularProgress size={22} color="inherit" />
+                          ) : (
+                            'Bayar online (Midtrans)'
+                          )}
+                        </Button>
+                        <Button fullWidth variant="outlined" onClick={() => setPayDialog(true)}>
+                          Kirim bukti transfer manual
+                        </Button>
+                      </Box>
+                    ) : (
+                      <Button
+                        fullWidth variant="contained" sx={{ mt: 2 }}
+                        onClick={() => setPayDialog(true)}
+                      >
+                        Kirim Bukti / Referensi Pembayaran
+                      </Button>
+                    )
                   )}
                 </CardContent>
               </Card>
