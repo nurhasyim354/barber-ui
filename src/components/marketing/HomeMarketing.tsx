@@ -25,6 +25,7 @@ import QrCode2Icon from '@mui/icons-material/QrCode2';
 import CarIcon from '@mui/icons-material/CarRepair';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
+import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import ReplayIcon from '@mui/icons-material/Replay';
@@ -133,6 +134,7 @@ const verticalIcons: Record<BusinessVerticalId, React.ReactNode> = {
   jasa_umum: <HandymanIcon sx={{ fontSize: 40 }} />,
   restaurant: <RestaurantIcon sx={{ fontSize: 40 }} />,
   toko: <HandymanIcon sx={{ fontSize: 40 }} />,
+  laundry: <LocalLaundryServiceIcon sx={{ fontSize: 40 }} />,
 };
 
 const TENANT_BENEFITS: { icon: React.ReactNode; title: string; body: string }[] = [

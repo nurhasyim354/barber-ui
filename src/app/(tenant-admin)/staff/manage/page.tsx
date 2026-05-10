@@ -5,6 +5,7 @@ import {
     Box, Card, CardContent, Typography, Button, CircularProgress,
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Avatar, IconButton, Chip, Switch, Rating, Pagination,
+    List, ListItem, ListItemText,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -13,9 +14,12 @@ import PersonIcon from '@mui/icons-material/Person';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import ClearIcon from '@mui/icons-material/Clear';
+import DownloadIcon from '@mui/icons-material/Download';
+import UploadIcon from '@mui/icons-material/Upload';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { compressImage } from '@/lib/imageUtils';
+import { exportWorkbook, parseExcelFile } from '@/lib/excelUtils';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
@@ -56,6 +60,10 @@ export default function StaffManagementPage() {
     const [deleting, setDeleting] = useState(false);
     const [photoUploading, setPhotoUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const importFileRef = useRef<HTMLInputElement>(null);
+    type ImportStaffRow = { name: string; phone: string; specialty: string; dailyBookingQuota: number | null };
+    const [importDialog, setImportDialog] = useState<{ open: boolean; rows: ImportStaffRow[]; errors: string[]; duplicates: string[] }>({ open: false, rows: [], errors: [], duplicates: [] });
+    const [importing, setImporting] = useState(false);
 
     useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -178,12 +186,107 @@ export default function StaffManagementPage() {
         }
     };
 
+    const handleExportStaff = () => {
+        if (staffMembers.length === 0) { toast.error('Tidak ada staff untuk diekspor'); return; }
+        exportWorkbook([{
+            name: 'Staff',
+            rows: staffMembers.map((s) => ({
+                'Nama': s.name,
+                'Spesialisasi': s.specialty ?? '',
+                'No. HP': s.phone ?? '',
+                'Rating': s.rating || 0,
+                'Kuota Harian': s.dailyBookingQuota ?? '',
+                'Aktif': s.isActive ? 'Ya' : 'Tidak',
+            })),
+        }], 'staff');
+        toast.success('File Excel berhasil diunduh');
+    };
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+            // Ambil semua nama staff yang sudah ada untuk cek duplikat
+            const allStaffRes = await api.get('/staff?limit=10000');
+            const allStaffNames = new Set<string>(
+                (allStaffRes.data.data as { name: string }[]).map((s) => s.name.toLowerCase()),
+            );
+
+            const rawRows = await parseExcelFile(file);
+            const rows: ImportStaffRow[] = [];
+            const errors: string[] = [];
+            const duplicates: string[] = [];
+            const batchNames = new Set<string>();
+
+            rawRows.forEach((r, idx) => {
+                const rowNum = idx + 2;
+                const name = String(r['Nama'] ?? '').trim();
+                if (!name) { errors.push(`Baris ${rowNum}: Nama wajib diisi`); return; }
+
+                const nameLower = name.toLowerCase();
+                if (allStaffNames.has(nameLower) || batchNames.has(nameLower)) {
+                    duplicates.push(name);
+                    return;
+                }
+                batchNames.add(nameLower);
+
+                const quotaRaw = String(r['Kuota Harian'] ?? '').trim();
+                const quota = quotaRaw === '' ? null : Math.max(1, parseInt(quotaRaw, 10) || 1);
+                rows.push({
+                    name,
+                    phone: String(r['No. HP'] ?? '').replace(/\D/g, ''),
+                    specialty: String(r['Spesialisasi'] ?? '').trim(),
+                    dailyBookingQuota: quota,
+                });
+            });
+            setImportDialog({ open: true, rows, errors, duplicates });
+        } catch {
+            toast.error('Gagal membaca file Excel');
+        }
+    };
+
+    const handleConfirmImport = async () => {
+        if (importDialog.rows.length === 0) return;
+        setImporting(true);
+        let ok = 0; let fail = 0;
+        for (const row of importDialog.rows) {
+            try {
+                await api.post('/staff', {
+                    name: row.name,
+                    ...(row.phone ? { phone: row.phone } : {}),
+                    ...(row.specialty ? { specialty: row.specialty } : {}),
+                    ...(row.dailyBookingQuota != null ? { dailyBookingQuota: row.dailyBookingQuota } : {}),
+                });
+                ok++;
+            } catch { fail++; }
+        }
+        setImporting(false);
+        setImportDialog({ open: false, rows: [], errors: [], duplicates: [] });
+        toast.success(`Import selesai: ${ok} berhasil${fail > 0 ? `, ${fail} gagal` : ''}${importDialog.duplicates.length > 0 ? `, ${importDialog.duplicates.length} duplikat dilewati` : ''}`);
+        loadStaffPage();
+    };
+
+    const handleDownloadTemplate = () => {
+        exportWorkbook([{
+            name: 'Staff',
+            rows: [{ 'Nama': 'Budi', 'Spesialisasi': 'Pangkas rambut', 'No. HP': '08123456789', 'Kuota Harian': '' }],
+        }], 'template_staff');
+    };
+
     return (
         <AppPageShell variant="withBottomNav">
+            <input ref={importFileRef} type="file" accept=".xlsx,.xls" hidden onChange={handleImportFile} />
             <PageHeader
                 title={`${ui.staffTeamTitle} (${total})`}
                 right={
-                    <Box className="flex items-center">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <IconButton color="inherit" size="small" onClick={handleExportStaff} title="Export Excel">
+                            <DownloadIcon />
+                        </IconButton>
+                        <IconButton color="inherit" size="small" onClick={() => importFileRef.current?.click()} title="Import Excel">
+                            <UploadIcon />
+                        </IconButton>
                         <IconButton color="inherit" onClick={openAdd}>
                             <AddIcon />
                         </IconButton>
@@ -399,6 +502,69 @@ export default function StaffManagementPage() {
                     </Button>
                     <Button onClick={() => void handleDelete()} variant="contained" color="error" fullWidth disabled={deleting}>
                         {deleting ? <CircularProgress size={20} color="inherit" /> : 'Hapus permanen'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Import Staff Dialog */}
+            <Dialog open={importDialog.open} onClose={() => !importing && setImportDialog({ open: false, rows: [], errors: [], duplicates: [] })} fullWidth maxWidth="xs">
+                <DialogTitle fontWeight={500}>Konfirmasi Import {ui.staffSingular}</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" gutterBottom>
+                        <strong>{importDialog.rows.length}</strong> {ui.staffSingular.toLowerCase()} baru siap diimport.
+                        {importDialog.duplicates.length > 0 && ` ${importDialog.duplicates.length} duplikat dilewati.`}
+                    </Typography>
+                    {importDialog.duplicates.length > 0 && (
+                        <Box sx={{ mb: 1, p: 1, borderRadius: 1, bgcolor: 'warning.light', opacity: 0.85 }}>
+                            <Typography variant="caption" color="warning.dark" fontWeight={600}>
+                                Dilewati karena sudah ada ({importDialog.duplicates.length}):
+                            </Typography>
+                            <Typography variant="caption" color="warning.dark" display="block">
+                                {importDialog.duplicates.slice(0, 5).join(', ')}{importDialog.duplicates.length > 5 ? `, … +${importDialog.duplicates.length - 5} lainnya` : ''}
+                            </Typography>
+                        </Box>
+                    )}
+                    {importDialog.errors.length > 0 && (
+                        <Box sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="error" fontWeight={600}>
+                                {importDialog.errors.length} baris error dilewati:
+                            </Typography>
+                            <List dense disablePadding>
+                                {importDialog.errors.slice(0, 5).map((e, i) => (
+                                    <ListItem key={i} disablePadding>
+                                        <ListItemText primaryTypographyProps={{ variant: 'caption', color: 'error' }} primary={e} />
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </Box>
+                    )}
+                    <List dense disablePadding sx={{ maxHeight: 200, overflow: 'auto' }}>
+                        {importDialog.rows.slice(0, 20).map((r, i) => (
+                            <ListItem key={i} disablePadding>
+                                <ListItemText
+                                    primary={r.name}
+                                    secondary={[r.specialty, r.phone].filter(Boolean).join(' · ') || '—'}
+                                    primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                                    secondaryTypographyProps={{ variant: 'caption' }}
+                                />
+                            </ListItem>
+                        ))}
+                        {importDialog.rows.length > 20 && (
+                            <ListItem disablePadding>
+                                <ListItemText primaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }} primary={`… dan ${importDialog.rows.length - 20} lainnya`} />
+                            </ListItem>
+                        )}
+                    </List>
+                    <Button size="small" onClick={handleDownloadTemplate} startIcon={<DownloadIcon />} sx={{ mt: 1 }}>
+                        Unduh template Excel
+                    </Button>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, gap: 1 }}>
+                    <Button onClick={() => setImportDialog({ open: false, rows: [], errors: [], duplicates: [] })} variant="outlined" fullWidth disabled={importing}>
+                        Batal
+                    </Button>
+                    <Button onClick={() => void handleConfirmImport()} variant="contained" fullWidth disabled={importing || importDialog.rows.length === 0}>
+                        {importing ? <CircularProgress size={20} color="inherit" /> : importDialog.rows.length === 0 ? 'Tidak ada data baru' : `Import ${importDialog.rows.length} ${ui.staffSingular}`}
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -6,7 +6,9 @@ import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Avatar, Divider, LinearProgress, Checkbox,
-  InputAdornment, Alert, Fab, Tooltip, Paper,
+  InputAdornment, Alert, Fab, Tooltip, Paper, IconButton,
+  FormControl, InputLabel, Select, MenuItem, FormHelperText,
+  Collapse, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
@@ -22,10 +24,15 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import NoteAltIcon from '@mui/icons-material/NoteAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import SearchIcon from '@mui/icons-material/Search';
 import SearchOffIcon from '@mui/icons-material/SearchOff';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -34,6 +41,7 @@ import SwitchOutletControl from '@/components/account/SwitchOutletControl';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import { formatDuration } from '@/lib/formatDuration';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
 import {
   bookingServicesLabel,
@@ -78,6 +86,10 @@ interface TenantInfo {
   allowStaffCreateBooking?: boolean;
   /** true = QR/booking hanya lewat OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
   requireLoginOnCreateBooking?: boolean;
+  /** Jumlah posisi di form booking; `null` = tanpa pemilihan posisi (API: `GET /tenants/:id` selalu number | null). */
+  bookingSeatCount?: number | null;
+  /** 0 = peringatan stok nonaktif; >0 = tampilkan info stok jika stockQty ≤ nilai ini */
+  outOfStockQtyReminder?: number;
 }
 
 interface ServicePhotoDoc {
@@ -126,6 +138,7 @@ type BookingResult = Pick<
   | 'totalSubtotal'
   | 'servicePrice'
   | 'services'
+  | 'seatPosition'
 >;
 
 interface LastDoneVisit {
@@ -156,9 +169,25 @@ const waitLabel = (m: number) => {
 const waitColor = (m: number): 'success' | 'warning' | 'error' =>
   m === 0 ? 'success' : m <= 15 ? 'warning' : 'error';
 const statusColor = (s: string) =>
-  s === 'waiting' ? 'warning' : s === 'in_progress' ? 'info' : s === 'done' ? 'success' : 'default';
+  s === 'waiting'
+    ? 'warning'
+    : s === 'in_progress'
+      ? 'info'
+      : s === 'waiting_for_payment'
+        ? 'secondary'
+        : s === 'done'
+          ? 'success'
+          : 'default';
 const statusLabel = (s: string) =>
-  s === 'waiting' ? 'Menunggu' : s === 'in_progress' ? 'Sedang dilayani' : s === 'done' ? 'Selesai' : s;
+  s === 'waiting'
+    ? 'Menunggu'
+    : s === 'in_progress'
+      ? 'Sedang dilayani'
+      : s === 'waiting_for_payment'
+        ? 'Menunggu bayar'
+        : s === 'done'
+          ? 'Selesai'
+          : s;
 
 const formatEstimatedServe = (iso: string) =>
   new Date(iso).toLocaleString('id-ID', {
@@ -202,6 +231,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
   const tenantIdParam = searchParams.get('tenantId');
   const customerPhoneParam = searchParams.get('customerPhone');
+  const addServiceParam = searchParams.get('addService');
   const isQrFlow =
     !isStaffVariant && !!(tenantIdParam && searchParams.get('type') === 'booking');
 
@@ -232,6 +262,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<StaffQueueRow | null>(null);
   const [notes, setNotes] = useState('');
+  /** Pilih posisi 1…N ketika outlet mengaktifkan `bookingSeatCount`. */
+  /** null = Take Away / Dibungkus (tanpa kursi); number = nomor kursi yang dipilih */
+  const [bookingSeatPick, setBookingSeatPick] = useState<number | null>(null);
+  /** Dari GET publik occupied-seat-positions saat dialog konfirmasi dibuka */
+  const [occupiedSeatPositions, setOccupiedSeatPositions] = useState<number[]>([]);
+  const [seatAvailabilityLoading, setSeatAvailabilityLoading] = useState(false);
   const [bookStep, setBookStep] = useState<'service' | 'staff'>('service');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeBookings, setActiveBookings] = useState<ActiveBooking[]>([]);
@@ -240,8 +276,21 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [qtyDraftByService, setQtyDraftByService] = useState<Record<string, string>>({});
   const [serviceSearch, setServiceSearch] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
+  const [floatingCartExpanded, setFloatingCartExpanded] = useState(false);
+  // ── Tambah item ke booking aktif ────────────────────────────────────────────
+  const [addItemBookingId, setAddItemBookingId] = useState<string | null>(null);
+  const [addItemSelected, setAddItemSelected] = useState<Service[]>([]);
+  const [addItemQty, setAddItemQty] = useState<Record<string, number>>({});
+  const [addItemQtyDraft, setAddItemQtyDraft] = useState<Record<string, string>>({});
+  const [addItemSearch, setAddItemSearch] = useState('');
+  const [addItemSubmitting, setAddItemSubmitting] = useState(false);
   const [selectedBookingCustomer, setSelectedBookingCustomer] = useState<CustomerPickRow | null>(null);
   const [customerSearchInput, setCustomerSearchInput] = useState('');
+  /** Mode pemilihan customer oleh staff: tamu baru (input nama) atau pelanggan terdaftar (autocomplete) */
+  const [staffCustomerMode, setStaffCustomerMode] = useState<'guest' | 'existing'>('guest');
+  const [staffGuestName, setStaffGuestName] = useState('');
+  const [staffGuestPhone, setStaffGuestPhone] = useState('');
+  const [staffGuestNameAttempted, setStaffGuestNameAttempted] = useState(false);
   const [customerOptions, setCustomerOptions] = useState<CustomerPickRow[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [lastHaircut, setLastHaircut] = useState<ServicePhotoDoc | null>(null);
@@ -249,6 +298,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [pageLoading, setPageLoading] = useState(true);
   const [staffQueueLoading, setStaffQueueLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  /** Waktu terakhir data berhasil dimuat (untuk label "X detik lalu") */
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  /** Hitung mundur detik ke auto-refresh berikutnya */
+  const [refreshCountdown, setRefreshCountdown] = useState(Math.round(QUEUE_AUTO_RELOAD_MS / 1000));
 
   /** QR dengan tenantId di URL: tunggu GET info outlet sebelum branch OTP vs tamu. */
   const [qrTenantReady, setQrTenantReady] = useState(() => !tenantIdParam);
@@ -313,16 +367,13 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         router.replace('/');
         return;
       }
-      void loadBookingData();
       return;
     }
     if (user.role !== 'customer') {
       router.replace('/dashboard');
       return;
     }
-    void loadBookingData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, isQrFlow, isStaffVariant]);
+  }, [user, authLoading, isQrFlow, isStaffVariant, router]);
 
   useEffect(() => {
     if (!isStaffVariant || !effectiveTenantId || !user?.tenantId) return;
@@ -360,6 +411,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     setBookStep('service');
   }, [selectedBookingCustomer?._id, isStaffVariant]);
 
+  useEffect(() => {
+    const n = tenant?.bookingSeatCount;
+    if (n == null || typeof n !== 'number' || !Number.isFinite(n) || n < 1) return;
+    setBookingSeatPick(1);
+  }, [tenant?._id, tenant?.bookingSeatCount]);
+
   // OTP countdown
   useEffect(() => {
     if (countdown <= 0) return;
@@ -376,10 +433,10 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     if (!silent) setPageLoading(true);
     try {
       if (isStaffVariant) {
-        const [svcRes, tenantRes, todayRes] = await Promise.all([
+        const [svcRes, tenantRes, todayWrapped] = await Promise.all([
           api.get(`/tenants/${effectiveTenantId}/services`),
           api.get(`/tenants/${effectiveTenantId}`),
-          api.get('/bookings/today'),
+          api.get('/bookings/today').catch(() => ({ data: [] as ActiveBooking[] })),
         ]);
         setServices(svcRes.data);
         setTenant(tenantRes.data);
@@ -388,12 +445,14 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           router.replace('/staff');
           return;
         }
-        const todayRows: ActiveBooking[] = Array.isArray(todayRes.data) ? todayRes.data : [];
+        const todayRows: ActiveBooking[] = Array.isArray(todayWrapped.data) ? todayWrapped.data : [];
         if (selectedBookingCustomer) {
           const actives = todayRows.filter(
             (b) =>
               b.customerId === selectedBookingCustomer._id &&
-              (b.status === 'waiting' || b.status === 'in_progress'),
+              (b.status === 'waiting' ||
+                b.status === 'in_progress' ||
+                b.status === 'waiting_for_payment'),
           );
           actives.sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
           setActiveBookings(actives);
@@ -404,18 +463,22 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         setLastDoneVisit(null);
         setVisitedTenants([]);
       } else {
-        const [svcRes, histRes, tenantRes] = await Promise.all([
+        const [svcRes, tenantRes, histWrapped] = await Promise.all([
           api.get(`/tenants/${effectiveTenantId}/services`),
-          api.get('/bookings/history?limit=100'),
           api.get(`/tenants/${effectiveTenantId}`),
+          api
+            .get('/bookings/history?limit=100')
+            .catch(() => ({ data: { data: [] as ActiveBooking[] } })),
         ]);
         setServices(svcRes.data);
         setTenant(tenantRes.data);
-        const historyItems: ActiveBooking[] = histRes.data?.data ?? [];
+        const historyItems: ActiveBooking[] = histWrapped.data?.data ?? [];
         const actives = historyItems.filter(
           (b) =>
             (!effectiveTenantId || b.tenantId === effectiveTenantId) &&
-            (b.status === 'waiting' || b.status === 'in_progress'),
+            (b.status === 'waiting' ||
+              b.status === 'in_progress' ||
+              b.status === 'waiting_for_payment'),
         );
         actives.sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
         setActiveBookings(actives);
@@ -449,14 +512,26 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       if (!silent) toast.error('Gagal memuat data');
     } finally {
       if (!silent) setPageLoading(false);
+      setLastRefreshedAt(new Date());
+      setRefreshCountdown(Math.round(QUEUE_AUTO_RELOAD_MS / 1000));
     }
   }, [effectiveTenantId, isQrFlow, isStaffVariant, selectedBookingCustomer, router]);
 
-  // Reload booking data when outlet / pelanggan (staff) berubah
+  // Muat data booking + outlet setelah auth & effectiveTenantId siap (history/today boleh gagal tanpa memblokir tenant)
   useEffect(() => {
-    if (user && effectiveTenantId) void loadBookingData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveTenantId, selectedBookingCustomer?._id, isStaffVariant]);
+    if (authLoading) return;
+    if (!user || !effectiveTenantId) return;
+    if (isStaffVariant && user.role !== 'staff') return;
+    if (!isStaffVariant && user.role !== 'customer') return;
+    void loadBookingData();
+  }, [
+    authLoading,
+    user,
+    effectiveTenantId,
+    selectedBookingCustomer?._id,
+    isStaffVariant,
+    loadBookingData,
+  ]);
 
   /** Staff membuat booking: tidak ada langkah pilih staff */
   useEffect(() => {
@@ -469,6 +544,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     if (!effectiveTenantId) return;
     if (guestBookingFlow) {
       const id = setInterval(() => {
+        void api
+          .get(`/tenants/${effectiveTenantId}`)
+          .then((r) => {
+            setTenant(r.data);
+          })
+          .catch(() => {});
         api
           .get(`/tenants/${effectiveTenantId}/staff/queue`)
           .then((r) => {
@@ -494,6 +575,15 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     }, QUEUE_AUTO_RELOAD_MS);
     return () => clearInterval(id);
   }, [user, effectiveTenantId, bookStep, loadBookingData, isStaffVariant, guestBookingFlow]);
+
+  /** Countdown detik ke auto-refresh berikutnya — tick tiap detik */
+  useEffect(() => {
+    if (!lastRefreshedAt) return;
+    const tick = setInterval(() => {
+      setRefreshCountdown((s) => (s > 1 ? s - 1 : 0));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [lastRefreshedAt]);
 
   /** Prefetch antrian staff agar langkah pilih staff tidak gagal diam-diam (hanya alur pelanggan) */
   useEffect(() => {
@@ -531,6 +621,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   useEffect(() => {
     if (!guestBookingFlow || !tenantIdParam) return;
     setPageLoading(true);
+    void api
+      .get(`/tenants/${tenantIdParam}`)
+      .then((r) => {
+        setTenant(r.data);
+      })
+      .catch(() => {});
     Promise.all([
       api.get(`/public/tenants/${tenantIdParam}/services`),
       api.get(`/tenants/${tenantIdParam}/staff/queue`).catch(() => ({ data: [] as StaffQueueRow[] })),
@@ -625,7 +721,78 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     () => selectedServices.reduce((sum, s) => sum + s.durationMinutes * qFor(s._id), 0),
     [selectedServices, serviceQty],
   );
+  /** Jumlah slot kursi = nilai `tenant.bookingSeatCount` dari outlet (telah dinormalisasi API). */
+  const seatSlotCount = useMemo(() => {
+    const n = tenant?.bookingSeatCount;
+    if (n == null || typeof n !== 'number' || !Number.isFinite(n) || n < 1) return null;
+    return Math.floor(n);
+  }, [tenant]);
+  const availableSeatSlots = useMemo(() => {
+    if (seatSlotCount == null) return [];
+    return Array.from({ length: seatSlotCount }, (_, i) => i + 1).filter(
+      (n) => !occupiedSeatPositions.includes(n),
+    );
+  }, [seatSlotCount, occupiedSeatPositions]);
+  // Hanya block saat loading; jika semua kursi penuh, pelanggan masih bisa memilih Take Away
+  const seatPickerBlocksSubmit = seatSlotCount != null && seatAvailabilityLoading;
   const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
+
+  /** Snapshot outlet terbaru (bookingSeatCount, kuota, tagihan) sebelum konfirmasi — hindari state stale. */
+  useEffect(() => {
+    if (!dialogOpen || !effectiveTenantId) return;
+    let cancelled = false;
+    void api
+      .get(`/tenants/${effectiveTenantId}`)
+      .then((res) => {
+        if (!cancelled) setTenant(res.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, effectiveTenantId]);
+
+  useEffect(() => {
+    if (!dialogOpen || seatSlotCount == null || !effectiveTenantId) {
+      if (!dialogOpen) {
+        setOccupiedSeatPositions([]);
+        setSeatAvailabilityLoading(false);
+      }
+      return;
+    }
+    let cancelled = false;
+    setSeatAvailabilityLoading(true);
+    void api
+      .get<{ occupiedSeatPositions?: number[] }>(
+        `/public/tenants/${effectiveTenantId}/occupied-seat-positions`,
+      )
+      .then((res) => {
+        if (cancelled) return;
+        const raw = res.data?.occupiedSeatPositions;
+        const list = Array.isArray(raw)
+          ? raw.filter((x): x is number => typeof x === 'number' && Number.isFinite(x)).map(Math.floor)
+          : [];
+        setOccupiedSeatPositions(list);
+      })
+      .catch(() => {
+        if (!cancelled) setOccupiedSeatPositions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSeatAvailabilityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, seatSlotCount, effectiveTenantId]);
+
+  useEffect(() => {
+    if (seatSlotCount == null) return;
+    // Jika pilihan saat ini adalah kursi (bukan take away) dan tidak lagi tersedia, reset ke take away
+    setBookingSeatPick((prev) => {
+      if (prev === null) return null; // take away — tetap
+      return availableSeatSlots.includes(prev) ? prev : null;
+    });
+  }, [seatSlotCount, availableSeatSlots]);
 
   const outletQuotaFull =
     !!tenant?.dailyBookingQuota &&
@@ -659,6 +826,20 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       return [...prev, svc];
     });
   };
+
+  // Auto-select layanan dari QR param (addService=serviceId)
+  useEffect(() => {
+    if (isStaffVariant || !addServiceParam || services.length === 0) return;
+    const target = services.find((s) => s._id === addServiceParam);
+    if (!target) return;
+    setSelectedServices((prev) => {
+      if (prev.find((s) => s._id === target._id)) return prev;
+      if (isServiceOutOfStock(target)) return prev;
+      setServiceQty((q) => ({ ...q, [target._id]: 1 }));
+      return [...prev, target];
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [services, addServiceParam]);
 
   const handleGoToStaff = () => {
     if (tenant?.subscriptionOverdue) {
@@ -713,6 +894,61 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     setDialogOpen(true);
   };
 
+  const handleManualRefresh = async () => {
+    setManualRefreshing(true);
+    try {
+      await loadBookingData({ silent: true });
+    } finally {
+      setManualRefreshing(false);
+    }
+  };
+
+  const addItemQFor = (id: string) => effectiveBookingLineQty(addItemQty[id] ?? 1);
+
+  const openAddItemDialog = (bookingId: string) => {
+    setAddItemBookingId(bookingId);
+    setAddItemSelected([]);
+    setAddItemQty({});
+    setAddItemQtyDraft({});
+    setAddItemSearch('');
+  };
+
+  const toggleAddItem = (svc: Service) => {
+    if (isServiceOutOfStock(svc)) return;
+    setAddItemSelected((prev) => {
+      const exists = prev.find((s) => s._id === svc._id);
+      if (exists) {
+        setAddItemQty((q) => { const n = { ...q }; delete n[svc._id]; return n; });
+        return prev.filter((s) => s._id !== svc._id);
+      }
+      setAddItemQty((q) => ({ ...q, [svc._id]: 1 }));
+      return [...prev, svc];
+    });
+  };
+
+  const handleAddItems = async () => {
+    if (!addItemBookingId || addItemSelected.length === 0) return;
+    setAddItemSubmitting(true);
+    try {
+      await api.post(`/bookings/${addItemBookingId}/add-items`, {
+        items: addItemSelected.map((s) => ({
+          serviceId: s._id,
+          quantity: addItemQFor(s._id),
+        })),
+      });
+      toast.success('Item berhasil ditambahkan ke booking');
+      setAddItemBookingId(null);
+      await loadBookingData({ silent: true });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Gagal menambahkan item';
+      toast.error(msg);
+    } finally {
+      setAddItemSubmitting(false);
+    }
+  };
+
   const handleBook = async () => {
     if (tenant?.subscriptionOverdue) {
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
@@ -734,8 +970,25 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       toast.error('Profil pelaksana tidak terpasang. Minta admin menautkan akun atau masuk ulang.');
       return;
     }
+    // Validasi nama tamu saat staff mode = guest
+    if (isStaffVariant && staffCustomerMode === 'guest' && !staffGuestName.trim()) {
+      toast.error('Nama customer wajib diisi');
+      setStaffGuestNameAttempted(true);
+      return;
+    }
     if (selectedServices.length === 0) return;
     if (!assertGuestHasName()) return;
+    if (seatSlotCount != null) {
+      if (seatAvailabilityLoading) {
+        toast.error('Tunggu sebentar, memuat ketersediaan kursi.');
+        return;
+      }
+      // bookingSeatPick null = take away → selalu boleh lanjut
+      if (bookingSeatPick !== null && !availableSeatSlots.includes(bookingSeatPick)) {
+        toast.error(`${bookingLabels.seatLabel} yang dipilih sudah tidak tersedia. Pilih ${bookingLabels.seatLabel.toLowerCase()} lain atau pilih "${bookingLabels.takeAwayLabel}".`);
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const res = guestBookingFlow && tenantIdParam
@@ -745,15 +998,25 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             items: selectedServices.map((s) => ({ serviceId: s._id, quantity: qFor(s._id) })),
             staffId: selectedStaff?.staffId,
             notes,
+            ...(seatSlotCount != null ? { seatPosition: bookingSeatPick ?? null } : {}),
           })
         : await api.post('/bookings', {
             tenantId: effectiveTenantId,
             items: selectedServices.map((s) => ({ serviceId: s._id, quantity: qFor(s._id) })),
             staffId: isStaffVariant ? user?.staffId ?? undefined : selectedStaff?.staffId,
             notes,
-            ...(isStaffVariant && selectedBookingCustomer
+            // Staff mode tamu: kirim nama + HP customer baru
+            ...(isStaffVariant && staffCustomerMode === 'guest' && staffGuestName.trim()
+              ? {
+                  guestName: staffGuestName.trim(),
+                  ...(staffGuestPhone.trim() ? { guestPhone: staffGuestPhone.trim() } : {}),
+                }
+              : {}),
+            // Staff mode pelanggan terdaftar: kirim customerId jika dipilih
+            ...(isStaffVariant && staffCustomerMode === 'existing' && selectedBookingCustomer
               ? { customerId: selectedBookingCustomer._id }
               : {}),
+            ...(seatSlotCount != null ? { seatPosition: bookingSeatPick ?? null } : {}),
           });
       const result = res.data as BookingResult;
       setDialogOpen(false);
@@ -765,13 +1028,20 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           void loadBookingData();
         }
       } else if (isStaffVariant) {
-        const okMsg = selectedBookingCustomer
-          ? `Booking untuk ${selectedBookingCustomer.name} berhasil! Nomor antrian: #${result.queueNumber}`
+        const customerLabel =
+          staffCustomerMode === 'guest' && staffGuestName.trim()
+            ? staffGuestName.trim()
+            : selectedBookingCustomer?.name ?? null;
+        const okMsg = customerLabel
+          ? `Booking untuk ${customerLabel} berhasil! Nomor antrian: #${result.queueNumber}`
           : `Booking berhasil! Nomor antrian: #${result.queueNumber}`;
         toast.success(okMsg, { duration: 5000 });
         setBookStep('service');
         setSelectedServices([]);
         setSelectedStaff(null);
+        setStaffGuestName('');
+        setStaffGuestPhone('');
+        setStaffGuestNameAttempted(false);
         void loadBookingData();
         router.push('/staff');
       } else {
@@ -1049,6 +1319,17 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                 <Typography variant="body2" fontWeight={500}>{bookingResult.staffName}</Typography>
               </Box>
             )}
+            {/* Tampilkan posisi kursi atau take away jika fitur kursi aktif */}
+            {tenant?.bookingSeatCount != null && Number(tenant.bookingSeatCount) >= 1 && (
+              <Box display="flex" justifyContent="space-between" mb={1}>
+                <Typography variant="body2" color="text.secondary">{bookingLabels.seatLabel}</Typography>
+                <Typography variant="body2" fontWeight={500}>
+                  {bookingResult.seatPosition != null && Number.isFinite(Number(bookingResult.seatPosition))
+                    ? `${bookingLabels.seatLabel} ${Number(bookingResult.seatPosition)}`
+                    : bookingLabels.takeAwayLabel}
+                </Typography>
+              </Box>
+            )}
             <Divider sx={{ my: 1.5, opacity: 0.5, borderColor: 'rgba(0,0,0,0.08)' }} />
             <Box display="flex" justifyContent="space-between" alignItems="center">
               <Typography variant="body2" color="text.secondary">Status</Typography>
@@ -1104,11 +1385,14 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             variant="contained"
             fullWidth
             startIcon={<LockIcon />}
-            onClick={() =>
+            onClick={() => {
+              const phoneQuery = guestFormPhone.trim()
+                ? `&phone=${encodeURIComponent(guestFormPhone.trim())}`
+                : '';
               router.push(
-                `/login?redirect=${encodeURIComponent(`/booking?tenantId=${tenantIdParam}&type=booking`)}`,
-              )
-            }
+                `/login?redirect=${encodeURIComponent(`/booking?tenantId=${tenantIdParam}&type=booking`)}${phoneQuery}`,
+              );
+            }}
             sx={{ mb: 1.5, borderRadius: 3, maxWidth: 340, py: 1.2, fontWeight: 700 }}
           >
             Masuk
@@ -1247,24 +1531,78 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       )}
 
       {isStaffVariant && tenant && effectiveTenantId && (
-        <Box sx={{ px: 2, pt: 2, pb: 1, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
-          <Autocomplete
-            options={customerOptions}
-            loading={customersLoading}
-            value={selectedBookingCustomer}
-            onChange={(_, v) => setSelectedBookingCustomer(v)}
-            onInputChange={(_, v) => setCustomerSearchInput(v)}
-            getOptionLabel={(o) => `${o.name} · ${o.phone}`}
-            isOptionEqualToValue={(a, b) => a._id === b._id}
-            renderInput={(params) => (
+        <Box sx={{ px: 2, pt: 2, pb: 2, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+          {/* Toggle mode customer */}
+          <ToggleButtonGroup
+            value={staffCustomerMode}
+            exclusive
+            onChange={(_, v) => { if (v) setStaffCustomerMode(v); }}
+            fullWidth
+            size="small"
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="guest" sx={{ gap: 0.75, fontWeight: 600, fontSize: '0.8rem' }}>
+              <PersonAddIcon fontSize="small" />
+              Tamu Baru
+            </ToggleButton>
+            <ToggleButton value="existing" sx={{ gap: 0.75, fontWeight: 600, fontSize: '0.8rem' }}>
+              <ManageAccountsIcon fontSize="small" />
+              Pelanggan Terdaftar
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          {staffCustomerMode === 'guest' ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               <TextField
-                {...params}
-                label="Pelanggan (opsional)"
-                placeholder="Kosongkan untuk booking atas nama staff · atau cari nama/HP…"
-                helperText="Jika dipilih: booking atas nama pelanggan terdaftar di outlet. Kosong: walk-in / administrasi (nama di antrian = akun staff)."
+                fullWidth
+                label="Nama Customer"
+                placeholder="Wajib diisi"
+                value={staffGuestName}
+                onChange={(e) => {
+                  setStaffGuestName(e.target.value);
+                  if (e.target.value.trim()) setStaffGuestNameAttempted(false);
+                }}
+                error={staffGuestNameAttempted && !staffGuestName.trim()}
+                helperText={staffGuestNameAttempted && !staffGuestName.trim() ? 'Nama wajib diisi' : undefined}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start"><PersonIcon color="action" fontSize="small" /></InputAdornment>
+                  ),
+                }}
               />
-            )}
-          />
+              <TextField
+                fullWidth
+                label="No. HP Customer (opsional)"
+                placeholder="Jika diisi, akan terdaftar/teridentifikasi"
+                value={staffGuestPhone}
+                onChange={(e) => setStaffGuestPhone(e.target.value.replace(/\D/g, ''))}
+                inputMode="tel"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start"><PhoneIcon color="action" fontSize="small" /></InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+          ) : (
+            <Autocomplete
+              options={customerOptions}
+              loading={customersLoading}
+              value={selectedBookingCustomer}
+              onChange={(_, v) => setSelectedBookingCustomer(v)}
+              onInputChange={(_, v) => setCustomerSearchInput(v)}
+              getOptionLabel={(o) => `${o.name} · ${o.phone}`}
+              isOptionEqualToValue={(a, b) => a._id === b._id}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Cari pelanggan terdaftar"
+                  placeholder="Cari nama atau nomor HP…"
+                  helperText="Kosong = booking atas nama akun staff"
+                />
+              )}
+            />
+          )}
         </Box>
       )}
 
@@ -1357,9 +1695,45 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               }}
             >
               <CardContent sx={{ pb: '12px !important' }}>
-                <Typography variant="overline" sx={{ color: 'warning.dark', fontWeight: 700, letterSpacing: 1.2, fontSize: '0.65rem' }}>
-                  {activeBookings.length > 1 ? `Antrian aktif (${activeBookings.length})` : 'Booking aktif'}
-                </Typography>
+                {/* Header: label + tombol refresh + info auto-refresh */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                  <Typography variant="overline" sx={{ color: 'warning.dark', fontWeight: 700, letterSpacing: 1.2, fontSize: '0.65rem' }}>
+                    {activeBookings.length > 1 ? `Antrian aktif (${activeBookings.length})` : 'Booking aktif'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem', lineHeight: 1 }}>
+                      {refreshCountdown > 0
+                        ? `refresh dalam ${refreshCountdown}d`
+                        : 'memperbarui…'}
+                    </Typography>
+                    <Tooltip title="Perbarui sekarang">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={handleManualRefresh}
+                          disabled={manualRefreshing}
+                          sx={{ p: 0.5 }}
+                        >
+                          {manualRefreshing
+                            ? <CircularProgress size={14} color="inherit" />
+                            : <RefreshIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                </Box>
+                {lastRefreshedAt && (
+                  <Typography variant="caption" color="text.disabled" display="block" sx={{ fontSize: '0.6rem', mb: 1, lineHeight: 1 }}>
+                    {(() => {
+                      const sec = Math.round((Date.now() - lastRefreshedAt.getTime()) / 1000);
+                      if (sec < 5) return 'Baru diperbarui';
+                      if (sec < 60) return `Diperbarui ${sec} detik lalu`;
+                      return `Diperbarui ${Math.round(sec / 60)} menit lalu`;
+                    })()}
+                    {' · auto refresh setiap '}
+                    {Math.round(QUEUE_AUTO_RELOAD_MS / 60000)} menit
+                  </Typography>
+                )}
                 {activeBookings.map((ab, idx) => (
                   <Box key={ab._id} sx={idx > 0 ? { mt: 2.5, pt: 2.5, borderTop: 1, borderColor: 'divider' } : {}}>
                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexWrap: 'wrap' }}>
@@ -1372,7 +1746,41 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                         </Typography>
                       )}
                     </Box>
-                    <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{bookingServicesLabel(ab)}</Typography>
+                    {tenant?.showBookingQty && ab.services && ab.services.length > 0 ? (
+                      <Box sx={{ mt: 0.5 }}>
+                        {ab.services.map((line, li) => {
+                          const qty = effectiveBookingLineQty(line.quantity);
+                          const sub = line.lineSubtotal != null && Number.isFinite(line.lineSubtotal)
+                            ? line.lineSubtotal
+                            : Math.round(line.unitPrice * qty);
+                          return (
+                            <Box key={li} sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
+                              <Typography variant="body2" fontWeight={600}>
+                                {line.serviceName}
+                                {qty !== 1 && (
+                                  <Typography component="span" variant="caption" fontWeight={700} color="primary.main" sx={{ ml: 0.5 }}>
+                                    ×{formatBookingQtyDisplay(qty)}{line.unit ? ` ${line.unit}` : ''}
+                                  </Typography>
+                                )}
+                              </Typography>
+                              <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ flexShrink: 0 }}>
+                                Rp {sub.toLocaleString('id-ID')}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                        {ab.services.length > 1 && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                            Total: <strong>Rp {(ab.totalSubtotal ?? ab.services.reduce((s, l) => {
+                              const q = effectiveBookingLineQty(l.quantity);
+                              return s + (l.lineSubtotal != null && Number.isFinite(l.lineSubtotal) ? l.lineSubtotal : Math.round(l.unitPrice * q));
+                            }, 0)).toLocaleString('id-ID')}</strong>
+                          </Typography>
+                        )}
+                      </Box>
+                    ) : (
+                      <Typography variant="body1" fontWeight={600} sx={{ mt: 0.25 }}>{bookingServicesLabel(ab)}</Typography>
+                    )}
                     {ab.staffName && (
                       <Typography variant="body2" color="text.secondary">
                         {bookingLabels.staffSingular}: {ab.staffName}
@@ -1380,7 +1788,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     )}
                     <Chip
                       label={statusLabel(ab.status)}
-                      color={statusColor(ab.status) as 'warning' | 'info' | 'success' | 'default'}
+                      color={statusColor(ab.status) as 'warning' | 'info' | 'secondary' | 'success' | 'default'}
                       size="small"
                       sx={{ mt: 1.5, fontWeight: 700 }}
                     />
@@ -1416,6 +1824,18 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
                         Estimasi akan tersedia setelah outlet menugaskan staff.
                       </Typography>
+                    )}
+                    {/* Tombol tambah item — hanya saat waiting & user login */}
+                    {ab.status === 'waiting' && user && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddCircleOutlineIcon sx={{ fontSize: 16 }} />}
+                        onClick={() => openAddItemDialog(ab._id)}
+                        sx={{ mt: 1.5, borderRadius: 2, fontSize: '0.75rem' }}
+                      >
+                        Tambah Item
+                      </Button>
                     )}
                   </Box>
                 ))}
@@ -1538,7 +1958,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                 {selectedServices.length > 0 && (
                   <Chip
                     icon={<ShoppingCartIcon sx={{ fontSize: '14px !important' }} />}
-                    label={`${totalCartQty} slot${selectedServices.length > 1 ? ` · ${selectedServices.length} jenis` : ''}`}
+                    label={`${totalCartQty} items${selectedServices.length > 1 ? ` · ${selectedServices.length} jenis` : ''}`}
                     color="primary" size="small"
                     sx={{ fontWeight: 700 }}
                   />
@@ -1653,7 +2073,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                             )}
                             <Chip
                               icon={<AccessTimeIcon sx={{ fontSize: '12px !important' }} />}
-                              label={`${svc.durationMinutes} menit`}
+                              label={formatDuration(svc.durationMinutes)}
                               size="small" variant="outlined"
                               sx={{ mt: 0.75, height: 22, fontSize: '0.7rem', borderRadius: 2, borderColor: 'rgba(0,0,0,0.15)' }}
                             />
@@ -1666,6 +2086,20 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                                 sx={{ mt: 0.75, ml: 0.5, height: 22, fontSize: '0.7rem', fontWeight: 700 }}
                               />
                             )}
+                            {!stockOut &&
+                              tenant?.showBookingQty &&
+                              svc.stockQty != null &&
+                              Number.isFinite(Number(svc.stockQty)) &&
+                              (tenant?.outOfStockQtyReminder ?? 0) > 0 &&
+                              Number(svc.stockQty) < (tenant?.outOfStockQtyReminder ?? 0) && (
+                                <Chip
+                                  label={`Sisa ${Number(svc.stockQty)}${svc.unit ? ` ${svc.unit}` : ''}`}
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  sx={{ mt: 0.75, ml: 0.5, height: 22, fontSize: '0.7rem', fontWeight: 700 }}
+                                />
+                              )}
                             <Typography
                             fontWeight={300} color="primary" variant="h6"
                             sx={{ whiteSpace: 'nowrap', letterSpacing: -0.5 }}
@@ -1689,26 +2123,42 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                                     const p = parseBookingQuantityInput(raw);
                                     setQtyDraftByService(({ [svc._id]: _, ...rest }) => rest);
                                     if (p != null) {
-                                      setServiceQty((q) => ({ ...q, [svc._id]: p }));
+                                      const maxStock =
+                                        svc.stockQty != null && Number.isFinite(Number(svc.stockQty))
+                                          ? Number(svc.stockQty)
+                                          : null;
+                                      if (maxStock !== null && p > maxStock) {
+                                        toast.error(
+                                          `Qty melebihi stok "${svc.name}". Maksimum: ${maxStock}${svc.unit ? ` ${svc.unit}` : ''}.`,
+                                        );
+                                        setServiceQty((q) => ({ ...q, [svc._id]: maxStock }));
+                                      } else {
+                                        setServiceQty((q) => ({ ...q, [svc._id]: p }));
+                                      }
                                     } else {
                                       toast.error(`Qty tidak valid. ${BOOKING_QTY_DECIMAL_HINT}`);
                                     }
                                   }}
-                                  helperText={
-                                    svc.unit
-                                      ? `${BOOKING_QTY_DECIMAL_HINT} Satuan: ${svc.unit}.`
-                                      : BOOKING_QTY_DECIMAL_HINT
-                                  }
+                                  helperText={(() => {
+                                    const maxStock =
+                                      svc.stockQty != null && Number.isFinite(Number(svc.stockQty))
+                                        ? Number(svc.stockQty)
+                                        : null;
+                                    const reminder = tenant?.outOfStockQtyReminder ?? 0;
+                                    // Tampilkan info stok hanya saat stok menipis (< reminder) atau di-set
+                                    const showStock =
+                                      maxStock !== null && reminder > 0 && maxStock < reminder;
+                                    const stockHint = showStock
+                                      ? `Stok tersedia: ${maxStock}${svc.unit ? ` ${svc.unit}` : ''}.`
+                                      : null;
+                                    const unitHint = svc.unit ? `Satuan: ${svc.unit}.` : null;
+                                    return [stockHint, unitHint].filter(Boolean).join(' ') || BOOKING_QTY_DECIMAL_HINT;
+                                  })()}
                                   FormHelperTextProps={{ sx: { fontSize: '0.65rem', lineHeight: 1.25 } }}
                                   inputProps={{ inputMode: 'decimal' }}
                                   sx={{ maxWidth: 160, mt: 0.5 }}
                                 />
                               </Box>
-                            )}
-                            {selected && !tenant?.showBookingQty && svc.unit && (
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                                Satuan: {svc.unit}
-                              </Typography>
                             )}
                           </Box>
                           
@@ -1752,9 +2202,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                           {s.name}
                           {tenant?.showBookingQty
                             ? ` ×${formatBookingQtyDisplay(qFor(s._id))}${s.unit ? ` ${s.unit}` : ''}`
-                            : s.unit
-                              ? ` (${s.unit})`
-                              : ''}
+                            : ''}
                         </Typography>
                       </Box>
                       <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
@@ -1967,50 +2415,252 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         </Box>
       )}
 
+      {/* Dialog Tambah Item ke Booking Aktif */}
+      <Dialog
+        open={addItemBookingId !== null}
+        onClose={() => !addItemSubmitting && setAddItemBookingId(null)}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, pb: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddCircleOutlineIcon color="primary" />
+            Tambah Item
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1.5 }}>
+          <TextField
+            fullWidth size="small"
+            placeholder="Cari layanan…"
+            value={addItemSearch}
+            onChange={(e) => setAddItemSearch(e.target.value)}
+            sx={{ mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, maxHeight: 360, overflowY: 'auto', pr: 0.5 }}>
+            {services
+              .filter((svc) => {
+                const q = addItemSearch.trim().toLowerCase();
+                if (q && !svc.name.toLowerCase().includes(q) && !(svc.description ?? '').toLowerCase().includes(q)) return false;
+                return true;
+              })
+              .map((svc) => {
+                const sel = !!addItemSelected.find((s) => s._id === svc._id);
+                const stockOut = isServiceOutOfStock(svc);
+                const lowStock =
+                  !stockOut &&
+                  svc.stockQty != null &&
+                  Number.isFinite(Number(svc.stockQty)) &&
+                  (tenant?.outOfStockQtyReminder ?? 0) > 0 &&
+                  Number(svc.stockQty) < (tenant?.outOfStockQtyReminder ?? 0);
+                return (
+                  <Card
+                    key={svc._id}
+                    onClick={() => !stockOut && toggleAddItem(svc)}
+                    sx={{
+                      cursor: stockOut ? 'default' : 'pointer',
+                      border: sel
+                        ? (t) => `1.5px solid ${t.palette.primary.main}`
+                        : '1.5px solid rgba(0,0,0,0.08)',
+                      borderRadius: 2.5,
+                      opacity: stockOut ? 0.5 : 1,
+                      bgcolor: sel ? (t) => `${t.palette.primary.main}0A` : 'background.paper',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: '10px !important' }}>
+                      <Checkbox checked={sel} color="primary" size="small" sx={{ p: 0 }}
+                        disabled={stockOut}
+                        onChange={() => !stockOut && toggleAddItem(svc)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Box flex={1} minWidth={0}>
+                        <Typography variant="body2" fontWeight={500} noWrap>{svc.name}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mt: 0.25 }}>
+                          <Typography variant="caption" color="primary" fontWeight={600}>
+                            Rp {svc.price.toLocaleString('id-ID')}
+                          </Typography>
+                          {stockOut && (
+                            <Chip label="Stok habis" size="small" color="error"
+                              sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }} />
+                          )}
+                          {lowStock && tenant?.showBookingQty && (
+                            <Chip label={`Sisa ${Number(svc.stockQty)}${svc.unit ? ` ${svc.unit}` : ''}`}
+                              size="small" color="warning" variant="outlined"
+                              sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }} />
+                          )}
+                        </Box>
+                        {sel && tenant?.showBookingQty && (
+                          <Box mt={0.75} onClick={(e) => e.stopPropagation()}>
+                            <TextField
+                              size="small" label="Qty"
+                              value={addItemQtyDraft[svc._id] ?? formatBookingQtyDisplay(addItemQFor(svc._id))}
+                              onChange={(e) =>
+                                setAddItemQtyDraft((d) => ({ ...d, [svc._id]: e.target.value }))
+                              }
+                              onBlur={() => {
+                                const raw = addItemQtyDraft[svc._id];
+                                if (raw === undefined) return;
+                                const p = parseBookingQuantityInput(raw);
+                                setAddItemQtyDraft(({ [svc._id]: _, ...rest }) => rest);
+                                if (p != null) {
+                                  const maxStock =
+                                    svc.stockQty != null && Number.isFinite(Number(svc.stockQty))
+                                      ? Number(svc.stockQty)
+                                      : null;
+                                  if (maxStock !== null && p > maxStock) {
+                                    toast.error(`Qty melebihi stok "${svc.name}". Maks: ${maxStock}${svc.unit ? ` ${svc.unit}` : ''}.`);
+                                    setAddItemQty((q) => ({ ...q, [svc._id]: maxStock }));
+                                  } else {
+                                    setAddItemQty((q) => ({ ...q, [svc._id]: p }));
+                                  }
+                                } else {
+                                  toast.error('Qty tidak valid.');
+                                }
+                              }}
+                              inputProps={{ inputMode: 'decimal' }}
+                              sx={{ maxWidth: 120 }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+          </Box>
+          {addItemSelected.length > 0 && (
+            <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                Item yang akan ditambahkan:
+              </Typography>
+              {addItemSelected.map((s) => (
+                <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                  <Typography variant="caption" fontWeight={500}>
+                    {s.name}
+                    {tenant?.showBookingQty && addItemQFor(s._id) !== 1 && (
+                      <Typography component="span" variant="caption" color="primary.main" sx={{ ml: 0.5 }}>
+                        ×{formatBookingQtyDisplay(addItemQFor(s._id))}{s.unit ? ` ${s.unit}` : ''}
+                      </Typography>
+                    )}
+                  </Typography>
+                  <Typography variant="caption" fontWeight={600} color="primary">
+                    Rp {(s.price * addItemQFor(s._id)).toLocaleString('id-ID')}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0.5, gap: 1 }}>
+          <Button
+            onClick={() => setAddItemBookingId(null)}
+            variant="outlined" fullWidth
+            disabled={addItemSubmitting}
+            sx={{ borderRadius: 2.5 }}
+          >
+            Batal
+          </Button>
+          <Button
+            onClick={handleAddItems}
+            variant="contained" fullWidth
+            disabled={addItemSelected.length === 0 || addItemSubmitting}
+            startIcon={addItemSubmitting ? undefined : <AddCircleOutlineIcon />}
+            sx={{ borderRadius: 2.5, fontWeight: 700 }}
+          >
+            {addItemSubmitting
+              ? <CircularProgress size={20} color="inherit" />
+              : `Tambah (${addItemSelected.length})`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Confirm Dialog */}
       <Dialog
         open={dialogOpen} onClose={() => setDialogOpen(false)}
         fullWidth maxWidth="xs"
         PaperProps={{ sx: { borderRadius: 4 } }}
       >
-        <DialogTitle fontWeight={600} sx={{ pb: 1, letterSpacing: -0.3 }}>Konfirmasi Booking</DialogTitle>
+        <DialogTitle
+          fontWeight={700}
+          color="primary"
+          sx={{ pb: 1, letterSpacing: -0.3 }}
+        >
+          Konfirmasi Booking
+        </DialogTitle>
+
         <DialogContent sx={{ pt: 0 }}>
+          {/* Ringkasan layanan */}
           <Box
             sx={{
               borderRadius: 3, p: 2.5, mb: 2.5,
-              background: 'linear-gradient(135deg, #fafaf9 0%, #f5f3f0 100%)',
-              border: '1px solid rgba(0,0,0,0.08)',
+              bgcolor: 'background.default',
+              border: '1px solid',
+              borderColor: 'divider',
             }}
           >
-            <Typography variant="overline" sx={{ fontWeight: 700, letterSpacing: 1.2, fontSize: '0.62rem', color: 'text.secondary' }}>
+            <Typography
+              variant="overline"
+              sx={{ fontWeight: 700, letterSpacing: 1.2, fontSize: '0.62rem', color: 'primary.main' }}
+            >
               Layanan
             </Typography>
+
             {selectedServices.map((s) => (
-              <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, gap: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+              <Box
+                key={s._id}
+                sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.25, gap: 1 }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
                   <Avatar
                     src={s.photoUrl || undefined}
                     variant="rounded"
-                    sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: 'primary.light' }}
+                    sx={{
+                      width: 34, height: 34, flexShrink: 0,
+                      bgcolor: 'primary.main',
+                      boxShadow: (t) => `0 2px 8px ${t.palette.primary.main}44`,
+                    }}
                   >
-                    {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16 }} />}
+                    {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16, color: 'white' }} />}
                   </Avatar>
-                  <Typography variant="body2" fontWeight={600} noWrap>{s.name}</Typography>
+                  <Box minWidth={0}>
+                    <Typography variant="body2" fontWeight={600} noWrap>
+                      {s.name}
+                    </Typography>
+                    {tenant?.showBookingQty && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {formatBookingQtyDisplay(qFor(s._id))}
+                        {s.unit ? ` ${s.unit}` : ''} × Rp {s.price.toLocaleString('id-ID')}
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-                <Typography variant="body2" fontWeight={500} color="primary" sx={{ flexShrink: 0 }}>
-                  Rp {s.price.toLocaleString('id-ID')}
+                <Typography variant="body2" fontWeight={700} color="primary" sx={{ flexShrink: 0 }}>
+                  Rp {(s.price * qFor(s._id)).toLocaleString('id-ID')}
                 </Typography>
               </Box>
             ))}
-            <Divider sx={{ my: 1.5, opacity: 0.4, borderColor: 'rgba(0,0,0,0.1)' }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+
+            <Divider sx={{ my: 1.5, borderColor: 'divider' }} />
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75, alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">Total</Typography>
-              <Typography fontWeight={600} color="primary" fontSize="1rem">Rp {totalPrice.toLocaleString('id-ID')}</Typography>
+              <Typography fontWeight={800} color="primary" fontSize="1.05rem">
+                Rp {totalPrice.toLocaleString('id-ID')}
+              </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
               <Typography variant="body2" color="text.secondary">Durasi</Typography>
-              <Typography fontWeight={600} variant="body2">~{totalDuration} menit</Typography>
+              <Typography fontWeight={600} variant="body2" color="text.primary">{formatDuration(totalDuration)}</Typography>
             </Box>
+
             {isStaffVariant ? (
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, lineHeight: 1.45 }}>
                 Anda akan ditugaskan sebagai pelaksana untuk booking ini. Pembayaran dilakukan di halaman antrian.
@@ -2019,10 +2669,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               <>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">{bookingLabels.staffSingular}</Typography>
-                  <Typography fontWeight={500} variant="body2">{selectedStaff?.staffName || 'Siapapun tersedia'}</Typography>
+                  <Typography fontWeight={600} variant="body2" color="text.primary">
+                    {selectedStaff?.staffName || 'Siapapun tersedia'}
+                  </Typography>
                 </Box>
                 {selectedStaff && selectedStaff.estimatedWaitMinutes > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.75 }}>
                     <Typography variant="body2" color="text.secondary">Est. tunggu</Typography>
                     <Chip
                       label={waitLabel(selectedStaff.estimatedWaitMinutes)} size="small"
@@ -2035,16 +2687,22 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             )}
           </Box>
 
-          {/* Foto dokumentasi (ringkas di dialog konfirmasi) */}
+          {/* Foto dokumentasi terakhir */}
           {lastHaircut && lastHaircut.photos.length > 0 && (
             <Box
               sx={{
                 mb: 2.5, p: 2, borderRadius: 3,
-                background: 'linear-gradient(135deg, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0.01) 100%)',
-                border: '1px solid rgba(0,0,0,0.07)',
+                bgcolor: 'background.default',
+                border: '1px solid',
+                borderColor: 'divider',
               }}
             >
-              <Typography variant="overline" display="block" sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'text.secondary', mb: 1 }}>
+              <Typography
+                variant="overline"
+                display="block"
+                sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'text.secondary', mb: 1 }}
+              >
+                <PhotoLibraryIcon sx={{ fontSize: 11, mr: 0.5, verticalAlign: 'middle' }} />
                 Hasil layanan terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
@@ -2055,8 +2713,6 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     style={{
                       height: 82, width: 82, objectFit: 'cover',
                       borderRadius: 10, flexShrink: 0,
-                      border: '1.5px solid rgba(0,0,0,0.08)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
                     }}
                   />
                 ))}
@@ -2064,6 +2720,53 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             </Box>
           )}
 
+          {/* Pilih nomor kursi (opsional — kosong = Take Away / Dibungkus) */}
+          {seatSlotCount != null && seatSlotCount >= 1 && (
+            <Box sx={{ mb: 2.5 }}>
+              {seatAvailabilityLoading ? (
+                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CircularProgress size={16} /> Memuat kursi yang tersedia…
+                </Typography>
+              ) : (
+                <>
+                  {availableSeatSlots.length === 0 && (
+                    <Alert severity="info" sx={{ borderRadius: 2.5, mb: 1.5 }}>
+                      Semua {bookingLabels.seatLabel.toLowerCase()} sedang terisi. Kamu tetap bisa booking dengan opsi &quot;{bookingLabels.takeAwayLabel}&quot;.
+                    </Alert>
+                  )}
+                  <FormControl fullWidth>
+                    <InputLabel id="booking-seat-select-label">{bookingLabels.seatLabel} (opsional)</InputLabel>
+                    <Select
+                      labelId="booking-seat-select-label"
+                      id="booking-seat-select"
+                      label={`${bookingLabels.seatLabel} (opsional)`}
+                      value={bookingSeatPick ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setBookingSeatPick(v === '' ? null : Number(v));
+                      }}
+                      sx={{ borderRadius: 2.5 }}
+                    >
+                      <MenuItem value="">
+                        <em>{bookingLabels.takeAwayLabel}</em>
+                      </MenuItem>
+                      {availableSeatSlots.map((n) => (
+                        <MenuItem key={n} value={n}>
+                          {bookingLabels.seatLabel} {n}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <FormHelperText>
+                      Pilih &quot;{bookingLabels.takeAwayLabel}&quot; jika tidak memerlukan {bookingLabels.seatLabel.toLowerCase()} tertentu.
+                      {' '}{bookingLabels.seatLabel} yang sedang terpakai tidak ditampilkan.
+                    </FormHelperText>
+                  </FormControl>
+                </>
+              )}
+            </Box>
+          )}
+
+          {/* Catatan */}
           <TextField
             fullWidth multiline rows={3} label="Catatan (opsional)"
             placeholder={bookingLabels.bookingNotesPlaceholder}
@@ -2078,10 +2781,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             }}
           />
         </DialogContent>
+
         <DialogActions sx={{ p: 2.5, pt: 1, gap: 1.5 }}>
           <Button
             onClick={() => setDialogOpen(false)} variant="outlined" fullWidth
-            sx={{ borderRadius: 2.5, py: 1.2, borderColor: 'rgba(0,0,0,0.2)', color: 'text.secondary' }}
+            sx={{ borderRadius: 2.5, py: 1.2 }}
           >
             Batal
           </Button>
@@ -2094,6 +2798,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               !!tenant?.subscriptionOverdue ||
               outletQuotaFull ||
               tenantSlotsExceededForCart ||
+              seatPickerBlocksSubmit ||
               (!!selectedStaff && staffQuotaExceeded(selectedStaff, totalCartQty)) ||
               (!!selectedStaff && selectedStaff.isAvailable === false)
             }
@@ -2107,7 +2812,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
       {showFloatingCartSummary && (
         <Paper
-          elevation={12}
+          elevation={floatingCartExpanded ? 14 : 6}
           sx={{
             position: 'fixed',
             left: 12,
@@ -2118,73 +2823,115 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             maxWidth: UI_LAYOUT.bookingColumnMaxWidthPx,
             mx: 'auto',
             overflow: 'hidden',
-            border: (t) => `1px solid ${t.palette.primary.main}22`,
-            
+            border: (t) => `1px solid ${t.palette.primary.main}${floatingCartExpanded ? '44' : '22'}`,
+            opacity: floatingCartExpanded ? 1 : 0.92,
+            transition: 'opacity 0.2s ease, box-shadow 0.2s ease',
           }}
         >
-          <Box sx={{ p: 1.75, pt: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <ShoppingCartIcon color="primary" sx={{ fontSize: 22 }} />
-              <Typography variant="subtitle2" fontWeight={700} color="primary">
-                Layanan dipilih ({selectedServices.length})
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                maxHeight: 140,
-                overflowY: 'auto',
-                pr: 0.5,
-                WebkitOverflowScrolling: 'touch',
-              }}
-            >
-              {selectedServices.map((s) => (
-                <Box
-                  key={s._id}
-                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, gap: 1 }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                    <Avatar
-                      src={s.photoUrl || undefined}
-                      variant="rounded"
-                      sx={{ width: 28, height: 28, flexShrink: 0, bgcolor: 'primary.light' }}
-                    >
-                      {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 14 }} />}
-                    </Avatar>
-                    <Typography variant="body2" noWrap fontWeight={500}>
-                      {s.name}
-                    </Typography>
-                  </Box>
-                  <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
-                    Rp {s.price.toLocaleString('id-ID')}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-            <Divider sx={{ my: 1, opacity: 0.35, borderColor: 'rgba(0,0,0,0.1)' }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Total waktu ~{totalDuration} menit
-              </Typography>
-              <Typography fontWeight={800} color="primary" variant="subtitle1">
+          {/* Header — selalu tampil, bisa diklik untuk expand/collapse */}
+          <Box
+            onClick={() => setFloatingCartExpanded((v) => !v)}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.75,
+              py: 1.1,
+              cursor: 'pointer',
+              userSelect: 'none',
+              bgcolor: (t) => floatingCartExpanded ? 'transparent' : `${t.palette.primary.main}08`,
+            }}
+          >
+            <ShoppingCartIcon color="primary" sx={{ fontSize: 20, flexShrink: 0 }} />
+            <Typography variant="subtitle2" fontWeight={700} color="primary" sx={{ flex: 1 }}>
+              {selectedServices.length} layanan dipilih
+            </Typography>
+            {/* Ringkasan total saat collapsed */}
+            {!floatingCartExpanded && (
+              <Typography variant="subtitle2" fontWeight={800} color="primary" sx={{ flexShrink: 0 }}>
                 Rp {totalPrice.toLocaleString('id-ID')}
               </Typography>
-            </Box>
-            {showStaffPayFab && (
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.45 }}>
-                Lanjut dengan tombol <strong>Bayar</strong> — Anda akan dibawa ke halaman antrian untuk pembayaran.
-              </Typography>
             )}
-            {showPickStaffFab && (
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.45 }}>
-                Lanjut dengan tombol <strong>Pilih staff</strong> di pojok kanan bawah.
-              </Typography>
-            )}
-            {tenant?.subscriptionOverdue && (
-              <Typography variant="caption" color="error" display="block" sx={{ mt: 0.75, fontWeight: 600 }}>
-                Outlet tidak dapat menerima booking baru saat ini.
-              </Typography>
-            )}
+            <IconButton size="small" sx={{ p: 0.25, ml: 0.5 }} disableRipple>
+              {floatingCartExpanded
+                ? <ExpandMoreIcon sx={{ fontSize: 20, color: 'primary.main' }} />
+                : <ExpandLessIcon sx={{ fontSize: 20, color: 'primary.main' }} />}
+            </IconButton>
           </Box>
+
+          {/* Detail — hanya muncul saat expanded */}
+          <Collapse in={floatingCartExpanded}>
+            <Box sx={{ px: 1.75, pb: 1.5 }}>
+              <Divider sx={{ mb: 1, opacity: 0.25 }} />
+              <Box
+                sx={{
+                  maxHeight: 140,
+                  overflowY: 'auto',
+                  pr: 0.5,
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
+                {selectedServices.map((s) => (
+                  <Box
+                    key={s._id}
+                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, gap: 1 }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                      <Avatar
+                        src={s.photoUrl || undefined}
+                        variant="rounded"
+                        sx={{ width: 28, height: 28, flexShrink: 0, bgcolor: 'primary.light' }}
+                      >
+                        {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 14 }} />}
+                      </Avatar>
+                      <Typography variant="body2" noWrap fontWeight={500}>
+                        {s.name}
+                        {tenant?.showBookingQty && (
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            fontWeight={700}
+                            color="primary.dark"
+                            sx={{ ml: 0.5, whiteSpace: 'nowrap' }}
+                          >
+                            ×{formatBookingQtyDisplay(qFor(s._id))}
+                            {s.unit ? ` ${s.unit}` : ''}
+                          </Typography>
+                        )}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
+                      Rp {(s.price * qFor(s._id)).toLocaleString('id-ID')}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Divider sx={{ my: 1, opacity: 0.35, borderColor: 'rgba(0,0,0,0.1)' }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Total waktu {formatDuration(totalDuration)}
+                </Typography>
+                <Typography fontWeight={800} color="primary" variant="subtitle1">
+                  Rp {totalPrice.toLocaleString('id-ID')}
+                </Typography>
+              </Box>
+              {showStaffPayFab && (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.45 }}>
+                  Lanjut dengan tombol <strong>Bayar</strong> — Anda akan dibawa ke halaman antrian untuk pembayaran.
+                </Typography>
+              )}
+              {showPickStaffFab && (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.45 }}>
+                  Lanjut dengan tombol <strong>Order</strong> di pojok kanan bawah.
+                </Typography>
+              )}
+              {tenant?.subscriptionOverdue && (
+                <Typography variant="caption" color="error" display="block" sx={{ mt: 0.75, fontWeight: 600 }}>
+                  Outlet tidak dapat menerima booking baru saat ini.
+                </Typography>
+              )}
+            </Box>
+          </Collapse>
         </Paper>
       )}
 
@@ -2241,8 +2988,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               fontWeight: 700,
             }}
           >
-            <PersonSearchIcon sx={{ mr: 1 }} />
-            Pilih staff
+            <ShoppingCartIcon sx={{ mr: 1 }} />
+            Order
           </Fab>
         </Tooltip>
       )}

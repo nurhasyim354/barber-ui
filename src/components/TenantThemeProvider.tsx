@@ -20,11 +20,33 @@ function TenantThemeInner({ children }: { children: React.ReactNode }) {
     loadFromStorage();
   }, [loadFromStorage]);
 
-  // URL param takes priority over JWT tenantId
-  const tenantId = useMemo(
-    () => searchParams.get('tenantId') ?? user?.tenantId ?? null,
-    [searchParams, user?.tenantId],
-  );
+  /**
+   * Resolve tenantId dengan prioritas:
+   * 1. ?tenantId= langsung di URL (halaman booking publik)
+   * 2. tenantId di dalam ?redirect= (login page yang di-redirect dari booking)
+   * 3. tenantId dari JWT user yang sedang login (halaman admin/staff/customer)
+   */
+  const tenantId = useMemo(() => {
+    const direct = searchParams.get('tenantId');
+    if (direct) return direct;
+
+    // Coba ekstrak dari ?redirect=/booking?tenantId=X&...
+    const redirectRaw = searchParams.get('redirect');
+    if (redirectRaw) {
+      try {
+        const decoded = decodeURIComponent(redirectRaw);
+        const qIdx = decoded.indexOf('?');
+        if (qIdx !== -1) {
+          const tid = new URLSearchParams(decoded.slice(qIdx + 1)).get('tenantId');
+          if (tid) return tid;
+        }
+      } catch {
+        // abaikan decode error
+      }
+    }
+
+    return user?.tenantId ?? null;
+  }, [searchParams, user?.tenantId]);
 
   useEffect(() => {
     if (!tenantId) {

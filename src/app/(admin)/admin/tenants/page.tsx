@@ -17,9 +17,10 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ChatIcon from '@mui/icons-material/Chat';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, type AuthUser } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
@@ -67,7 +68,7 @@ function statusChip(t: Tenant) {
 }
 
 export default function AdminTenantsPage() {
-  const { user, isLoading, loadFromStorage, logout } = useAuthStore();
+  const { user, isLoading, loadFromStorage, logout, setAuth } = useAuthStore();
   const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [total, setTotal] = useState(0);
@@ -80,6 +81,7 @@ export default function AdminTenantsPage() {
   const [saving, setSaving] = useState(false);
   const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
   const [deletingTenant, setDeletingTenant] = useState(false);
+  const [enteringTenantId, setEnteringTenantId] = useState<string | null>(null);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -103,7 +105,7 @@ export default function AdminTenantsPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'super_admin') { router.replace('/login'); return; }
+    if (user.role !== 'super_admin') { router.replace(user.delegatedFromSuperAdmin ? '/dashboard' : '/login'); return; }
     loadTenants(1);
   }, [user, isLoading, loadTenants]);
 
@@ -136,6 +138,21 @@ export default function AdminTenantsPage() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menyimpan');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEnterAsTenantAdmin = async (tenantId: string, tenantName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEnteringTenantId(tenantId);
+    try {
+      const res = await api.post<{ token: string; user: AuthUser }>('/auth/super-admin/enter-tenant', { tenantId });
+      setAuth(res.data.user, res.data.token);
+      toast.success(tenantName ? `Membuka dashboard: ${tenantName}` : 'Membuka dashboard outlet');
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal membuka outlet');
+    } finally {
+      setEnteringTenantId(null);
     }
   };
 
@@ -271,6 +288,20 @@ export default function AdminTenantsPage() {
                       </Typography>
                     </Box>
                     <Box className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={(e) => void handleEnterAsTenantAdmin(t._id, t.name, e)}
+                        disabled={!!enteringTenantId}
+                        aria-label="Kelola fitur outlet"
+                        title="Kelola seperti admin outlet"
+                      >
+                        {enteringTenantId === t._id ? (
+                          <CircularProgress size={20} color="inherit" />
+                        ) : (
+                          <OpenInNewIcon />
+                        )}
+                      </IconButton>
                       <IconButton
                         size="small"
                         color="error"

@@ -25,11 +25,12 @@ type BookingHistory = Pick<
 
 const PAGE_SIZE = 20;
 
-const statusColor: Record<string, 'success' | 'error' | 'warning' | 'info'> = {
+const statusColor: Record<string, 'success' | 'error' | 'warning' | 'info' | 'secondary'> = {
   done: 'success',
   cancelled: 'error',
   waiting: 'warning',
   in_progress: 'info',
+  waiting_for_payment: 'secondary',
 };
 
 const statusLabel: Record<string, string> = {
@@ -37,6 +38,7 @@ const statusLabel: Record<string, string> = {
   cancelled: 'Dibatal',
   waiting: 'Menunggu',
   in_progress: 'Dilayani',
+  waiting_for_payment: 'Menunggu bayar',
 };
 
 export default function StaffHistoryPage() {

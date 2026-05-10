@@ -14,6 +14,8 @@ export interface AuthUser {
   isOverdue?: boolean;
   /** Dari tenant aktif — untuk salinan UI per vertikal */
   tenantType?: string | null;
+  /** Sesi super admin mengakses fitur seperti admin outlet untuk satu outlet */
+  delegatedFromSuperAdmin?: boolean;
 }
 
 interface AuthState {

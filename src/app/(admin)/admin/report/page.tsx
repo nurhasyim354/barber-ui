@@ -103,7 +103,7 @@ export default function AdminReportPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'super_admin') { router.replace('/login'); return; }
+    if (user.role !== 'super_admin') { router.replace(user.delegatedFromSuperAdmin ? '/dashboard' : '/login'); return; }
     loadReport(from, to);
     const m = currentMonthStr();
     setRefMonth(m);

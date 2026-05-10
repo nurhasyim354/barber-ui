@@ -6,6 +6,7 @@ import {
   TextField, Divider, IconButton, Chip,
   Accordion, AccordionSummary, AccordionDetails,
   FormControlLabel, Switch,
+  Grid,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveIcon from '@mui/icons-material/Save';
@@ -13,8 +14,10 @@ import MyLocationIcon from '@mui/icons-material/MyLocation';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
+import ImageIcon from '@mui/icons-material/Image';
 import UploadIcon from '@mui/icons-material/Upload';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PaletteIcon from '@mui/icons-material/Palette';
 import toast from 'react-hot-toast';
 import { compressImage } from '@/lib/imageUtils';
 import api from '@/lib/api';
@@ -26,6 +29,8 @@ import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { defaultBrandPalette } from '@/lib/uiStyleConfig';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import SwitchOutletControl from '@/components/account/SwitchOutletControl';
+import { BOOKING_SEAT_COUNT_MAX, BOOKING_SEAT_COUNT_MIN } from '@/lib/bookingSeatLimits';
+import { getPresetsForType, type TenantThemePreset } from '@/lib/tenantThemePresets';
 
 interface TenantTheme {
   primaryColor: string;
@@ -48,6 +53,8 @@ interface TenantSettings {
   phone?: string;
   location?: { lat: number; lng: number } | null;
   qrisImageBase64?: string | null;
+  tenantLogoBase64?: string | null;
+  tenantType?: string | null;
   theme?: TenantTheme | null;
   /** 0 = nonaktif; kosong/null di DB = default server (21) */
   customerReturnReminderDays?: number | null;
@@ -55,12 +62,18 @@ interface TenantSettings {
   customerAppointmentReminderMinutes?: number | null;
   /** Batas antrian aktif per hari (menunggu + sedang dilayani); null = tidak dibatasi */
   dailyBookingQuota?: number | null;
+  /** Jumlah posisi di form booking; rentang lihat `@/lib/bookingSeatLimits` (sinkron API). `null` = pemilihan posisi tidak dipakai */
+  bookingSeatCount?: number | null;
   /** Halaman /booking: tampil field qty per layanan */
   showBookingQty?: boolean | null;
   /** Izinkan akun staff (`staff`) membuat booking lewat API */
   allowStaffCreateBooking?: boolean | null;
   /** true = halaman booking pelanggan (QR) wajib OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
   requireLoginOnCreateBooking?: boolean | null;
+  /** Stok minimum pemicu peringatan di dashboard; 0/null = nonaktif */
+  outOfStockQtyReminder?: number | null;
+  /** Nomor antrian pertama tiap hari; null/undefined = default 1 */
+  startQueueAtNumber?: number | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -70,6 +83,7 @@ export default function SettingsPage() {
   const pendingLoginPhone = useAuthStore((s) => s.user?.pendingPhone);
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [tenant, setTenant] = useState<TenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,14 +101,22 @@ export default function SettingsPage() {
   // qrisImageBase64 state: null = unchanged/loading, '' = explicitly removed, 'data:...' = new or existing
   const [qrisImage, setQrisImage] = useState<string | null>(null);
   const [qrisUploading, setQrisUploading] = useState(false);
+  // tenantLogoBase64 state: null = unchanged/loading, '' = explicitly removed, 'data:...' = new or existing
+  const [logoImage, setLogoImage] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [tenantType, setTenantType] = useState<string | undefined>(undefined);
   const [theme, setTheme] = useState<TenantTheme>(DEFAULT_THEME);
   const [customerReturnReminderDays, setCustomerReturnReminderDays] = useState(21);
   const [customerAppointmentReminderMinutes, setCustomerAppointmentReminderMinutes] = useState(0);
   /** string kosong = tidak dibatasi */
   const [dailyBookingQuota, setDailyBookingQuota] = useState('');
+  const [bookingSeatCount, setBookingSeatCount] = useState('');
   const [showBookingQty, setShowBookingQty] = useState(false);
   const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
   const [requireLoginOnCreateBooking, setRequireLoginOnCreateBooking] = useState(false);
+  /** 0 = peringatan stok nonaktif */
+  const [outOfStockQtyReminder, setOutOfStockQtyReminder] = useState(0);
+  const [startQueueAtNumber, setStartQueueAtNumber] = useState(1);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -118,6 +140,8 @@ export default function SettingsPage() {
         gpsLng: t.location?.lng != null ? String(t.location.lng) : '',
       });
       setQrisImage(t.qrisImageBase64 || '');
+      setLogoImage(t.tenantLogoBase64 || '');
+      setTenantType(t.tenantType ?? undefined);
       setTheme(t.theme ?? DEFAULT_THEME);
       const rd = t.customerReturnReminderDays;
       if (rd === 0) setCustomerReturnReminderDays(0);
@@ -129,9 +153,16 @@ export default function SettingsPage() {
       const dq = t.dailyBookingQuota;
       if (dq == null || dq <= 0 || Number.isNaN(Number(dq))) setDailyBookingQuota('');
       else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
+      const bsc = t.bookingSeatCount;
+      if (bsc == null || bsc < 1 || Number.isNaN(Number(bsc))) setBookingSeatCount('');
+      else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, Math.max(BOOKING_SEAT_COUNT_MIN, Math.floor(Number(bsc))))));
       setShowBookingQty(t.showBookingQty === true);
       setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
       setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
+      const osr = t.outOfStockQtyReminder;
+      setOutOfStockQtyReminder(osr == null || Number.isNaN(Number(osr)) ? 0 : Math.max(0, Math.floor(Number(osr))));
+      const sqn = t.startQueueAtNumber;
+      setStartQueueAtNumber(sqn == null || Number.isNaN(Number(sqn)) ? 1 : Math.max(1, Math.floor(Number(sqn))));
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -171,13 +202,23 @@ export default function SettingsPage() {
         gpsLat: lat,
         gpsLng: lng,
         qrisImageBase64: qrisImage ?? undefined,
+        tenantLogoBase64: logoImage ?? undefined,
         theme,
         customerReturnReminderDays,
         customerAppointmentReminderMinutes,
         dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
+        bookingSeatCount:
+          bookingSeatCount.trim() === ''
+            ? null
+            : Math.min(
+                BOOKING_SEAT_COUNT_MAX,
+                Math.max(BOOKING_SEAT_COUNT_MIN, parseInt(bookingSeatCount, 10) || BOOKING_SEAT_COUNT_MIN),
+              ),
         showBookingQty,
         allowStaffCreateBooking,
         requireLoginOnCreateBooking,
+        outOfStockQtyReminder,
+        startQueueAtNumber,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -186,6 +227,30 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar (JPG, PNG, dst.)');
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error('Ukuran gambar maksimal 2 MB');
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const base64 = await compressImage(file);
+      setLogoImage(base64);
+      toast.success('Logo siap — klik Simpan untuk menyimpan');
+    } catch {
+      toast.error('Gagal memproses gambar');
+    } finally {
+      setLogoUploading(false);
+    }
+    e.target.value = '';
   };
 
   const handleQrisFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -383,6 +448,21 @@ export default function SettingsPage() {
                 placeholder="Tidak dibatasi"
                 helperText="Anda juga bisa set batas per staff di menu Kelola Staff."
               />
+              <TextField
+                fullWidth
+                type="number"
+                label="Jumlah Kursi / Lokasi untuk booking"
+                value={bookingSeatCount}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  if (v === '') setBookingSeatCount('');
+                  else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, parseInt(v, 10))));
+                }}
+                inputProps={{ min: BOOKING_SEAT_COUNT_MIN, max: BOOKING_SEAT_COUNT_MAX }}
+                placeholder="Tidak dipakai"
+                sx={{ mt: 2 }}
+                helperText={`Jika diisi (${BOOKING_SEAT_COUNT_MIN}–${BOOKING_SEAT_COUNT_MAX}), pelanggan wajib pilih nomor posisi saat booking; tidak boleh bentrok antara antrian menunggu / sedang dilayani pada hari yang sama.`}
+              />
             </CardContent>
           </Card>
 
@@ -437,6 +517,168 @@ export default function SettingsPage() {
                     </Typography>
                   </Box>
                 )}
+              />
+              {/* Peringatan Stok Menipis */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  Peringatan stok menipis
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Tampilkan peringatan di dashboard jika stok layanan / produk ≤ nilai ini.
+                  Isi <strong>0</strong> untuk menonaktifkan peringatan.
+                </Typography>
+                <TextField
+                  label="Batas stok minimum"
+                  type="number"
+                  size="small"
+                  value={outOfStockQtyReminder}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setOutOfStockQtyReminder(Number.isNaN(v) ? 0 : Math.max(0, v));
+                  }}
+                  inputProps={{ min: 0, step: 1 }}
+                  helperText={outOfStockQtyReminder === 0 ? 'Peringatan dinonaktifkan' : `Peringatan muncul saat stok ≤ ${outOfStockQtyReminder}`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
+
+              {/* Nomor antrian awal */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  Nomor antrian awal per hari
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Antrian pertama setiap hari dimulai dari nomor ini. Default: <strong>1</strong>.
+                  Misal isi <strong>101</strong> agar antrian hari ini mulai dari #101.
+                </Typography>
+                <TextField
+                  label="Mulai dari nomor"
+                  type="number"
+                  size="small"
+                  value={startQueueAtNumber}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setStartQueueAtNumber(Number.isNaN(v) ? 1 : Math.max(1, v));
+                  }}
+                  inputProps={{ min: 1, step: 1 }}
+                  helperText={`Antrian pertama hari ini (jika belum ada booking): #${startQueueAtNumber}`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Logo Outlet */}
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <ImageIcon color="primary" />
+                  <Typography variant="subtitle1" fontWeight={500}>
+                    Logo Outlet
+                  </Typography>
+                </Box>
+                {logoImage && (
+                  <Chip
+                    label={`~${Math.round((logoImage.length * 0.75) / 1024)} KB`}
+                    size="small"
+                    variant="outlined"
+                    color="default"
+                  />
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                Ditampilkan di halaman login dan booking pelanggan. Gunakan gambar persegi dengan latar putih/transparan.
+              </Typography>
+
+              {logoImage ? (
+                <>
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      mb: 2,
+                      textAlign: 'center',
+                      bgcolor: 'white',
+                      p: 2,
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logoImage}
+                      alt="Logo outlet"
+                      style={{ maxWidth: 160, maxHeight: 160, objectFit: 'contain' }}
+                    />
+                  </Box>
+                  <Box display="flex" gap={1.5}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UploadIcon />}
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={logoUploading}
+                    >
+                      Ganti Logo
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteOutlineIcon />}
+                      onClick={() => {
+                        setLogoImage('');
+                        toast('Logo dihapus — klik Simpan untuk menyimpan', { icon: '🗑️' });
+                      }}
+                    >
+                      Hapus
+                    </Button>
+                  </Box>
+                </>
+              ) : (
+                <>
+                  <Box
+                    sx={{
+                      border: '2px dashed',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      p: 4,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                      transition: 'all 0.2s',
+                    }}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    <ImageIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary" mb={1}>
+                      Belum ada logo outlet
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={logoUploading ? <CircularProgress size={14} /> : <UploadIcon />}
+                      disabled={logoUploading}
+                    >
+                      {logoUploading ? 'Memproses...' : 'Pilih Gambar'}
+                    </Button>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    Format JPG / PNG / SVG · Maksimal 2 MB · Disarankan persegi (mis. 512×512 px)
+                  </Typography>
+                </>
+              )}
+
+              {/* Hidden file input */}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleLogoFileChange}
               />
             </CardContent>
           </Card>
@@ -631,11 +873,72 @@ export default function SettingsPage() {
           {/* Theme Customization */}
           <Card>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={500} className="mb-1">
-                Tema Warna
-              </Typography>
-              <Typography variant="caption" color="text.secondary" className="mb-3 block">
-                Default: Industrial Modern palette
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <PaletteIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  Tema Warna
+                </Typography>
+              </Box>
+
+              {/* Preset tema per jenis bisnis */}
+              {(() => {
+                const presets = getPresetsForType(tenantType);
+                return (
+                  <Box mb={3}>
+                    <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                      Pilih preset tema — atau atur warna custom di bawah
+                    </Typography>
+                    <Grid container spacing={1}>
+                      {presets.map((preset: TenantThemePreset) => {
+                        const isActive =
+                          theme.primaryColor === preset.primaryColor &&
+                          theme.accentColor === preset.accentColor &&
+                          theme.bgColor === preset.bgColor &&
+                          theme.paperColor === preset.paperColor;
+                        return (
+                          <Grid item xs={6} sm={4} key={preset.key}>
+                            <Box
+                              onClick={() => setTheme({
+                                primaryColor: preset.primaryColor,
+                                accentColor: preset.accentColor,
+                                bgColor: preset.bgColor,
+                                paperColor: preset.paperColor,
+                              })}
+                              sx={{
+                                cursor: 'pointer',
+                                borderRadius: 2,
+                                border: '2px solid',
+                                borderColor: isActive ? 'primary.main' : 'divider',
+                                overflow: 'hidden',
+                                transition: 'border-color 0.15s',
+                                '&:hover': { borderColor: 'primary.light' },
+                                boxShadow: isActive ? 2 : 0,
+                              }}
+                            >
+                              {/* Preview strip warna */}
+                              <Box sx={{ display: 'flex', height: 28 }}>
+                                <Box sx={{ flex: 1, bgcolor: preset.bgColor }} />
+                                <Box sx={{ flex: 1, bgcolor: preset.primaryColor }} />
+                                <Box sx={{ flex: 1, bgcolor: preset.accentColor }} />
+                                <Box sx={{ flex: 1, bgcolor: preset.paperColor }} />
+                              </Box>
+                              <Box sx={{ px: 1, py: 0.75, bgcolor: 'background.paper' }}>
+                                <Typography variant="caption" fontWeight={isActive ? 700 : 400} display="block" noWrap>
+                                  {preset.label}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Grid>
+                        );
+                      })}
+                    </Grid>
+                  </Box>
+                );
+              })()}
+
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                Kustomisasi warna manual
               </Typography>
               <Box className="grid grid-cols-2 gap-3">
                 {([
