@@ -131,7 +131,8 @@ export default function DashboardPage() {
               <SwitchOutletControl
                 onSwitched={() => {
                   void loadRevenue();
-                  void loadLowStockServices();
+                  const tid = useAuthStore.getState().user?.tenantId;
+                  if (tid) void loadLowStockServices(tid);
                 }}
               />
             )}
@@ -145,7 +146,9 @@ export default function DashboardPage() {
               color="inherit"
               onClick={() => {
                 void loadRevenue();
-                if (user?.role === 'tenant_admin') void loadLowStockServices();
+                if (user?.role === 'tenant_admin' && user.tenantId) {
+                  void loadLowStockServices(user.tenantId);
+                }
               }}
             >
               <RefreshIcon />
