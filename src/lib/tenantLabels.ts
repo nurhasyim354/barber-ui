@@ -165,7 +165,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     addStaffTitle: 'Tambah Staff',
     editStaffTitle: 'Edit Staff',
     specialtyPlaceholder: 'Contoh: Poles, Mekanik, Elektrical',
-    bookingNotesPlaceholder: 'Contoh: Nomor Plat detail singkat kebutuhan, preferensi jadwal',
+    bookingNotesPlaceholder: 'Contoh: Nomor Plat, detail singkat kebutuhan, preferensi jadwal',
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',
@@ -207,7 +207,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',
-    seatLabel: 'Kursi',
+    seatLabel: 'Loket',
     takeAwayLabel: 'Tanpa Tempat',
   },
   restaurant: {
@@ -245,7 +245,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Karyawan *',
     deleteStaffTitle: 'Hapus Karyawan?',
     assigneeReceiptLabel: 'Karyawan',
-    seatLabel: 'Slot',
+    seatLabel: 'Jalur',
     takeAwayLabel: 'Take Away / Ambil Sendiri',
   },
   laundry: {
@@ -264,7 +264,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Operator *',
     deleteStaffTitle: 'Hapus Operator?',
     assigneeReceiptLabel: 'Operator',
-    seatLabel: 'Loket',
+    seatLabel: 'Loker',
     takeAwayLabel: 'Antar / Jemput',
   },
 };
