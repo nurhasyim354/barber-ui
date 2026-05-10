@@ -5,6 +5,7 @@ import {
   Box, Card, CardContent, Typography, TextField,
   Button, InputAdornment, CircularProgress,
   Dialog, DialogTitle, DialogContent, List, ListItemButton, ListItemText,
+  Avatar,
 } from '@mui/material';
 import PhoneIcon from '@mui/icons-material/Phone';
 import LockIcon from '@mui/icons-material/Lock';
@@ -37,6 +38,12 @@ type LoginIdentityOption = {
   label: string;
 };
 
+interface TenantPublicInfo {
+  _id: string;
+  name: string;
+  tenantLogoBase64?: string | null;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { setAuth, user, loadFromStorage } = useAuthStore();
@@ -52,7 +59,54 @@ export default function LoginPage() {
   const [identityOptions, setIdentityOptions] = useState<LoginIdentityOption[]>([]);
   const [selectingUserId, setSelectingUserId] = useState<string | null>(null);
 
+  // Tenant info dari URL
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [tenantInfo, setTenantInfo] = useState<TenantPublicInfo | null>(null);
+  const [tenantLoading, setTenantLoading] = useState(false);
+
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
+
+  // Baca tenantId dari query params langsung ATAU dari dalam param `redirect`.
+  // Baca juga `phone` untuk auto-fill (diteruskan dari halaman booking).
+  // Contoh: /login?redirect=%2Fbooking%3FtenantId%3DXXX%26type%3Dbooking&phone=081234567890
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+
+    // Auto-fill nomor HP jika diteruskan dari halaman booking
+    const phoneParam = params.get('phone');
+    if (phoneParam) setPhone(phoneParam.replace(/\D/g, ''));
+
+    const tid = params.get('tenantId');
+    if (tid) { setTenantId(tid); return; }
+
+    // Fallback: ekstrak tenantId dari dalam nilai ?redirect=
+    const redirectRaw = params.get('redirect');
+    if (redirectRaw) {
+      try {
+        const redirectDecoded = decodeURIComponent(redirectRaw);
+        const qIndex = redirectDecoded.indexOf('?');
+        if (qIndex !== -1) {
+          const redirectParams = new URLSearchParams(redirectDecoded.slice(qIndex + 1));
+          const tidFromRedirect = redirectParams.get('tenantId');
+          if (tidFromRedirect) setTenantId(tidFromRedirect);
+        }
+      } catch {
+        // abaikan jika decode gagal
+      }
+    }
+  }, []);
+
+  // Fetch info publik tenant jika tenantId ada
+  useEffect(() => {
+    if (!tenantId) return;
+    setTenantLoading(true);
+    api.get(`/tenants/${tenantId}`)
+      .then((res) => setTenantInfo(res.data))
+      .catch(() => { /* gagal diam-diam, tetap tampilkan form login */ })
+      .finally(() => setTenantLoading(false));
+  }, [tenantId]);
+
   useEffect(() => {
     if (user) {
       if (user.role === 'super_admin') router.replace('/admin/tenants');
@@ -79,7 +133,11 @@ export default function LoginPage() {
     if (isNewUser && !name.trim()) { toast.error('Masukkan nama Anda'); return; }
     setLoading(true);
     try {
-      const res = await api.post('/auth/send-otp', { phone, name: name || undefined });
+      const res = await api.post('/auth/send-otp', {
+        phone,
+        name: name || undefined,
+        tenantId: tenantId || undefined,
+      });
       toast.success(res.data.message);
       if (res.data.devOtp) toast(`🔐 Dev OTP: ${res.data.devOtp}`, { duration: 15000 });
       setStep('otp');
@@ -101,7 +159,11 @@ export default function LoginPage() {
     if (otp.length !== 6) { toast.error('Kode OTP harus 6 angka'); return; }
     setLoading(true);
     try {
-      const res = await api.post('/auth/verify-otp', { phone, otp });
+      const res = await api.post('/auth/verify-otp', {
+        phone,
+        otp,
+        tenantId: tenantId || undefined,
+      });
       if (res.data.needsIdentitySelection && res.data.identities?.length) {
         setPickToken(res.data.pickToken);
         setIdentityOptions(res.data.identities);
@@ -162,28 +224,83 @@ export default function LoginPage() {
         }}
       >
       <Box sx={{ mb: 5, textAlign: 'center' }}>
-        <Box
-          sx={{
-            width: 80, height: 80, borderRadius: 4,
-            bgcolor: 'primary.main',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            mx: 'auto', mb: 3,
-            boxShadow: (t) => `0 8px 32px ${t.palette.primary.main}55`,
-          }}
-        >
-          <ContentCutIcon sx={{ fontSize: 44, color: 'white' }} />
-        </Box>
-        <Typography
-          variant="h4"
-          color="primary"
-          fontWeight={600}
-          sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
-        >
-          Booking App
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-          Masuk untuk melanjutkan
-        </Typography>
+        {/* Branding: logo/ikon tenant atau default */}
+        {tenantLoading ? (
+          <Box sx={{ width: 80, height: 80, mx: 'auto', mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CircularProgress size={36} />
+          </Box>
+        ) : tenantInfo?.tenantLogoBase64 ? (
+          /* Logo tenant custom */
+          <Box
+            sx={{
+              width: 80, height: 80, borderRadius: 4,
+              overflow: 'hidden',
+              mx: 'auto', mb: 3,
+              boxShadow: (t) => `0 8px 32px ${t.palette.primary.main}44`,
+              border: '2px solid',
+              borderColor: 'divider',
+              bgcolor: 'white',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={tenantInfo.tenantLogoBase64}
+              alt={tenantInfo.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          </Box>
+        ) : (
+          /* Ikon default platform */
+          <Box
+            sx={{
+              width: 80, height: 80, borderRadius: 4,
+              bgcolor: 'primary.main',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              mx: 'auto', mb: 3,
+              boxShadow: (t) => `0 8px 32px ${t.palette.primary.main}55`,
+            }}
+          >
+            {tenantInfo ? (
+              <Avatar sx={{ width: 80, height: 80, bgcolor: 'transparent', fontSize: 32, borderRadius: 4, fontWeight: 700 }}>
+                {tenantInfo.name.slice(0, 1).toUpperCase()}
+              </Avatar>
+            ) : (
+              <ContentCutIcon sx={{ fontSize: 44, color: 'white' }} />
+            )}
+          </Box>
+        )}
+
+        {/* Nama tenant atau nama platform */}
+        {tenantInfo ? (
+          <>
+            <Typography
+              variant="h5"
+              color="primary"
+              fontWeight={700}
+              sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
+            >
+              {tenantInfo.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Masuk untuk melanjutkan
+            </Typography>
+          </>
+        ) : (
+          <>
+            <Typography
+              variant="h4"
+              color="primary"
+              fontWeight={600}
+              sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
+            >
+              Booking App
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+              Masuk untuk melanjutkan
+            </Typography>
+          </>
+        )}
       </Box>
 
       <Dialog open={Boolean(pickToken && identityOptions.length > 0)} maxWidth="xs" fullWidth>

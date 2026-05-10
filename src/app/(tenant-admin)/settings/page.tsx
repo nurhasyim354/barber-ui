@@ -6,6 +6,7 @@ import {
   TextField, Divider, IconButton, Chip,
   Accordion, AccordionSummary, AccordionDetails,
   FormControlLabel, Switch,
+  Grid,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveIcon from '@mui/icons-material/Save';
@@ -13,8 +14,10 @@ import MyLocationIcon from '@mui/icons-material/MyLocation';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
+import ImageIcon from '@mui/icons-material/Image';
 import UploadIcon from '@mui/icons-material/Upload';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PaletteIcon from '@mui/icons-material/Palette';
 import toast from 'react-hot-toast';
 import { compressImage } from '@/lib/imageUtils';
 import api from '@/lib/api';
@@ -27,6 +30,7 @@ import { defaultBrandPalette } from '@/lib/uiStyleConfig';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import SwitchOutletControl from '@/components/account/SwitchOutletControl';
 import { BOOKING_SEAT_COUNT_MAX, BOOKING_SEAT_COUNT_MIN } from '@/lib/bookingSeatLimits';
+import { getPresetsForType, type TenantThemePreset } from '@/lib/tenantThemePresets';
 
 interface TenantTheme {
   primaryColor: string;
@@ -49,6 +53,8 @@ interface TenantSettings {
   phone?: string;
   location?: { lat: number; lng: number } | null;
   qrisImageBase64?: string | null;
+  tenantLogoBase64?: string | null;
+  tenantType?: string | null;
   theme?: TenantTheme | null;
   /** 0 = nonaktif; kosong/null di DB = default server (21) */
   customerReturnReminderDays?: number | null;
@@ -73,6 +79,7 @@ export default function SettingsPage() {
   const pendingLoginPhone = useAuthStore((s) => s.user?.pendingPhone);
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [tenant, setTenant] = useState<TenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +97,10 @@ export default function SettingsPage() {
   // qrisImageBase64 state: null = unchanged/loading, '' = explicitly removed, 'data:...' = new or existing
   const [qrisImage, setQrisImage] = useState<string | null>(null);
   const [qrisUploading, setQrisUploading] = useState(false);
+  // tenantLogoBase64 state: null = unchanged/loading, '' = explicitly removed, 'data:...' = new or existing
+  const [logoImage, setLogoImage] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [tenantType, setTenantType] = useState<string | undefined>(undefined);
   const [theme, setTheme] = useState<TenantTheme>(DEFAULT_THEME);
   const [customerReturnReminderDays, setCustomerReturnReminderDays] = useState(21);
   const [customerAppointmentReminderMinutes, setCustomerAppointmentReminderMinutes] = useState(0);
@@ -122,6 +133,8 @@ export default function SettingsPage() {
         gpsLng: t.location?.lng != null ? String(t.location.lng) : '',
       });
       setQrisImage(t.qrisImageBase64 || '');
+      setLogoImage(t.tenantLogoBase64 || '');
+      setTenantType(t.tenantType ?? undefined);
       setTheme(t.theme ?? DEFAULT_THEME);
       const rd = t.customerReturnReminderDays;
       if (rd === 0) setCustomerReturnReminderDays(0);
@@ -178,6 +191,7 @@ export default function SettingsPage() {
         gpsLat: lat,
         gpsLng: lng,
         qrisImageBase64: qrisImage ?? undefined,
+        tenantLogoBase64: logoImage ?? undefined,
         theme,
         customerReturnReminderDays,
         customerAppointmentReminderMinutes,
@@ -200,6 +214,30 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar (JPG, PNG, dst.)');
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error('Ukuran gambar maksimal 2 MB');
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const base64 = await compressImage(file);
+      setLogoImage(base64);
+      toast.success('Logo siap — klik Simpan untuk menyimpan');
+    } catch {
+      toast.error('Gagal memproses gambar');
+    } finally {
+      setLogoUploading(false);
+    }
+    e.target.value = '';
   };
 
   const handleQrisFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -470,6 +508,121 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Logo Outlet */}
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <ImageIcon color="primary" />
+                  <Typography variant="subtitle1" fontWeight={500}>
+                    Logo Outlet
+                  </Typography>
+                </Box>
+                {logoImage && (
+                  <Chip
+                    label={`~${Math.round((logoImage.length * 0.75) / 1024)} KB`}
+                    size="small"
+                    variant="outlined"
+                    color="default"
+                  />
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                Ditampilkan di halaman login dan booking pelanggan. Gunakan gambar persegi dengan latar putih/transparan.
+              </Typography>
+
+              {logoImage ? (
+                <>
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      mb: 2,
+                      textAlign: 'center',
+                      bgcolor: 'white',
+                      p: 2,
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logoImage}
+                      alt="Logo outlet"
+                      style={{ maxWidth: 160, maxHeight: 160, objectFit: 'contain' }}
+                    />
+                  </Box>
+                  <Box display="flex" gap={1.5}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UploadIcon />}
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={logoUploading}
+                    >
+                      Ganti Logo
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteOutlineIcon />}
+                      onClick={() => {
+                        setLogoImage('');
+                        toast('Logo dihapus — klik Simpan untuk menyimpan', { icon: '🗑️' });
+                      }}
+                    >
+                      Hapus
+                    </Button>
+                  </Box>
+                </>
+              ) : (
+                <>
+                  <Box
+                    sx={{
+                      border: '2px dashed',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      p: 4,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                      transition: 'all 0.2s',
+                    }}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    <ImageIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary" mb={1}>
+                      Belum ada logo outlet
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={logoUploading ? <CircularProgress size={14} /> : <UploadIcon />}
+                      disabled={logoUploading}
+                    >
+                      {logoUploading ? 'Memproses...' : 'Pilih Gambar'}
+                    </Button>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    Format JPG / PNG / SVG · Maksimal 2 MB · Disarankan persegi (mis. 512×512 px)
+                  </Typography>
+                </>
+              )}
+
+              {/* Hidden file input */}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleLogoFileChange}
+              />
+            </CardContent>
+          </Card>
+
           {/* QRIS Image */}
           <Card>
             <CardContent>
@@ -660,11 +813,72 @@ export default function SettingsPage() {
           {/* Theme Customization */}
           <Card>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={500} className="mb-1">
-                Tema Warna
-              </Typography>
-              <Typography variant="caption" color="text.secondary" className="mb-3 block">
-                Default: Industrial Modern palette
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <PaletteIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  Tema Warna
+                </Typography>
+              </Box>
+
+              {/* Preset tema per jenis bisnis */}
+              {(() => {
+                const presets = getPresetsForType(tenantType);
+                return (
+                  <Box mb={3}>
+                    <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                      Pilih preset tema — atau atur warna custom di bawah
+                    </Typography>
+                    <Grid container spacing={1}>
+                      {presets.map((preset: TenantThemePreset) => {
+                        const isActive =
+                          theme.primaryColor === preset.primaryColor &&
+                          theme.accentColor === preset.accentColor &&
+                          theme.bgColor === preset.bgColor &&
+                          theme.paperColor === preset.paperColor;
+                        return (
+                          <Grid item xs={6} sm={4} key={preset.key}>
+                            <Box
+                              onClick={() => setTheme({
+                                primaryColor: preset.primaryColor,
+                                accentColor: preset.accentColor,
+                                bgColor: preset.bgColor,
+                                paperColor: preset.paperColor,
+                              })}
+                              sx={{
+                                cursor: 'pointer',
+                                borderRadius: 2,
+                                border: '2px solid',
+                                borderColor: isActive ? 'primary.main' : 'divider',
+                                overflow: 'hidden',
+                                transition: 'border-color 0.15s',
+                                '&:hover': { borderColor: 'primary.light' },
+                                boxShadow: isActive ? 2 : 0,
+                              }}
+                            >
+                              {/* Preview strip warna */}
+                              <Box sx={{ display: 'flex', height: 28 }}>
+                                <Box sx={{ flex: 1, bgcolor: preset.bgColor }} />
+                                <Box sx={{ flex: 1, bgcolor: preset.primaryColor }} />
+                                <Box sx={{ flex: 1, bgcolor: preset.accentColor }} />
+                                <Box sx={{ flex: 1, bgcolor: preset.paperColor }} />
+                              </Box>
+                              <Box sx={{ px: 1, py: 0.75, bgcolor: 'background.paper' }}>
+                                <Typography variant="caption" fontWeight={isActive ? 700 : 400} display="block" noWrap>
+                                  {preset.label}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Grid>
+                        );
+                      })}
+                    </Grid>
+                  </Box>
+                );
+              })()}
+
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                Kustomisasi warna manual
               </Typography>
               <Box className="grid grid-cols-2 gap-3">
                 {([
