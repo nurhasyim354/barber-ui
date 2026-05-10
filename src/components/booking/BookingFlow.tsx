@@ -312,6 +312,9 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [guestBookingNameAttempted, setGuestBookingNameAttempted] = useState(false);
   const guestNameInputRef = useRef<HTMLInputElement | null>(null);
 
+  /** Mencegah auto-add QR service dipanggil lebih dari sekali per mount */
+  const qrAutoAddAttemptedRef = useRef(false);
+
   const guestBookingFlow =
     !user &&
     isQrFlow &&
@@ -827,11 +830,46 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     });
   };
 
-  // Auto-select layanan dari QR param (addService=serviceId)
+  // Auto-add atau auto-select layanan dari QR param (addService=serviceId)
+  // Prioritas: jika ada booking 'waiting' yang aktif → auto-add via API (tanpa membuat booking baru)
+  // Fallback: jika tidak ada booking aktif → auto-select seperti biasa di form
   useEffect(() => {
-    if (isStaffVariant || !addServiceParam || services.length === 0) return;
+    if (isStaffVariant || !addServiceParam || services.length === 0 || pageLoading) return;
+    if (qrAutoAddAttemptedRef.current) return;
+
     const target = services.find((s) => s._id === addServiceParam);
     if (!target) return;
+
+    const waitingBooking = activeBookings.find(
+      (b) => b.status === 'waiting' && (!effectiveTenantId || b.tenantId === effectiveTenantId),
+    );
+
+    if (waitingBooking && user && !isServiceOutOfStock(target)) {
+      qrAutoAddAttemptedRef.current = true;
+      api
+        .post(`/bookings/${waitingBooking._id}/add-items`, {
+          items: [{ serviceId: addServiceParam, quantity: 1 }],
+        })
+        .then(() => {
+          toast.success(`${target.name} ditambahkan ke antrian #${waitingBooking.queueNumber}`);
+          void loadBookingData({ silent: true });
+        })
+        .catch((err: { response?: { data?: { message?: string } } }) => {
+          const msg = err?.response?.data?.message ?? 'Gagal menambahkan item ke booking';
+          toast.error(msg);
+          // Fallback: auto-select di form booking baru
+          setSelectedServices((prev) => {
+            if (prev.find((s) => s._id === target._id)) return prev;
+            if (isServiceOutOfStock(target)) return prev;
+            setServiceQty((q) => ({ ...q, [target._id]: 1 }));
+            return [...prev, target];
+          });
+        });
+      return;
+    }
+
+    // Tidak ada booking aktif → auto-select di form seperti biasa
+    qrAutoAddAttemptedRef.current = true;
     setSelectedServices((prev) => {
       if (prev.find((s) => s._id === target._id)) return prev;
       if (isServiceOutOfStock(target)) return prev;
@@ -839,7 +877,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       return [...prev, target];
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [services, addServiceParam]);
+  }, [services, activeBookings, addServiceParam, pageLoading]);
 
   const handleGoToStaff = () => {
     if (tenant?.subscriptionOverdue) {
