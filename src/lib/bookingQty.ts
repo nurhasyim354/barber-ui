@@ -1,6 +1,6 @@
 /** Hint untuk helper text input qty (selaras pesan validasi backend). */
 export const BOOKING_QTY_DECIMAL_HINT =
-  'Gunakan titik (.) atau koma (,) sebagai pemisah desimal (mis. 2,5 atau 1.25).';
+  '';
 
 export const BOOKING_QTY_MIN = 0.0001;
 export const BOOKING_QTY_MAX = 99999;

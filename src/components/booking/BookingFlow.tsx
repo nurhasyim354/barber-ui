@@ -23,7 +23,6 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import NoteAltIcon from '@mui/icons-material/NoteAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import SearchIcon from '@mui/icons-material/Search';
 import SearchOffIcon from '@mui/icons-material/SearchOff';
@@ -1251,11 +1250,14 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             variant="contained"
             fullWidth
             startIcon={<LockIcon />}
-            onClick={() =>
+            onClick={() => {
+              const phoneQuery = guestFormPhone.trim()
+                ? `&phone=${encodeURIComponent(guestFormPhone.trim())}`
+                : '';
               router.push(
-                `/login?redirect=${encodeURIComponent(`/booking?tenantId=${tenantIdParam}&type=booking`)}`,
-              )
-            }
+                `/login?redirect=${encodeURIComponent(`/booking?tenantId=${tenantIdParam}&type=booking`)}${phoneQuery}`,
+              );
+            }}
             sx={{ mb: 1.5, borderRadius: 3, maxWidth: 340, py: 1.2, fontWeight: 700 }}
           >
             Masuk
@@ -2120,44 +2122,79 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         fullWidth maxWidth="xs"
         PaperProps={{ sx: { borderRadius: 4 } }}
       >
-        <DialogTitle fontWeight={600} sx={{ pb: 1, letterSpacing: -0.3 }}>Konfirmasi Booking</DialogTitle>
+        <DialogTitle
+          fontWeight={700}
+          color="primary"
+          sx={{ pb: 1, letterSpacing: -0.3 }}
+        >
+          Konfirmasi Booking
+        </DialogTitle>
+
         <DialogContent sx={{ pt: 0 }}>
+          {/* Ringkasan layanan */}
           <Box
             sx={{
               borderRadius: 3, p: 2.5, mb: 2.5,
-              background: 'linear-gradient(135deg, #fafaf9 0%, #f5f3f0 100%)',
-              border: '1px solid rgba(0,0,0,0.08)',
+              bgcolor: 'background.default',
+              border: '1px solid',
+              borderColor: 'divider',
             }}
           >
-            <Typography variant="overline" sx={{ fontWeight: 700, letterSpacing: 1.2, fontSize: '0.62rem', color: 'text.secondary' }}>
+            <Typography
+              variant="overline"
+              sx={{ fontWeight: 700, letterSpacing: 1.2, fontSize: '0.62rem', color: 'primary.main' }}
+            >
               Layanan
             </Typography>
+
             {selectedServices.map((s) => (
-              <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, gap: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+              <Box
+                key={s._id}
+                sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.25, gap: 1 }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
                   <Avatar
                     src={s.photoUrl || undefined}
                     variant="rounded"
-                    sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: 'primary.light' }}
+                    sx={{
+                      width: 34, height: 34, flexShrink: 0,
+                      bgcolor: 'primary.main',
+                      boxShadow: (t) => `0 2px 8px ${t.palette.primary.main}44`,
+                    }}
                   >
-                    {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16 }} />}
+                    {!s.photoUrl && <ContentCutIcon sx={{ fontSize: 16, color: 'white' }} />}
                   </Avatar>
-                  <Typography variant="body2" fontWeight={600} noWrap>{s.name}</Typography>
+                  <Box minWidth={0}>
+                    <Typography variant="body2" fontWeight={600} noWrap>
+                      {s.name}
+                    </Typography>
+                    {tenant?.showBookingQty && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {formatBookingQtyDisplay(qFor(s._id))}
+                        {s.unit ? ` ${s.unit}` : ''} × Rp {s.price.toLocaleString('id-ID')}
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-                <Typography variant="body2" fontWeight={500} color="primary" sx={{ flexShrink: 0 }}>
-                  Rp {s.price.toLocaleString('id-ID')}
+                <Typography variant="body2" fontWeight={700} color="primary" sx={{ flexShrink: 0 }}>
+                  Rp {(s.price * qFor(s._id)).toLocaleString('id-ID')}
                 </Typography>
               </Box>
             ))}
-            <Divider sx={{ my: 1.5, opacity: 0.4, borderColor: 'rgba(0,0,0,0.1)' }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+
+            <Divider sx={{ my: 1.5, borderColor: 'divider' }} />
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75, alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">Total</Typography>
-              <Typography fontWeight={600} color="primary" fontSize="1rem">Rp {totalPrice.toLocaleString('id-ID')}</Typography>
+              <Typography fontWeight={800} color="primary" fontSize="1.05rem">
+                Rp {totalPrice.toLocaleString('id-ID')}
+              </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
               <Typography variant="body2" color="text.secondary">Durasi</Typography>
-              <Typography fontWeight={600} variant="body2">~{totalDuration} menit</Typography>
+              <Typography fontWeight={600} variant="body2" color="text.primary">~{totalDuration} menit</Typography>
             </Box>
+
             {isStaffVariant ? (
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, lineHeight: 1.45 }}>
                 Anda akan ditugaskan sebagai pelaksana untuk booking ini. Pembayaran dilakukan di halaman antrian.
@@ -2166,10 +2203,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               <>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">{bookingLabels.staffSingular}</Typography>
-                  <Typography fontWeight={500} variant="body2">{selectedStaff?.staffName || 'Siapapun tersedia'}</Typography>
+                  <Typography fontWeight={600} variant="body2" color="text.primary">
+                    {selectedStaff?.staffName || 'Siapapun tersedia'}
+                  </Typography>
                 </Box>
                 {selectedStaff && selectedStaff.estimatedWaitMinutes > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.75 }}>
                     <Typography variant="body2" color="text.secondary">Est. tunggu</Typography>
                     <Chip
                       label={waitLabel(selectedStaff.estimatedWaitMinutes)} size="small"
@@ -2182,16 +2221,22 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             )}
           </Box>
 
-          {/* Foto dokumentasi (ringkas di dialog konfirmasi) */}
+          {/* Foto dokumentasi terakhir */}
           {lastHaircut && lastHaircut.photos.length > 0 && (
             <Box
               sx={{
                 mb: 2.5, p: 2, borderRadius: 3,
-                background: 'linear-gradient(135deg, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0.01) 100%)',
-                border: '1px solid rgba(0,0,0,0.07)',
+                bgcolor: 'background.default',
+                border: '1px solid',
+                borderColor: 'divider',
               }}
             >
-              <Typography variant="overline" display="block" sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'text.secondary', mb: 1 }}>
+              <Typography
+                variant="overline"
+                display="block"
+                sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'text.secondary', mb: 1 }}
+              >
+                <PhotoLibraryIcon sx={{ fontSize: 11, mr: 0.5, verticalAlign: 'middle' }} />
                 Hasil layanan terakhir · {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
@@ -2202,8 +2247,6 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     style={{
                       height: 82, width: 82, objectFit: 'cover',
                       borderRadius: 10, flexShrink: 0,
-                      border: '1.5px solid rgba(0,0,0,0.08)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
                     }}
                   />
                 ))}
@@ -2211,6 +2254,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             </Box>
           )}
 
+          {/* Pilih nomor kursi */}
           {seatSlotCount != null && seatSlotCount >= 1 && (
             <Box sx={{ mb: 2.5 }}>
               {seatAvailabilityLoading ? (
@@ -2250,6 +2294,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             </Box>
           )}
 
+          {/* Catatan */}
           <TextField
             fullWidth multiline rows={3} label="Catatan (opsional)"
             placeholder={bookingLabels.bookingNotesPlaceholder}
@@ -2264,10 +2309,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             }}
           />
         </DialogContent>
+
         <DialogActions sx={{ p: 2.5, pt: 1, gap: 1.5 }}>
           <Button
             onClick={() => setDialogOpen(false)} variant="outlined" fullWidth
-            sx={{ borderRadius: 2.5, py: 1.2, borderColor: 'rgba(0,0,0,0.2)', color: 'text.secondary' }}
+            sx={{ borderRadius: 2.5, py: 1.2 }}
           >
             Batal
           </Button>
@@ -2339,10 +2385,22 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     </Avatar>
                     <Typography variant="body2" noWrap fontWeight={500}>
                       {s.name}
+                      {tenant?.showBookingQty && (
+                        <Typography
+                          component="span"
+                          variant="caption"
+                          fontWeight={700}
+                          color="primary.dark"
+                          sx={{ ml: 0.5, whiteSpace: 'nowrap' }}
+                        >
+                          ×{formatBookingQtyDisplay(qFor(s._id))}
+                          {s.unit ? ` ${s.unit}` : ''}
+                        </Typography>
+                      )}
                     </Typography>
                   </Box>
                   <Typography variant="body2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
-                    Rp {s.price.toLocaleString('id-ID')}
+                    Rp {(s.price * qFor(s._id)).toLocaleString('id-ID')}
                   </Typography>
                 </Box>
               ))}
@@ -2363,7 +2421,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             )}
             {showPickStaffFab && (
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, lineHeight: 1.45 }}>
-                Lanjut dengan tombol <strong>Pilih staff</strong> di pojok kanan bawah.
+                Lanjut dengan tombol <strong>Order</strong> di pojok kanan bawah.
               </Typography>
             )}
             {tenant?.subscriptionOverdue && (
@@ -2428,8 +2486,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               fontWeight: 700,
             }}
           >
-            <PersonSearchIcon sx={{ mr: 1 }} />
-            Pilih staff
+            <ShoppingCartIcon sx={{ mr: 1 }} />
+            Order
           </Fab>
         </Tooltip>
       )}
