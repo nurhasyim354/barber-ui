@@ -288,6 +288,35 @@ export const THEME_PRESETS_BY_TYPE: Record<string, TenantThemePreset[]> = {
       paperColor: '#F5FAFF',
     },
   ],
+  laundry: [
+    {
+      key: 'laundry_fresh',
+      label: 'Fresh Laundry',
+      description: 'Biru muda & putih bersih — segar seperti cucian baru',
+      primaryColor: '#0EA5E9',
+      accentColor: '#0369A1',
+      bgColor: '#E0F2FE',
+      paperColor: '#F0FAFF',
+    },
+    {
+      key: 'laundry_teal',
+      label: 'Clean Teal',
+      description: 'Teal & putih — kesan bersih dan modern',
+      primaryColor: '#0D9488',
+      accentColor: '#0F766E',
+      bgColor: '#CCFBF1',
+      paperColor: '#F0FDFB',
+    },
+    {
+      key: 'laundry_soft',
+      label: 'Soft Purple',
+      description: 'Ungu lembut — laundry premium & boutique',
+      primaryColor: '#7C3AED',
+      accentColor: '#5B21B6',
+      bgColor: '#EDE9FE',
+      paperColor: '#FDFAFF',
+    },
+  ],
 };
 
 /**

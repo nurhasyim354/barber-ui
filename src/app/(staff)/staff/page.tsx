@@ -6,11 +6,9 @@ import {
   CircularProgress, Dialog, DialogTitle, DialogContent,
   DialogActions, Divider, IconButton, Avatar, List,
   ListItem, ListItemButton, ListItemText, ListItemAvatar,
-  Switch, FormControlLabel, Alert, TextField, Tooltip,
-  Accordion, AccordionSummary, AccordionDetails,
+  Alert, TextField, Tooltip, Checkbox, InputAdornment,
   Fab,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import PrintIcon from '@mui/icons-material/Print';
@@ -23,6 +21,7 @@ import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import HistoryIcon from '@mui/icons-material/History';
 import BluetoothIcon from '@mui/icons-material/Bluetooth';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import SearchIcon from '@mui/icons-material/Search';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { compressImage } from '@/lib/imageUtils';
@@ -34,13 +33,13 @@ import { StaffBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { parseRupiahInput } from '@/lib/rupiahInput';
 import { QUEUE_AUTO_RELOAD_MS } from '@/lib/queueReload';
-import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import SwitchOutletControl from '@/components/account/SwitchOutletControl';
 import { BookingQuantityEditor, buildQtyDraftFromBooking } from '@/components/booking/BookingQuantityEditor';
 import {
   BOOKING_QTY_MIN,
   clampBookingQtyParsedOrFallback,
   formatBookingQtyDisplay,
+  parseBookingQuantityInput,
 } from '@/lib/bookingQty';
 import {
   bookingServicesLabel,
@@ -79,6 +78,17 @@ interface Tenant {
   allowStaffCreateBooking?: boolean;
 }
 
+interface Service {
+  _id: string;
+  name: string;
+  description?: string;
+  price: number;
+  durationMinutes: number;
+  unit?: string | null;
+  stockQty?: number | null;
+  isActive: boolean;
+}
+
 const statusColor: Record<string, 'warning' | 'info' | 'secondary' | 'success' | 'error'> = {
   waiting: 'warning',
   in_progress: 'info',
@@ -96,8 +106,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function StaffQueuePage() {
-  const { user, isLoading, loadFromStorage, setAuth, token } = useAuthStore();
-  const pendingLoginPhone = useAuthStore((s) => s.user?.pendingPhone);
+  const { user, isLoading, loadFromStorage, setAuth } = useAuthStore();
   const router = useRouter();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -120,8 +129,17 @@ export default function StaffQueuePage() {
   const [receiptDialog, setReceiptDialog] = useState(false);
   const [reprintBusyId, setReprintBusyId] = useState<string | null>(null);
   const [takingId, setTakingId] = useState<string | null>(null);
-  const [isAvailable, setIsAvailable] = useState(true);
-  const [togglingAvail, setTogglingAvail] = useState(false);
+
+  // Tambah item ke booking
+  const [addItemBookingId, setAddItemBookingId] = useState<string | null>(null);
+  const [addItemServices, setAddItemServices] = useState<Service[]>([]);
+  const [addItemServicesLoading, setAddItemServicesLoading] = useState(false);
+  const [addItemSelected, setAddItemSelected] = useState<Service[]>([]);
+  const [addItemQty, setAddItemQty] = useState<Record<string, number>>({});
+  const [addItemQtyDraft, setAddItemQtyDraft] = useState<Record<string, string>>({});
+  const [addItemSearch, setAddItemSearch] = useState('');
+  const [addItemSubmitting, setAddItemSubmitting] = useState(false);
+  const [outOfStockQtyReminder, setOutOfStockQtyReminder] = useState(0);
 
   // Foto hasil 
   const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
@@ -179,6 +197,7 @@ export default function StaffQueuePage() {
       .then((r) => {
         setQrisImageBase64(r.data?.qrisImageBase64 || null);
         setShowBookingQty(r.data?.showBookingQty === true);
+        setOutOfStockQtyReminder(Math.max(0, Number(r.data?.outOfStockQtyReminder) || 0));
       })
       .catch(() => {});
   }, [user?.tenantId]);
@@ -273,20 +292,6 @@ export default function StaffQueuePage() {
     }
   };
 
-  const handleToggleAvailability = async () => {
-    if (!user?.staffId) return;
-    setTogglingAvail(true);
-    try {
-      const res = await api.patch(`/staff/${user.staffId}/availability`);
-      setIsAvailable(res.data.isAvailable);
-      toast.success(res.data.isAvailable ? 'Status: Tersedia' : 'Status: Tidak Tersedia');
-    } catch {
-      toast.error('Gagal mengubah status');
-    } finally {
-      setTogglingAvail(false);
-    }
-  };
-
   const loadBookings = useCallback(async (opts?: { tenantId?: string; silent?: boolean }) => {
     const tid = opts?.tenantId || user?.tenantId;
     if (!tid) return;
@@ -366,6 +371,68 @@ export default function StaffQueuePage() {
       toast.error('Gagal mengambil antrian');
     } finally {
       setTakingId(null);
+    }
+  };
+
+  // ─── Tambah Item ───────────────────────────────────────────────────────────
+  const openAddItemDialog = async (bookingId: string) => {
+    setAddItemBookingId(bookingId);
+    setAddItemSelected([]);
+    setAddItemQty({});
+    setAddItemQtyDraft({});
+    setAddItemSearch('');
+    if (addItemServices.length > 0) return; // sudah ter-load
+    setAddItemServicesLoading(true);
+    try {
+      const tid = user?.tenantId;
+      if (!tid) return;
+      const res = await api.get(`/tenants/${tid}/services`);
+      setAddItemServices(res.data ?? []);
+    } catch {
+      toast.error('Gagal memuat daftar layanan');
+    } finally {
+      setAddItemServicesLoading(false);
+    }
+  };
+
+  const addItemIsOutOfStock = (svc: Service) =>
+    svc.stockQty != null && Number.isFinite(Number(svc.stockQty)) && Number(svc.stockQty) <= 0;
+
+  const addItemQFor = (id: string) => addItemQty[id] ?? 1;
+
+  const toggleAddItem = (svc: Service) => {
+    if (addItemIsOutOfStock(svc)) return;
+    setAddItemSelected((prev) => {
+      const exists = prev.find((s) => s._id === svc._id);
+      if (exists) {
+        setAddItemQty((q) => { const n = { ...q }; delete n[svc._id]; return n; });
+        return prev.filter((s) => s._id !== svc._id);
+      }
+      setAddItemQty((q) => ({ ...q, [svc._id]: 1 }));
+      return [...prev, svc];
+    });
+  };
+
+  const handleAddItems = async () => {
+    if (!addItemBookingId || addItemSelected.length === 0) return;
+    setAddItemSubmitting(true);
+    try {
+      await api.post(`/bookings/${addItemBookingId}/add-items`, {
+        items: addItemSelected.map((s) => ({
+          serviceId: s._id,
+          quantity: addItemQFor(s._id),
+        })),
+      });
+      toast.success('Item berhasil ditambahkan');
+      setAddItemBookingId(null);
+      await loadBookings({ silent: true });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Gagal menambahkan item';
+      toast.error(msg);
+    } finally {
+      setAddItemSubmitting(false);
     }
   };
 
@@ -543,74 +610,6 @@ export default function StaffQueuePage() {
               Tagihan berlangganan outlet melewati jatuh tempo. Pembayaran layanan dinonaktifkan sampai tagihan dilunasi.
             </Alert>
           )}
-          <Card variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
-            <Accordion
-              defaultExpanded={Boolean(pendingLoginPhone)}
-              disableGutters
-              elevation={0}
-              sx={{
-                bgcolor: 'transparent',
-                '&:before': { display: 'none' },
-              }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', pr: 1 }}>
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    Ubah nomor WhatsApp (login)
-                  </Typography>
-                  {pendingLoginPhone ? (
-                    <Chip size="small" label="Menunggu verifikasi" color="info" />
-                  ) : null}
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails sx={{ pt: 0, px: 2, pb: 2 }}>
-                <PhoneChangeSection hideIntro />
-              </AccordionDetails>
-            </Accordion>
-          </Card>
-          {/* Info staff */}
-          <Card
-            className="mb-4"
-            sx={{
-              border: '1px solid',
-              borderColor: isAvailable ? 'success.light' : 'warning.light',
-              bgcolor: isAvailable ? 'rgba(46,125,50,0.06)' : 'rgba(230,81,0,0.06)',
-              boxShadow: (t) => isAvailable
-                ? `0 2px 12px ${t.palette.success.main}22`
-                : `0 2px 12px ${t.palette.warning.main}22`,
-            }}
-          >
-            <CardContent className="py-3">
-              <Box className="flex items-center gap-3">
-                <Avatar sx={{ bgcolor: 'primary.main', width: 44, height: 44, fontWeight: 700 }}>
-                  {user?.name?.charAt(0).toUpperCase()}
-                </Avatar>
-                <Box className="flex-1">
-                  <Typography fontWeight={500}>{user?.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">{ui.staffSingular} · {currentTenant?.name}</Typography>
-                </Box>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={isAvailable}
-                      onChange={handleToggleAvailability}
-                      disabled={togglingAvail || !user?.staffId}
-                      color="success"
-                      size="small"
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" fontWeight={600} color={isAvailable ? 'success.main' : 'warning.main'}>
-                      {isAvailable ? 'Tersedia' : 'Tidak Tersedia'}
-                    </Typography>
-                  }
-                  labelPlacement="start"
-                  sx={{ m: 0 }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-
           <Typography variant="h6" fontWeight={500} className="mb-3">
             Antrian Hari Ini ({pendingBookings.length})
           </Typography>
@@ -729,6 +728,17 @@ export default function StaffQueuePage() {
                           onClick={() => handleUpdateStatus(b._id, 'in_progress')}
                         >
                           Mulai Layani
+                        </Button>
+                      )}
+                      {mine && (b.status === 'waiting' || b.status === 'in_progress') && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="primary"
+                          startIcon={<AddCircleOutlineIcon />}
+                          onClick={() => void openAddItemDialog(b._id)}
+                        >
+                          Tambah Item
                         </Button>
                       )}
                       {mine && b.status === 'in_progress' && (
@@ -1141,13 +1151,10 @@ export default function StaffQueuePage() {
                     </Box>
                   )}
 
-                  <Typography variant="body2" color="text.secondary" mb={1}>
+                  <Typography variant="body2" color="text.secondary" mb={0.5}>
                     {qrisImageBase64
                       ? 'Minta pelanggan scan QR di atas'
                       : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
-                  </Typography>
-                  <Typography variant="h5" fontWeight={900} color="primary">
-                    Rp {(payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0).toLocaleString('id-ID')}
                   </Typography>
                 </Box>
               </Box>
@@ -1156,11 +1163,11 @@ export default function StaffQueuePage() {
                 sx={{
                   flexShrink: 0,
                   px: 2,
-                  pt: 2,
+                  pt: 1.5,
                   pb: 2.25,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 1.25,
+                  gap: 1,
                   bgcolor: 'background.paper',
                   borderTop: 1,
                   borderColor: 'divider',
@@ -1170,6 +1177,17 @@ export default function StaffQueuePage() {
                       : '0 -10px 36px rgba(0,0,0,0.12)',
                 }}
               >
+                {/* Total selalu terlihat di bottom bar — tidak ikut scroll */}
+                <Typography
+                  variant="h5"
+                  fontWeight={900}
+                  color="primary"
+                  textAlign="center"
+                  noWrap
+                  sx={{ letterSpacing: '-0.5px' }}
+                >
+                  Rp {(payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0).toLocaleString('id-ID')}
+                </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'stretch' }}>
                   <Fab
                     variant="extended"
@@ -1340,6 +1358,180 @@ export default function StaffQueuePage() {
             }}
           >
             Selesai
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog Tambah Item ke Booking */}
+      <Dialog
+        open={addItemBookingId !== null}
+        onClose={() => !addItemSubmitting && setAddItemBookingId(null)}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, pb: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddCircleOutlineIcon color="primary" />
+            Tambah Item ke Booking
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1.5 }}>
+          <TextField
+            fullWidth size="small"
+            placeholder="Cari layanan…"
+            value={addItemSearch}
+            onChange={(e) => setAddItemSearch(e.target.value)}
+            sx={{ mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          {addItemServicesLoading ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress /></Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, maxHeight: 340, overflowY: 'auto', pr: 0.5 }}>
+              {addItemServices
+                .filter((svc) => {
+                  const q = addItemSearch.trim().toLowerCase();
+                  return !q || svc.name.toLowerCase().includes(q) || (svc.description ?? '').toLowerCase().includes(q);
+                })
+                .map((svc) => {
+                  const sel = !!addItemSelected.find((s) => s._id === svc._id);
+                  const stockOut = addItemIsOutOfStock(svc);
+                  const lowStock =
+                    !stockOut &&
+                    svc.stockQty != null &&
+                    Number.isFinite(Number(svc.stockQty)) &&
+                    outOfStockQtyReminder > 0 &&
+                    Number(svc.stockQty) < outOfStockQtyReminder;
+                  return (
+                    <Card
+                      key={svc._id}
+                      onClick={() => !stockOut && toggleAddItem(svc)}
+                      sx={{
+                        cursor: stockOut ? 'default' : 'pointer',
+                        border: sel
+                          ? (t) => `1.5px solid ${t.palette.primary.main}`
+                          : '1.5px solid rgba(0,0,0,0.10)',
+                        borderRadius: 2.5,
+                        opacity: stockOut ? 0.5 : 1,
+                        bgcolor: sel ? (t) => `${t.palette.primary.main}0A` : 'background.paper',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: '10px !important' }}>
+                        <Checkbox
+                          checked={sel}
+                          color="primary"
+                          size="small"
+                          sx={{ p: 0 }}
+                          disabled={stockOut}
+                          onChange={() => !stockOut && toggleAddItem(svc)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Box flex={1} minWidth={0}>
+                          <Typography variant="body2" fontWeight={500} noWrap>{svc.name}</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mt: 0.25 }}>
+                            <Typography variant="caption" color="primary" fontWeight={600}>
+                              Rp {svc.price.toLocaleString('id-ID')}
+                            </Typography>
+                            {stockOut && (
+                              <Chip label="Stok habis" size="small" color="error"
+                                sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }} />
+                            )}
+                            {lowStock && showBookingQty && (
+                              <Chip
+                                label={`Sisa ${Number(svc.stockQty)}${svc.unit ? ` ${svc.unit}` : ''}`}
+                                size="small" color="warning" variant="outlined"
+                                sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                              />
+                            )}
+                          </Box>
+                          {sel && showBookingQty && (
+                            <Box mt={0.75} onClick={(e) => e.stopPropagation()}>
+                              <TextField
+                                size="small" label="Qty"
+                                value={addItemQtyDraft[svc._id] ?? formatBookingQtyDisplay(addItemQFor(svc._id))}
+                                onChange={(e) => setAddItemQtyDraft((d) => ({ ...d, [svc._id]: e.target.value }))}
+                                onBlur={() => {
+                                  const raw = addItemQtyDraft[svc._id];
+                                  if (raw === undefined) return;
+                                  const p = parseBookingQuantityInput(raw);
+                                  setAddItemQtyDraft(({ [svc._id]: _, ...rest }) => rest);
+                                  if (p != null) {
+                                    const maxStock =
+                                      svc.stockQty != null && Number.isFinite(Number(svc.stockQty))
+                                        ? Number(svc.stockQty)
+                                        : null;
+                                    if (maxStock !== null && p > maxStock) {
+                                      toast.error(`Qty melebihi stok "${svc.name}". Maks: ${maxStock}${svc.unit ? ` ${svc.unit}` : ''}.`);
+                                      setAddItemQty((q) => ({ ...q, [svc._id]: maxStock }));
+                                    } else {
+                                      setAddItemQty((q) => ({ ...q, [svc._id]: p }));
+                                    }
+                                  } else {
+                                    toast.error('Qty tidak valid.');
+                                  }
+                                }}
+                                inputProps={{ inputMode: 'decimal' }}
+                                sx={{ maxWidth: 120 }}
+                              />
+                            </Box>
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </Box>
+          )}
+          {addItemSelected.length > 0 && (
+            <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                Item yang akan ditambahkan:
+              </Typography>
+              {addItemSelected.map((s) => (
+                <Box key={s._id} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                  <Typography variant="caption" fontWeight={500}>
+                    {s.name}
+                    {showBookingQty && addItemQFor(s._id) !== 1 && (
+                      <Typography component="span" variant="caption" color="primary.main" sx={{ ml: 0.5 }}>
+                        ×{formatBookingQtyDisplay(addItemQFor(s._id))}{s.unit ? ` ${s.unit}` : ''}
+                      </Typography>
+                    )}
+                  </Typography>
+                  <Typography variant="caption" fontWeight={600} color="primary">
+                    Rp {(s.price * addItemQFor(s._id)).toLocaleString('id-ID')}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0.5, gap: 1 }}>
+          <Button
+            onClick={() => setAddItemBookingId(null)}
+            variant="outlined" fullWidth
+            disabled={addItemSubmitting}
+            sx={{ borderRadius: 2.5 }}
+          >
+            Batal
+          </Button>
+          <Button
+            onClick={() => void handleAddItems()}
+            variant="contained" fullWidth
+            disabled={addItemSelected.length === 0 || addItemSubmitting}
+            startIcon={addItemSubmitting ? undefined : <AddCircleOutlineIcon />}
+            sx={{ borderRadius: 2.5, fontWeight: 700 }}
+          >
+            {addItemSubmitting
+              ? <CircularProgress size={20} color="inherit" />
+              : `Tambah (${addItemSelected.length})`}
           </Button>
         </DialogActions>
       </Dialog>

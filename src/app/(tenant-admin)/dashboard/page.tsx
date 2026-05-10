@@ -34,8 +34,6 @@ interface RevenueSummary {
   completedBookings: number;
 }
 
-/** Stok terlacak di katalog; tampil peringatan di dashboard admin outlet */
-const LOW_STOCK_THRESHOLD = 5;
 
 interface StatCardProps {
   title: string;
@@ -71,6 +69,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [lowStockServices, setLowStockServices] = useState<{ _id: string; name: string; stockQty: number }[]>([]);
+  const [lowStockThreshold, setLowStockThreshold] = useState(0);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -86,17 +85,29 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const loadLowStockServices = useCallback(async () => {
+  const loadLowStockServices = useCallback(async (tenantId: string) => {
     try {
-      const res = await api.get('/services');
+      const [servicesRes, tenantRes] = await Promise.all([
+        api.get('/services'),
+        api.get(`/tenants/${tenantId}/settings`),
+      ]);
+      const threshold: number = Math.max(
+        0,
+        Math.floor(Number(tenantRes.data?.outOfStockQtyReminder) || 0),
+      );
+      setLowStockThreshold(threshold);
+      if (threshold === 0) {
+        setLowStockServices([]);
+        return;
+      }
       const rows = (
-        res.data as { _id: string; name: string; isActive: boolean; stockQty?: number | null }[]
+        servicesRes.data as { _id: string; name: string; isActive: boolean; stockQty?: number | null }[]
       )
         .filter(
           (s) =>
             s.isActive &&
             typeof s.stockQty === 'number' &&
-            s.stockQty <= LOW_STOCK_THRESHOLD,
+            s.stockQty <= threshold,
         )
         .map((s) => ({ _id: s._id, name: s.name, stockQty: s.stockQty as number }));
       setLowStockServices(rows);
@@ -111,8 +122,8 @@ export default function DashboardPage() {
     if (user.role === 'customer') { router.replace('/booking'); return; }
     if (user.role === 'super_admin') { router.replace('/admin/tenants'); return; }
     loadRevenue();
-    if (user.role === 'tenant_admin') {
-      void loadLowStockServices();
+    if (user.role === 'tenant_admin' && user.tenantId) {
+      void loadLowStockServices(user.tenantId);
     }
   }, [user, isLoading, loadLowStockServices, loadRevenue]);
 
@@ -164,7 +175,7 @@ export default function DashboardPage() {
           {lowStockServices.length > 0 && (
             <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }} icon={<InventoryIcon />}>
               <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                Menu / barang akan habis (stok ≤ {LOW_STOCK_THRESHOLD})
+                Menu / barang akan habis (stok ≤ {lowStockThreshold})
               </Typography>
               <List dense disablePadding sx={{ pt: 0.5 }}>
                 {lowStockServices.map((s) => (

@@ -11,6 +11,7 @@ export const TENANT_TYPES = [
   'jasa_umum',
   'restaurant',
   'toko',
+  'laundry',
 ] as const;
 export type TenantType = (typeof TENANT_TYPES)[number];
 
@@ -35,6 +36,7 @@ export const TENANT_TYPE_OPTIONS: { value: TenantType; label: string }[] = [
   { value: 'jasa_umum', label: 'Studio / jasa umum' },
   { value: 'restaurant', label: 'Restoran & kafe' },
   { value: 'toko', label: 'Toko / Warung' },
+  { value: 'laundry', label: 'Laundry & Dry Cleaning' },
 ];
 
 export interface TenantUiLabels {
@@ -68,6 +70,10 @@ export interface TenantUiLabels {
   deleteStaffTitle: string;
   /** Receipt / POS: prefix nama penugasan */
   assigneeReceiptLabel: string;
+  /** Label untuk pilihan "tanpa kursi" di dropdown posisi, mis. "Take Away", "Ambil Sendiri", "Antar ke Rumah" */
+  takeAwayLabel: string;
+  /** Label untuk slot posisi, mis. "Kursi", "Meja", "Jalur" */
+  seatLabel: string;
 }
 
 const LABELS: Record<TenantType, TenantUiLabels> = {
@@ -87,6 +93,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Barber *',
     deleteStaffTitle: 'Hapus Barber?',
     assigneeReceiptLabel: 'Barber',
+    seatLabel: 'Kursi',
+    takeAwayLabel: 'Tanpa Kursi',
   },
   klinik: {
     navStaff: 'Dokter',
@@ -104,6 +112,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Dokter *',
     deleteStaffTitle: 'Hapus Dokter?',
     assigneeReceiptLabel: 'Dokter',
+    seatLabel: 'Ruang',
+    takeAwayLabel: 'Tanpa Ruang Khusus',
   },
   bengkel_motor: {
     navStaff: 'Mekanik',
@@ -121,6 +131,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Mekanik *',
     deleteStaffTitle: 'Hapus Mekanik?',
     assigneeReceiptLabel: 'Mekanik',
+    seatLabel: 'Jalur',
+    takeAwayLabel: 'Titip / Antar',
   },
   spa_kecantikan: {
     navStaff: 'Terapis',
@@ -138,6 +150,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Terapis *',
     deleteStaffTitle: 'Hapus Terapis?',
     assigneeReceiptLabel: 'Terapis',
+    seatLabel: 'Bed / Kursi',
+    takeAwayLabel: 'Tanpa Tempat Khusus',
   },
   carwash: {
     navStaff: 'Staff',
@@ -155,6 +169,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',
+    seatLabel: 'Jalur',
+    takeAwayLabel: 'Titip / Antar Jemput',
   },
   ppob: {
     navStaff: 'Staff',
@@ -172,6 +188,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',
+    seatLabel: 'Loket',
+    takeAwayLabel: 'Tanpa Loket',
   },
   jasa_umum: {
     navStaff: 'Staff',
@@ -189,6 +207,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',
+    seatLabel: 'Kursi',
+    takeAwayLabel: 'Tanpa Tempat',
   },
   restaurant: {
     navStaff: 'Pelayan',
@@ -206,6 +226,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Pelayan *',
     deleteStaffTitle: 'Hapus Pelayan?',
     assigneeReceiptLabel: 'Pelayan',
+    seatLabel: 'Meja',
+    takeAwayLabel: 'Take Away / Dibungkus',
   },
   toko: {
     navStaff: 'karyawan',
@@ -223,6 +245,27 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Karyawan *',
     deleteStaffTitle: 'Hapus Karyawan?',
     assigneeReceiptLabel: 'Karyawan',
+    seatLabel: 'Slot',
+    takeAwayLabel: 'Take Away / Ambil Sendiri',
+  },
+  laundry: {
+    navStaff: 'Staff',
+    navServices: 'Layanan',
+    navCustomerBooking: 'Order',
+    navCustomerHistory: 'Riwayat',
+    bookingPageTitle: '🧺 Order Laundry',
+    historyPageTitle: 'Riwayat Laundry',
+    staffTeamTitle: 'Tim Operator',
+    staffSingular: 'Operator',
+    addStaffTitle: 'Tambah Operator',
+    editStaffTitle: 'Edit Operator',
+    specialtyPlaceholder: 'Contoh: Cuci, Setrika, Dry Clean',
+    bookingNotesPlaceholder: 'Contoh: warna baju, instruksi khusus, estimasi kg',
+    staffNameFieldLabel: 'Nama Operator *',
+    deleteStaffTitle: 'Hapus Operator?',
+    assigneeReceiptLabel: 'Operator',
+    seatLabel: 'Loket',
+    takeAwayLabel: 'Antar / Jemput',
   },
 };
 

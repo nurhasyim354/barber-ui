@@ -17,6 +17,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { CustomerBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { bookingServicesLabel, bookingSubtotalOrLegacy, type UiBooking } from '@/lib/bookingDisplay';
+import { effectiveBookingLineQty, formatBookingQtyDisplay } from '@/lib/bookingQty';
 
 type Booking = UiBooking & { tenantId?: string; estimatedServedAt?: string | null };
 
@@ -44,6 +45,7 @@ interface TenantPublic {
   address?: string;
   customerReturnReminderDays?: number;
   tenantType?: string;
+  showBookingQty?: boolean;
 }
 
 const statusConfig: Record<string, { label: string; color: 'warning' | 'info' | 'secondary' | 'success' | 'error' | 'default' }> = {
@@ -100,6 +102,7 @@ export default function HistoryPage() {
             address: tRes.data.address,
             customerReturnReminderDays: tRes.data.customerReturnReminderDays,
             tenantType: tRes.data.tenantType,
+            showBookingQty: tRes.data.showBookingQty === true,
           });
         } catch {
           setLastDone(null);
@@ -170,14 +173,38 @@ export default function HistoryPage() {
                 </Typography>
                 {lastDone && (
                   <Box sx={{ mb: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>
-                        {bookingServicesLabel({
-                          serviceName: lastDone.serviceName,
-                          services: lastDone.services,
+                    {tenantInfo?.showBookingQty && lastDone.services && lastDone.services.length > 0 ? (
+                      <Box sx={{ mb: 0.5 }}>
+                        {lastDone.services.map((line, li) => {
+                          const qty = effectiveBookingLineQty(line.quantity);
+                          const sub = line.lineSubtotal != null && Number.isFinite(line.lineSubtotal)
+                            ? line.lineSubtotal
+                            : Math.round(line.unitPrice * qty);
+                          return (
+                            <Box key={li} sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
+                              <Typography variant="body2" fontWeight={600}>
+                                {line.serviceName}
+                                {qty !== 1 && (
+                                  <Typography component="span" variant="caption" fontWeight={700} color="primary.main" sx={{ ml: 0.5 }}>
+                                    ×{formatBookingQtyDisplay(qty)}
+                                  </Typography>
+                                )}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                                Rp {sub.toLocaleString('id-ID')}
+                              </Typography>
+                            </Box>
+                          );
                         })}
-                      </strong>
-                      {' · '}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        <strong>
+                          {bookingServicesLabel({ serviceName: lastDone.serviceName, services: lastDone.services })}
+                        </strong>
+                      </Typography>
+                    )}
+                    <Typography variant="body2" color="text.secondary">
                       {new Date(lastDone.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                       {lastDone.staffName ? ` · ${lastDone.staffName}` : ''}
                     </Typography>
@@ -242,7 +269,27 @@ export default function HistoryPage() {
                         </Avatar>
                         <Box className="flex-1">
                           <Box className="flex items-center justify-between">
-                            <Typography fontWeight={500}>{bookingServicesLabel(b)}</Typography>
+                            {tenantInfo?.showBookingQty && b.services && b.services.length > 0 ? (
+                              <Box sx={{ flex: 1 }}>
+                                {b.services.map((line, li) => {
+                                  const qty = effectiveBookingLineQty(line.quantity);
+                                  return (
+                                    <Box key={li} sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                                      <Typography variant="body2" fontWeight={500}>
+                                        {line.serviceName}
+                                      </Typography>
+                                      {qty !== 1 && (
+                                        <Typography variant="caption" fontWeight={700} color="primary.main">
+                                          ×{formatBookingQtyDisplay(qty)}{line.unit ? ` ${line.unit}` : ''}
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  );
+                                })}
+                              </Box>
+                            ) : (
+                              <Typography fontWeight={500}>{bookingServicesLabel(b)}</Typography>
+                            )}
                           </Box>
                           <Chip label={cfg.label} color={cfg.color} size="small" />
                           <Typography variant="body2" color="text.secondary">
