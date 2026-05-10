@@ -852,7 +852,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         })
         .then(() => {
           toast.success(`${target.name} ditambahkan ke antrian #${waitingBooking.queueNumber}`);
-          void loadBookingData({ silent: true });
+          // Redirect ke /booking tanpa param addService agar refresh tidak auto-add ulang
+          router.replace('/booking');
         })
         .catch((err: { response?: { data?: { message?: string } } }) => {
           const msg = err?.response?.data?.message ?? 'Gagal menambahkan item ke booking';
