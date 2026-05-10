@@ -70,6 +70,10 @@ interface TenantSettings {
   allowStaffCreateBooking?: boolean | null;
   /** true = halaman booking pelanggan (QR) wajib OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
   requireLoginOnCreateBooking?: boolean | null;
+  /** Stok minimum pemicu peringatan di dashboard; 0/null = nonaktif */
+  outOfStockQtyReminder?: number | null;
+  /** Nomor antrian pertama tiap hari; null/undefined = default 1 */
+  startQueueAtNumber?: number | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -110,6 +114,9 @@ export default function SettingsPage() {
   const [showBookingQty, setShowBookingQty] = useState(false);
   const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
   const [requireLoginOnCreateBooking, setRequireLoginOnCreateBooking] = useState(false);
+  /** 0 = peringatan stok nonaktif */
+  const [outOfStockQtyReminder, setOutOfStockQtyReminder] = useState(0);
+  const [startQueueAtNumber, setStartQueueAtNumber] = useState(1);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -152,6 +159,10 @@ export default function SettingsPage() {
       setShowBookingQty(t.showBookingQty === true);
       setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
       setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
+      const osr = t.outOfStockQtyReminder;
+      setOutOfStockQtyReminder(osr == null || Number.isNaN(Number(osr)) ? 0 : Math.max(0, Math.floor(Number(osr))));
+      const sqn = t.startQueueAtNumber;
+      setStartQueueAtNumber(sqn == null || Number.isNaN(Number(sqn)) ? 1 : Math.max(1, Math.floor(Number(sqn))));
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -206,6 +217,8 @@ export default function SettingsPage() {
         showBookingQty,
         allowStaffCreateBooking,
         requireLoginOnCreateBooking,
+        outOfStockQtyReminder,
+        startQueueAtNumber,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -505,6 +518,53 @@ export default function SettingsPage() {
                   </Box>
                 )}
               />
+              {/* Peringatan Stok Menipis */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  Peringatan stok menipis
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Tampilkan peringatan di dashboard jika stok layanan / produk ≤ nilai ini.
+                  Isi <strong>0</strong> untuk menonaktifkan peringatan.
+                </Typography>
+                <TextField
+                  label="Batas stok minimum"
+                  type="number"
+                  size="small"
+                  value={outOfStockQtyReminder}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setOutOfStockQtyReminder(Number.isNaN(v) ? 0 : Math.max(0, v));
+                  }}
+                  inputProps={{ min: 0, step: 1 }}
+                  helperText={outOfStockQtyReminder === 0 ? 'Peringatan dinonaktifkan' : `Peringatan muncul saat stok ≤ ${outOfStockQtyReminder}`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
+
+              {/* Nomor antrian awal */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  Nomor antrian awal per hari
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Antrian pertama setiap hari dimulai dari nomor ini. Default: <strong>1</strong>.
+                  Misal isi <strong>101</strong> agar antrian hari ini mulai dari #101.
+                </Typography>
+                <TextField
+                  label="Mulai dari nomor"
+                  type="number"
+                  size="small"
+                  value={startQueueAtNumber}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setStartQueueAtNumber(Number.isNaN(v) ? 1 : Math.max(1, v));
+                  }}
+                  inputProps={{ min: 1, step: 1 }}
+                  helperText={`Antrian pertama hari ini (jika belum ada booking): #${startQueueAtNumber}`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
             </CardContent>
           </Card>
 

@@ -1,17 +1,21 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, CircularProgress,
   Avatar, TextField, InputAdornment, IconButton, Chip, Pagination,
+  Button, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import PhoneIcon from '@mui/icons-material/Phone';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
+import DownloadIcon from '@mui/icons-material/Download';
+import UploadIcon from '@mui/icons-material/Upload';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { exportWorkbook, parseExcelFile } from '@/lib/excelUtils';
 import { useAuthStore } from '@/store/authStore';
 import PageHeader from '@/components/layout/PageHeader';
 import AppPageShell from '@/components/layout/AppPageShell';
@@ -38,6 +42,10 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const importFileRef = useRef<HTMLInputElement>(null);
+  type ImportRow = { name: string; phone: string };
+  const [importDialog, setImportDialog] = useState<{ open: boolean; rows: ImportRow[]; errors: string[]; duplicates: string[] }>({ open: false, rows: [], errors: [], duplicates: [] });
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
   useEffect(() => {
@@ -86,12 +94,110 @@ export default function CustomersPage() {
   const getInitials = (name: string) =>
     name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
+  const handleExportCustomers = async () => {
+    try {
+      const res = await api.get(`/customers?page=1&limit=10000`);
+      const all: Customer[] = res.data.data;
+      if (all.length === 0) { toast.error('Tidak ada pelanggan untuk diekspor'); return; }
+      exportWorkbook([{
+        name: 'Pelanggan',
+        rows: all.map((c) => ({
+          'Nama': c.name,
+          'No. HP': c.phone,
+          'Status': c.isActive ? 'Aktif' : 'Nonaktif',
+          'Bergabung': new Date(c.createdAt).toLocaleDateString('id-ID'),
+        })),
+      }], 'pelanggan');
+      toast.success('File Excel berhasil diunduh');
+    } catch {
+      toast.error('Gagal mengekspor data');
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      // Ambil semua pelanggan untuk cek duplikat HP dan nama
+      const allRes = await api.get('/customers?limit=10000');
+      const allCustomers: { name: string; phone: string }[] = allRes.data.data;
+      const existingPhones = new Set(allCustomers.map((c) => c.phone).filter(Boolean));
+      const existingNames = new Set(allCustomers.map((c) => c.name.toLowerCase()));
+
+      const rawRows = await parseExcelFile(file);
+      const rows: ImportRow[] = [];
+      const errors: string[] = [];
+      const duplicates: string[] = [];
+      const batchPhones = new Set<string>();
+      const batchNames = new Set<string>();
+
+      rawRows.forEach((r, idx) => {
+        const rowNum = idx + 2;
+        const name = String(r['Nama'] ?? '').trim();
+        if (!name) { errors.push(`Baris ${rowNum}: Nama wajib diisi`); return; }
+        const phone = String(r['No. HP'] ?? '').replace(/\D/g, '');
+
+        // Cek duplikat berdasarkan HP (jika ada HP) atau nama (jika tidak ada HP)
+        if (phone.length >= 10) {
+          if (existingPhones.has(phone) || batchPhones.has(phone)) {
+            duplicates.push(`${name} (${phone})`);
+            return;
+          }
+          batchPhones.add(phone);
+        } else {
+          const nameLower = name.toLowerCase();
+          if (existingNames.has(nameLower) || batchNames.has(nameLower)) {
+            duplicates.push(name);
+            return;
+          }
+          batchNames.add(nameLower);
+        }
+
+        rows.push({ name, phone });
+      });
+      setImportDialog({ open: true, rows, errors, duplicates });
+    } catch {
+      toast.error('Gagal membaca file Excel');
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importDialog.rows.length === 0) return;
+    setImporting(true);
+    let ok = 0; let fail = 0;
+    for (const row of importDialog.rows) {
+      try {
+        await api.post('/customers', { name: row.name, phone: row.phone || undefined });
+        ok++;
+      } catch { fail++; }
+    }
+    setImporting(false);
+    setImportDialog({ open: false, rows: [], errors: [], duplicates: [] });
+    toast.success(`Import selesai: ${ok} berhasil${fail > 0 ? `, ${fail} gagal` : ''}${importDialog.duplicates.length > 0 ? `, ${importDialog.duplicates.length} duplikat dilewati` : ''}`);
+    loadCustomers(1, search);
+  };
+
+  const handleDownloadTemplate = () => {
+    exportWorkbook([{
+      name: 'Pelanggan',
+      rows: [{ 'Nama': 'Budi Santoso', 'No. HP': '08123456789' }],
+    }], 'template_pelanggan');
+  };
+
   return (
     <AppPageShell variant="withBottomNav">
-      <PageHeader title={`Pelanggan (${total})`}
+      <input ref={importFileRef} type="file" accept=".xlsx,.xls" hidden onChange={handleImportFile} />
 
+      <PageHeader title={`Pelanggan (${total})`}
         right={
-          <Box className="flex items-center">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <IconButton color="inherit" size="small" onClick={() => void handleExportCustomers()} title="Export Excel">
+              <DownloadIcon />
+            </IconButton>
+            <IconButton color="inherit" size="small" onClick={() => importFileRef.current?.click()} title="Import Excel">
+              <UploadIcon />
+            </IconButton>
             <IconButton color="inherit" onClick={() => { logout(); router.push('/login'); }}>
               <LogoutIcon />
             </IconButton>
@@ -189,6 +295,69 @@ export default function CustomersPage() {
           </>
         )}
       </PageContainer>
+
+      {/* Import Dialog */}
+      <Dialog open={importDialog.open} onClose={() => !importing && setImportDialog({ open: false, rows: [], errors: [], duplicates: [] })} fullWidth maxWidth="xs">
+        <DialogTitle fontWeight={500}>Konfirmasi Import Pelanggan</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom>
+            <strong>{importDialog.rows.length}</strong> pelanggan baru siap diimport.
+            {importDialog.duplicates.length > 0 && ` ${importDialog.duplicates.length} duplikat dilewati.`}
+          </Typography>
+          {importDialog.duplicates.length > 0 && (
+            <Box sx={{ mb: 1, p: 1, borderRadius: 1, bgcolor: 'warning.light', opacity: 0.85 }}>
+              <Typography variant="caption" color="warning.dark" fontWeight={600}>
+                Dilewati karena sudah ada ({importDialog.duplicates.length}):
+              </Typography>
+              <Typography variant="caption" color="warning.dark" display="block">
+                {importDialog.duplicates.slice(0, 5).join(', ')}{importDialog.duplicates.length > 5 ? `, … +${importDialog.duplicates.length - 5} lainnya` : ''}
+              </Typography>
+            </Box>
+          )}
+          {importDialog.errors.length > 0 && (
+            <Box sx={{ mb: 1 }}>
+              <Typography variant="caption" color="error" fontWeight={600}>
+                {importDialog.errors.length} baris error dilewati:
+              </Typography>
+              <List dense disablePadding>
+                {importDialog.errors.slice(0, 5).map((e, i) => (
+                  <ListItem key={i} disablePadding>
+                    <ListItemText primaryTypographyProps={{ variant: 'caption', color: 'error' }} primary={e} />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+          <List dense disablePadding sx={{ maxHeight: 200, overflow: 'auto' }}>
+            {importDialog.rows.slice(0, 20).map((r, i) => (
+              <ListItem key={i} disablePadding>
+                <ListItemText
+                  primary={r.name}
+                  secondary={r.phone || '—'}
+                  primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                  secondaryTypographyProps={{ variant: 'caption' }}
+                />
+              </ListItem>
+            ))}
+            {importDialog.rows.length > 20 && (
+              <ListItem disablePadding>
+                <ListItemText primaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }} primary={`… dan ${importDialog.rows.length - 20} lainnya`} />
+              </ListItem>
+            )}
+          </List>
+          <Button size="small" onClick={handleDownloadTemplate} startIcon={<DownloadIcon />} sx={{ mt: 1 }}>
+            Unduh template Excel
+          </Button>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setImportDialog({ open: false, rows: [], errors: [], duplicates: [] })} variant="outlined" fullWidth disabled={importing}>
+            Batal
+          </Button>
+          <Button onClick={() => void handleConfirmImport()} variant="contained" fullWidth disabled={importing || importDialog.rows.length === 0}>
+            {importing ? <CircularProgress size={20} color="inherit" /> : importDialog.rows.length === 0 ? 'Tidak ada data baru' : `Import ${importDialog.rows.length} Pelanggan`}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <TenantAdminBottomNav />
     </AppPageShell>

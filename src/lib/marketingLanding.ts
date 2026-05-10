@@ -13,6 +13,7 @@ export type BusinessVerticalId =
   | 'jasa_umum'
   | 'restaurant'
   | 'toko'
+  | 'laundry'
   ;
 
 export interface BusinessVertical {
@@ -107,6 +108,15 @@ export const BUSINESS_VERTICALS: BusinessVertical[] = [
     shortLabel: 'Toko',
     description: 'Order, atur stok barang, dan nota transparan.',
     defaultMonthlyRevenue: 10_000_000,
+    upliftMin: 0.08,
+    upliftMax: 0.22,
+  },
+  {
+    id: 'laundry',
+    label: 'Laundry & Dry Cleaning',
+    shortLabel: 'Laundry',
+    description: 'Order laundry, antrian cucian, dan nota transparan untuk pelanggan setia.',
+    defaultMonthlyRevenue: 12_000_000,
     upliftMin: 0.08,
     upliftMax: 0.22,
   },

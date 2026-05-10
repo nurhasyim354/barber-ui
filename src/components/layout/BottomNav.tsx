@@ -13,6 +13,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import PersonIcon from '@mui/icons-material/Person';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuthStore } from '@/store/authStore';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import api from '@/lib/api';
@@ -54,7 +55,7 @@ export function CustomerBottomNav({ tenantType }: { tenantType?: string | null }
 export function StaffBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, user } = useAuthStore();
+  const { user } = useAuthStore();
   const L = getTenantUiLabels(user?.tenantType);
 
   const [mayCreateBooking, setMayCreateBooking] = useState(false);
@@ -78,13 +79,17 @@ export function StaffBottomNav() {
     };
   }, [user?.role, user?.tenantId]);
 
+  // Tab indexes: Antrian=0 | [Booking=1 jika allowed] | Riwayat=1/2 | Pengaturan=2/3
   let navValue = 0;
   if (mayCreateBooking) {
     if (pathname.startsWith('/staff/booking')) navValue = 1;
     else if (pathname.startsWith('/staff/history')) navValue = 2;
+    else if (pathname.startsWith('/staff/settings')) navValue = 3;
     else navValue = 0;
-  } else if (pathname.startsWith('/staff/history')) {
-    navValue = 1;
+  } else {
+    if (pathname.startsWith('/staff/history')) navValue = 1;
+    else if (pathname.startsWith('/staff/settings')) navValue = 2;
+    else navValue = 0;
   }
 
   const handleNavChange = (_: unknown, v: number) => {
@@ -92,15 +97,11 @@ export function StaffBottomNav() {
       if (v === 0) router.push('/staff');
       else if (v === 1) router.push('/staff/booking');
       else if (v === 2) router.push('/staff/history');
-      else {
-        logout();
-        router.push('/login');
-      }
-    } else if (v === 0) router.push('/staff');
-    else if (v === 1) router.push('/staff/history');
-    else {
-      logout();
-      router.push('/login');
+      else router.push('/staff/settings');
+    } else {
+      if (v === 0) router.push('/staff');
+      else if (v === 1) router.push('/staff/history');
+      else router.push('/staff/settings');
     }
   };
 
@@ -123,7 +124,7 @@ export function StaffBottomNav() {
           <BottomNavigationAction label="Booking" icon={<AddCircleOutlineIcon />} />
         ) : null}
         <BottomNavigationAction label={L.navCustomerHistory} icon={<HistoryIcon />} />
-        <BottomNavigationAction label="Keluar" icon={<LogoutIcon />} />
+        <BottomNavigationAction label="Pengaturan" icon={<SettingsIcon />} />
       </BottomNavigation>
     </Paper>
   );
