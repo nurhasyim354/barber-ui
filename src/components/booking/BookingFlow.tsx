@@ -33,6 +33,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -90,6 +91,8 @@ interface TenantInfo {
   bookingSeatCount?: number | null;
   /** 0 = peringatan stok nonaktif; >0 = tampilkan info stok jika stockQty ≤ nilai ini */
   outOfStockQtyReminder?: number;
+  /** Persentase PPN (0 = tidak ada PPN, tidak ditampilkan). */
+  ppnPercentage?: number;
 }
 
 interface ServicePhotoDoc {
@@ -147,6 +150,8 @@ interface LastDoneVisit {
   servicePrice: number;
   services?: { serviceName: string; unitPrice: number; quantity: number; lineSubtotal?: number }[];
   totalSubtotal?: number;
+  paidAmount?: number;
+  paymentTaxSnapshot?: { subtotal: number; ppnPercentage: number; ppnAmount: number };
   queueNumber: number;
   staffName: string | null;
   date: string;
@@ -311,6 +316,10 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   /** Diset true jika user tamu menekan aksi booking tanpa mengisi nama (toast + helper). */
   const [guestBookingNameAttempted, setGuestBookingNameAttempted] = useState(false);
   const guestNameInputRef = useRef<HTMLInputElement | null>(null);
+  const [serviceDetailDialog, setServiceDetailDialog] = useState<{ open: boolean; service: Service | null }>({
+    open: false,
+    service: null,
+  });
 
   /** Mencegah auto-add QR service dipanggil lebih dari sekali per mount */
   const qrAutoAddAttemptedRef = useRef(false);
@@ -720,6 +729,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     () => selectedServices.reduce((sum, s) => sum + s.price * qFor(s._id), 0),
     [selectedServices, serviceQty],
   );
+  const ppnPct = tenant?.ppnPercentage ?? 0;
+  const ppnAmount = ppnPct > 0 ? Math.round(totalPrice * ppnPct / 100) : 0;
   const totalDuration = useMemo(
     () => selectedServices.reduce((sum, s) => sum + s.durationMinutes * qFor(s._id), 0),
     [selectedServices, serviceQty],
@@ -1904,8 +1915,22 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                       })}
                       {lastDoneVisit.staffName ? ` · ${lastDoneVisit.staffName}` : ''}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Rp {bookingSubtotalOrLegacy({ totalSubtotal: lastDoneVisit.totalSubtotal, servicePrice: lastDoneVisit.servicePrice }).toLocaleString('id-ID')} · antrian #{lastDoneVisit.queueNumber}
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {(() => {
+                        const sub = bookingSubtotalOrLegacy({
+                          totalSubtotal: lastDoneVisit.totalSubtotal,
+                          servicePrice: lastDoneVisit.servicePrice,
+                        });
+                        const snap = lastDoneVisit.paymentTaxSnapshot;
+                        const total =
+                          snap != null
+                            ? snap.subtotal + snap.ppnAmount
+                            : lastDoneVisit.paidAmount ?? sub;
+                        if (snap && snap.ppnAmount > 0) {
+                          return `Subtotal Rp ${snap.subtotal.toLocaleString('id-ID')} · PPN ${snap.ppnPercentage}% Rp ${snap.ppnAmount.toLocaleString('id-ID')} · Total Rp ${total.toLocaleString('id-ID')} · antrian #${lastDoneVisit.queueNumber}`;
+                        }
+                        return `Rp ${total.toLocaleString('id-ID')} · antrian #${lastDoneVisit.queueNumber}`;
+                      })()}
                     </Typography>
                   </Box>
                 )}
@@ -2106,7 +2131,21 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                             {!svc.photoUrl && <ContentCutIcon sx={{ color: 'white', fontSize: 22 }} />}
                           </Avatar>
                           <Box flex={1} minWidth={0}>
-                            <Typography fontWeight={400} noWrap>{svc.name}</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Typography fontWeight={400} noWrap sx={{ flex: 1, minWidth: 0 }}>{svc.name}</Typography>
+                              {(svc.description || svc.photoUrl) && (
+                                <IconButton
+                                  size="small"
+                                  sx={{ p: 0.25, flexShrink: 0, color: 'text.disabled' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setServiceDetailDialog({ open: true, service: svc });
+                                  }}
+                                >
+                                  <InfoOutlinedIcon sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              )}
+                            </Box>
                             {svc.description && (
                               <Typography variant="body2" color="text.secondary" noWrap>{svc.description}</Typography>
                             )}
@@ -2250,9 +2289,15 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     </Box>
                   ))}
                   <Divider sx={{ my: 1, opacity: 0.35, borderColor: 'rgba(0,0,0,0.1)' }} />
+                  {ppnPct > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary">PPN {ppnPct}%</Typography>
+                      <Typography variant="body2" color="text.secondary">Rp {ppnAmount.toLocaleString('id-ID')}</Typography>
+                    </Box>
+                  )}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Total</Typography>
-                    <Typography fontWeight={600} color="primary">Rp {totalPrice.toLocaleString('id-ID')}</Typography>
+                    <Typography fontWeight={600} color="primary">Rp {(totalPrice + ppnAmount).toLocaleString('id-ID')}</Typography>
                   </Box>
                 </CardContent>
               </Card>
@@ -2689,10 +2734,24 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
             <Divider sx={{ my: 1.5, borderColor: 'divider' }} />
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75, alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">Total</Typography>
-              <Typography fontWeight={800} color="primary" fontSize="1.05rem">
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">Subtotal</Typography>
+              <Typography fontWeight={600} variant="body2" color="text.primary">
                 Rp {totalPrice.toLocaleString('id-ID')}
+              </Typography>
+            </Box>
+            {ppnPct > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, alignItems: 'center' }}>
+                <Typography variant="body2" color="text.secondary">PPN {ppnPct}%</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Rp {ppnAmount.toLocaleString('id-ID')}
+                </Typography>
+              </Box>
+            )}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75, alignItems: 'center' }}>
+              <Typography variant="body2" fontWeight={700}>Total</Typography>
+              <Typography fontWeight={800} color="primary" fontSize="1.05rem">
+                Rp {(totalPrice + ppnAmount).toLocaleString('id-ID')}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
@@ -2888,7 +2947,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             {/* Ringkasan total saat collapsed */}
             {!floatingCartExpanded && (
               <Typography variant="subtitle2" fontWeight={800} color="primary" sx={{ flexShrink: 0 }}>
-                Rp {totalPrice.toLocaleString('id-ID')}
+                Rp {(totalPrice + ppnAmount).toLocaleString('id-ID')}
               </Typography>
             )}
             <IconButton size="small" sx={{ p: 0.25, ml: 0.5 }} disableRipple>
@@ -2946,12 +3005,20 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                 ))}
               </Box>
               <Divider sx={{ my: 1, opacity: 0.35, borderColor: 'rgba(0,0,0,0.1)' }} />
+              {ppnPct > 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary">PPN {ppnPct}%</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Rp {ppnAmount.toLocaleString('id-ID')}
+                  </Typography>
+                </Box>
+              )}
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                 <Typography variant="caption" color="text.secondary">
                   Total waktu {formatDuration(totalDuration)}
                 </Typography>
                 <Typography fontWeight={800} color="primary" variant="subtitle1">
-                  Rp {totalPrice.toLocaleString('id-ID')}
+                  Rp {(totalPrice + ppnAmount).toLocaleString('id-ID')}
                 </Typography>
               </Box>
               {showStaffPayFab && (
@@ -3038,6 +3105,87 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           <CustomerBottomNav tenantType={tenant?.tenantType ?? user?.tenantType} />
         )
       )}
+
+      {/* Dialog detail layanan */}
+      <Dialog
+        open={serviceDetailDialog.open}
+        onClose={() => setServiceDetailDialog({ open: false, service: null })}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        {serviceDetailDialog.service && (() => {
+          const svc = serviceDetailDialog.service;
+          return (
+            <>
+              {svc.photoUrl && (
+                <Box sx={{ width: '100%', bgcolor: 'grey.50', borderRadius: '12px 12px 0 0', overflow: 'hidden', maxHeight: 220 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={svc.photoUrl}
+                    alt={svc.name}
+                    style={{ width: '100%', maxHeight: 220, objectFit: 'cover', display: 'block' }}
+                  />
+                </Box>
+              )}
+              <DialogTitle sx={{ fontWeight: 700, pb: 0.5 }}>
+                {svc.name}
+              </DialogTitle>
+              <DialogContent sx={{ pt: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+                  <Typography variant="h6" color="primary" fontWeight={700} sx={{ letterSpacing: -0.5 }}>
+                    Rp {svc.price.toLocaleString('id-ID')}
+                  </Typography>
+                  <Chip
+                    icon={<AccessTimeIcon sx={{ fontSize: '12px !important' }} />}
+                    label={formatDuration(svc.durationMinutes)}
+                    size="small"
+                    variant="outlined"
+                    sx={{ height: 22, fontSize: '0.7rem', borderRadius: 2, borderColor: 'rgba(0,0,0,0.18)' }}
+                  />
+                  {svc.unit && (
+                    <Chip label={`/ ${svc.unit}`} size="small" variant="outlined"
+                      sx={{ height: 22, fontSize: '0.7rem', borderRadius: 2 }} />
+                  )}
+                </Box>
+                {svc.description ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
+                    {svc.description}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.disabled" fontStyle="italic">
+                    Tidak ada deskripsi
+                  </Typography>
+                )}
+                {svc.stockQty != null && Number.isFinite(Number(svc.stockQty)) && (
+                  <Box sx={{ mt: 1.5 }}>
+                    <Chip
+                      label={Number(svc.stockQty) <= 0 ? 'Stok habis' : `Stok: ${Number(svc.stockQty)}${svc.unit ? ` ${svc.unit}` : ''}`}
+                      size="small"
+                      color={Number(svc.stockQty) <= 0 ? 'error' : 'default'}
+                      variant="outlined"
+                      sx={{ fontSize: '0.72rem', height: 24 }}
+                    />
+                  </Box>
+                )}
+              </DialogContent>
+              <DialogActions sx={{ px: 2.5, pb: 2 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={() => {
+                    setServiceDetailDialog({ open: false, service: null });
+                    if (!isServiceOutOfStock(svc)) toggleService(svc);
+                  }}
+                  disabled={!!tenant?.subscriptionOverdue || outletQuotaFull || isServiceOutOfStock(svc)}
+                >
+                  {selectedServices.find((s) => s._id === svc._id) ? 'Batalkan Pilihan' : 'Pilih Layanan Ini'}
+                </Button>
+              </DialogActions>
+            </>
+          );
+        })()}
+      </Dialog>
     </Box>
   );
 }

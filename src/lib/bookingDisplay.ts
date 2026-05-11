@@ -23,6 +23,17 @@ export type UiBooking = {
   servicePrice?: number;
   /** getToday: nominal dibayar untuk booking selesai */
   paidAmount?: number;
+  /** Id dokumen pembayaran untuk cetak ulang nota */
+  paymentId?: string;
+  /**
+   * Snapshot PPN/DPP dari pembayaran (booking `done`).
+   * Jangan digabung/ditimpa dengan config tenant terkini.
+   */
+  paymentTaxSnapshot?: {
+    subtotal: number;
+    ppnPercentage: number;
+    ppnAmount: number;
+  };
   queueNumber: number;
   status: string;
   notes?: string;

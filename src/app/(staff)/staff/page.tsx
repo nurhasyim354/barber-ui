@@ -140,6 +140,7 @@ export default function StaffQueuePage() {
   const [addItemSearch, setAddItemSearch] = useState('');
   const [addItemSubmitting, setAddItemSubmitting] = useState(false);
   const [outOfStockQtyReminder, setOutOfStockQtyReminder] = useState(0);
+  const [ppnPercentage, setPpnPercentage] = useState(0);
 
   // Foto hasil 
   const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
@@ -156,8 +157,15 @@ export default function StaffQueuePage() {
   );
 
   const fmtRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const calcPpn = (subtotal: number) => ppnPercentage > 0 ? Math.round(subtotal * ppnPercentage / 100) : 0;
+  const bookingInvoiceTotal = (b: Booking) => bookingSubtotalOrLegacy(b) + calcPpn(bookingSubtotalOrLegacy(b));
+  const expectedPaidForDoneBooking = (b: Booking) => {
+    const snap = b.paymentTaxSnapshot;
+    if (snap) return snap.subtotal + snap.ppnAmount;
+    return bookingSubtotalOrLegacy(b);
+  };
   const showOrigVsPaid = (b: Booking) =>
-    b.status === 'done' && b.paidAmount != null && b.paidAmount !== bookingSubtotalOrLegacy(b);
+    b.status === 'done' && b.paidAmount != null && b.paidAmount !== expectedPaidForDoneBooking(b);
 
   const handleReprintNotaBrowser = async (b: Booking) => {
     if (!b.paymentId) return;
@@ -198,6 +206,8 @@ export default function StaffQueuePage() {
         setQrisImageBase64(r.data?.qrisImageBase64 || null);
         setShowBookingQty(r.data?.showBookingQty === true);
         setOutOfStockQtyReminder(Math.max(0, Number(r.data?.outOfStockQtyReminder) || 0));
+        const ppn = r.data?.ppnPercentage;
+        setPpnPercentage(ppn == null || Number.isNaN(Number(ppn)) ? 0 : Math.min(100, Math.max(0, Math.floor(Number(ppn)))));
       })
       .catch(() => {});
   }, [user?.tenantId]);
@@ -444,7 +454,7 @@ export default function StaffQueuePage() {
     lastBookingRef.current = b;
     setPayStep('select');
     setQrisErrorBanner(null);
-    setPayCashTenderedInput(String(bookingSubtotalOrLegacy(b)));
+    setPayCashTenderedInput(String(bookingInvoiceTotal(b)));
     setPayDialog({ open: true, booking: b });
   };
 
@@ -453,7 +463,7 @@ export default function StaffQueuePage() {
   const handlePayment = async (method: 'cash' | 'qris') => {
     const booking = lastBookingRef.current;
     if (!booking) return;
-    const invoiceAmount = bookingSubtotalOrLegacy(booking);
+    const invoiceAmount = bookingInvoiceTotal(booking);
     if (!Number.isFinite(invoiceAmount) || invoiceAmount < 1) {
       toast.error('Total transaksi tidak valid');
       return;
@@ -684,10 +694,29 @@ export default function StaffQueuePage() {
                           </Typography>
                         )}
                       </Box>
-                      <Box className="text-right">
-                        <Typography fontWeight={600} color="primary">
-                          Rp {bookingSubtotalOrLegacy(b).toLocaleString('id-ID')}
-                        </Typography>
+                      <Box className="text-right" sx={{ maxWidth: { xs: '48%', sm: 'none' } }}>
+                        {(() => {
+                          const sub = bookingSubtotalOrLegacy(b);
+                          const ppnAmt = calcPpn(sub);
+                          const inv = sub + ppnAmt;
+                          return ppnPercentage > 0 ? (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                Subtotal {fmtRp(sub)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                PPN {ppnPercentage}% {fmtRp(ppnAmt)}
+                              </Typography>
+                              <Typography fontWeight={700} color="primary" sx={{ mt: 0.25 }}>
+                                {fmtRp(inv)}
+                              </Typography>
+                            </Box>
+                          ) : (
+                            <Typography fontWeight={600} color="primary">
+                              Rp {sub.toLocaleString('id-ID')}
+                            </Typography>
+                          );
+                        })()}
                         <Chip
                           label={statusLabel[b.status]}
                           color={statusColor[b.status]}
@@ -838,11 +867,33 @@ export default function StaffQueuePage() {
                           <CheckCircleIcon color="success" sx={{ display: 'block', ml: 'auto', mb: 0.5 }} />
                           {showOrigVsPaid(b) ? (
                             <Box>
+                              {b.paymentTaxSnapshot && b.paymentTaxSnapshot.ppnAmount > 0 ? (
+                                <>
+                                  <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                    Subtotal {fmtRp(b.paymentTaxSnapshot.subtotal)}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                    PPN {b.paymentTaxSnapshot.ppnPercentage}% {fmtRp(b.paymentTaxSnapshot.ppnAmount)}
+                                  </Typography>
+                                </>
+                              ) : null}
                               <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
-                                Tercatat {fmtRp(bookingSubtotalOrLegacy(b))}
+                                Tercatat {fmtRp(expectedPaidForDoneBooking(b))}
                               </Typography>
                               <Typography variant="body2" fontWeight={700} color="primary">
                                 Dibayar {fmtRp(b.paidAmount!)}
+                              </Typography>
+                            </Box>
+                          ) : b.paymentTaxSnapshot && b.paymentTaxSnapshot.ppnAmount > 0 ? (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                Subtotal {fmtRp(b.paymentTaxSnapshot.subtotal)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                PPN {b.paymentTaxSnapshot.ppnPercentage}% {fmtRp(b.paymentTaxSnapshot.ppnAmount)}
+                              </Typography>
+                              <Typography variant="body2" fontWeight={500}>
+                                {fmtRp(b.paidAmount ?? expectedPaidForDoneBooking(b))}
                               </Typography>
                             </Box>
                           ) : (
@@ -975,6 +1026,7 @@ export default function StaffQueuePage() {
                   booking={payDialog.booking}
                   assigneeLabel={ui.assigneeReceiptLabel}
                   customerPhone={payDialog.booking.customerPhone}
+                  ppnPercentage={ppnPercentage}
                 />
               )}
             </DialogContent>
@@ -1004,8 +1056,9 @@ export default function StaffQueuePage() {
                 autoFocus
               />
               {(() => {
-                const inv =
+                const subtotal =
                   payDialog.booking != null ? bookingSubtotalOrLegacy(payDialog.booking) : null;
+                const inv = subtotal != null ? subtotal + calcPpn(subtotal) : null;
                 const cash = parseRupiahInput(payCashTenderedInput);
                 if (inv != null && inv >= 1 && cash != null && cash >= inv) {
                   return (
@@ -1108,6 +1161,7 @@ export default function StaffQueuePage() {
                       booking={payDialog.booking}
                       assigneeLabel={ui.assigneeReceiptLabel}
                       customerPhone={payDialog.booking.customerPhone}
+                      ppnPercentage={ppnPercentage}
                     />
                   </Box>
                 )}
@@ -1151,7 +1205,7 @@ export default function StaffQueuePage() {
                     </Box>
                   )}
 
-                  <Typography variant="body2" color="text.secondary" mb={0.5}>
+                  <Typography variant="body2" color="text.secondary" mb={1}>
                     {qrisImageBase64
                       ? 'Minta pelanggan scan QR di atas'
                       : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
@@ -1177,17 +1231,42 @@ export default function StaffQueuePage() {
                       : '0 -10px 36px rgba(0,0,0,0.12)',
                 }}
               >
-                {/* Total selalu terlihat di bottom bar — tidak ikut scroll */}
-                <Typography
-                  variant="h5"
-                  fontWeight={900}
-                  color="primary"
-                  textAlign="center"
-                  noWrap
-                  sx={{ letterSpacing: '-0.5px' }}
-                >
-                  Rp {(payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0).toLocaleString('id-ID')}
-                </Typography>
+                {(() => {
+                  const subtotal = payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0;
+                  const ppnAmt = calcPpn(subtotal);
+                  const total = subtotal + ppnAmt;
+                  return ppnPercentage > 0 ? (
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25, px: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">Subtotal</Typography>
+                        <Typography variant="body2">{fmtRp(subtotal)}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, px: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">PPN {ppnPercentage}%</Typography>
+                        <Typography variant="body2">{fmtRp(ppnAmt)}</Typography>
+                      </Box>
+                      <Typography
+                        variant="h5"
+                        fontWeight={900}
+                        color="primary"
+                        sx={{ letterSpacing: '-0.5px' }}
+                      >
+                        Rp {total.toLocaleString('id-ID')}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Typography
+                      variant="h5"
+                      fontWeight={900}
+                      color="primary"
+                      textAlign="center"
+                      noWrap
+                      sx={{ letterSpacing: '-0.5px' }}
+                    >
+                      Rp {subtotal.toLocaleString('id-ID')}
+                    </Typography>
+                  );
+                })()}
                 <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'stretch' }}>
                   <Fab
                     variant="extended"

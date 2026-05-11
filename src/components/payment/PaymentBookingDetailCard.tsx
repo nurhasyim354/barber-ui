@@ -14,15 +14,21 @@ export type PaymentBookingDetailCardProps = {
   assigneeLabel: string;
   /** Opsional: dari GET /bookings/today bila ada akun pelanggan */
   customerPhone?: string | null;
+  /** Persentase PPN tenant (0 = tidak ditampilkan). */
+  ppnPercentage?: number;
 };
 
 export function PaymentBookingDetailCard({
   booking,
   assigneeLabel,
   customerPhone,
+  ppnPercentage = 0,
 }: PaymentBookingDetailCardProps) {
   const lines = getReceiptServiceLines(booking);
-  const total = bookingSubtotalOrLegacy(booking);
+  const subtotal = bookingSubtotalOrLegacy(booking);
+  const ppnPct = Math.min(100, Math.max(0, Math.floor(Number(ppnPercentage) || 0)));
+  const ppnAmount = ppnPct > 0 ? Math.round(subtotal * ppnPct / 100) : 0;
+  const total = subtotal + ppnAmount;
   const phoneTrim =
     customerPhone != null && String(customerPhone).trim() !== '' ? String(customerPhone).trim() : '';
 
@@ -97,6 +103,26 @@ export function PaymentBookingDetailCard({
         </Box>
 
         <Divider sx={{ my: 1 }} />
+
+        {ppnPct > 0 ? (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.5 }}>
+              <Typography fontWeight={600} variant="body2" color="text.secondary">Subtotal</Typography>
+              <Typography fontWeight={600} variant="body2">
+                Rp {subtotal.toLocaleString('id-ID')}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.75 }}>
+              <Typography fontWeight={600} variant="body2" color="text.secondary">
+                PPN {ppnPct}%
+              </Typography>
+              <Typography fontWeight={600} variant="body2">
+                Rp {ppnAmount.toLocaleString('id-ID')}
+              </Typography>
+            </Box>
+            <Divider sx={{ my: 1 }} />
+          </>
+        ) : null}
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <Typography fontWeight={800}>Total</Typography>

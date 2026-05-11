@@ -74,6 +74,8 @@ interface TenantSettings {
   outOfStockQtyReminder?: number | null;
   /** Nomor antrian pertama tiap hari; null/undefined = default 1 */
   startQueueAtNumber?: number | null;
+  /** Persentase PPN di struk; 0 = tidak tampil baris PPN; null/tidak ada = default 0 */
+  ppnPercentage?: number | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -117,6 +119,8 @@ export default function SettingsPage() {
   /** 0 = peringatan stok nonaktif */
   const [outOfStockQtyReminder, setOutOfStockQtyReminder] = useState(0);
   const [startQueueAtNumber, setStartQueueAtNumber] = useState(1);
+  /** null di DB = default 0; 0 = tidak tampil PPN */
+  const [ppnPercentage, setPpnPercentage] = useState(0);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -163,6 +167,8 @@ export default function SettingsPage() {
       setOutOfStockQtyReminder(osr == null || Number.isNaN(Number(osr)) ? 0 : Math.max(0, Math.floor(Number(osr))));
       const sqn = t.startQueueAtNumber;
       setStartQueueAtNumber(sqn == null || Number.isNaN(Number(sqn)) ? 1 : Math.max(1, Math.floor(Number(sqn))));
+      const ppn = t.ppnPercentage;
+      setPpnPercentage(ppn == null || Number.isNaN(Number(ppn)) ? 0 : Math.min(100, Math.max(0, Math.floor(Number(ppn)))));
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -219,6 +225,7 @@ export default function SettingsPage() {
         requireLoginOnCreateBooking,
         outOfStockQtyReminder,
         startQueueAtNumber,
+        ppnPercentage,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -562,6 +569,30 @@ export default function SettingsPage() {
                   }}
                   inputProps={{ min: 1, step: 1 }}
                   helperText={`Antrian pertama hari ini (jika belum ada booking): #${startQueueAtNumber}`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
+
+              {/* PPN */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  PPN di struk (%)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Persentase PPN yang ditampilkan di nota / struk pembayaran.
+                  Isi <strong>0</strong> untuk menyembunyikan baris PPN. Default platform: <strong>0%</strong> (tidak ada PPN).
+                </Typography>
+                <TextField
+                  label="PPN (%)"
+                  type="number"
+                  size="small"
+                  value={ppnPercentage}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 0);
+                    setPpnPercentage(Number.isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
+                  }}
+                  inputProps={{ min: 0, max: 100, step: 1 }}
+                  helperText={ppnPercentage === 0 ? 'Baris PPN tidak ditampilkan di struk' : `PPN ${ppnPercentage}% akan ditampilkan di struk`}
                   sx={{ width: 220 }}
                 />
               </Box>

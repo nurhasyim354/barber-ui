@@ -685,6 +685,12 @@ export default function ServicesPage() {
                           <Typography
                             variant="body2"
                             color={svc.isActive ? 'text.secondary' : 'text.disabled'}
+                            sx={{
+                              display: { xs: '-webkit-box', sm: 'block' },
+                              WebkitLineClamp: { xs: 2 },
+                              WebkitBoxOrient: 'vertical',
+                              overflow: { xs: 'hidden' },
+                            }}
                           >
                             {svc.description}
                           </Typography>
@@ -827,6 +833,9 @@ export default function ServicesPage() {
             label="Deskripsi (opsional)"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
+            multiline
+            minRows={2}
+            maxRows={6}
           />
           <TextField
             fullWidth

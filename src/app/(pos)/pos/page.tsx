@@ -106,6 +106,7 @@ export default function PosPage() {
   const [loading, setLoading] = useState(true);
   const [qrisImageBase64, setQrisImageBase64] = useState<string | null>(null);
   const [showBookingQty, setShowBookingQty] = useState(false);
+  const [ppnPercentage, setPpnPercentage] = useState(0);
   const [qtyDraftByBooking, setQtyDraftByBooking] = useState<Record<string, { serviceId: string; quantity: number }[]>>({});
   const [savingQtyBookingId, setSavingQtyBookingId] = useState<string | null>(null);
   const [payDialog, setPayDialog] = useState<{ open: boolean; booking: Booking | null }>({
@@ -114,6 +115,7 @@ export default function PosPage() {
   const [payCashTenderedInput, setPayCashTenderedInput] = useState('');
   const [payStep, setPayStep] = useState<'select' | 'qris-confirm'>('select');
   const [qrisErrorBanner, setQrisErrorBanner] = useState<string | null>(null);
+  const [qrisFullScreen, setQrisFullScreen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [thermalReceipt, setThermalReceipt] = useState<ThermalReceipt | null>(null);
   const [receiptBookingDateIso, setReceiptBookingDateIso] = useState<string | null>(null);
@@ -139,8 +141,16 @@ export default function PosPage() {
   const lastBookingRef = useRef<Booking | null>(null);
 
   const fmtRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const calcPpn = (subtotal: number) => ppnPercentage > 0 ? Math.round(subtotal * ppnPercentage / 100) : 0;
+  const bookingInvoiceTotal = (b: Booking) => bookingSubtotalOrLegacy(b) + calcPpn(bookingSubtotalOrLegacy(b));
+  /** Total yang diharapkan pada transaksi selesai = snapshot pembayaran, bukan PPN tenant saat ini. */
+  const expectedPaidForDoneBooking = (b: Booking) => {
+    const snap = b.paymentTaxSnapshot;
+    if (snap) return snap.subtotal + snap.ppnAmount;
+    return bookingSubtotalOrLegacy(b);
+  };
   const showOrigVsPaid = (b: Booking) =>
-    b.status === 'done' && b.paidAmount != null && b.paidAmount !== bookingSubtotalOrLegacy(b);
+    b.status === 'done' && b.paidAmount != null && b.paidAmount !== expectedPaidForDoneBooking(b);
 
   const handleReprintNotaBrowser = async (b: Booking) => {
     if (!b.paymentId) return;
@@ -185,6 +195,8 @@ export default function PosPage() {
         .then((r) => {
           setQrisImageBase64(r.data?.qrisImageBase64 || null);
           setShowBookingQty(r.data?.showBookingQty === true);
+          const ppn = r.data?.ppnPercentage;
+          setPpnPercentage(ppn == null || Number.isNaN(Number(ppn)) ? 0 : Math.min(100, Math.max(0, Math.floor(Number(ppn)))));
         })
         .catch(() => {});
     }
@@ -290,14 +302,14 @@ export default function PosPage() {
     lastBookingRef.current = b;
     setPayStep('select');
     setQrisErrorBanner(null);
-    setPayCashTenderedInput(String(bookingSubtotalOrLegacy(b)));
+    setPayCashTenderedInput(String(bookingInvoiceTotal(b)));
     setPayDialog({ open: true, booking: b });
   };
 
   const handlePayment = async (method: 'cash' | 'qris') => {
     const booking = lastBookingRef.current;
     if (!booking) return;
-    const invoiceAmount = bookingSubtotalOrLegacy(booking);
+    const invoiceAmount = bookingInvoiceTotal(booking);
     if (!Number.isFinite(invoiceAmount) || invoiceAmount < 1) {
       toast.error('Total transaksi tidak valid');
       return;
@@ -515,10 +527,29 @@ export default function PosPage() {
                         </Typography>
                       )}
                     </Box>
-                    <Box className="text-right">
-                      <Typography fontWeight={600} color="primary">
-                        {fmtRp(bookingSubtotalOrLegacy(b))}
-                      </Typography>
+                    <Box className="text-right" sx={{ maxWidth: { xs: '48%', sm: 'none' } }}>
+                      {(() => {
+                        const sub = bookingSubtotalOrLegacy(b);
+                        const ppnAmt = calcPpn(sub);
+                        const inv = sub + ppnAmt;
+                        return ppnPercentage > 0 ? (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                              Subtotal {fmtRp(sub)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                              PPN {ppnPercentage}% {fmtRp(ppnAmt)}
+                            </Typography>
+                            <Typography fontWeight={700} color="primary" sx={{ mt: 0.25 }}>
+                              {fmtRp(inv)}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography fontWeight={600} color="primary">
+                            {fmtRp(sub)}
+                          </Typography>
+                        );
+                      })()}
                       <Chip
                         label={statusLabel[b.status]}
                         color={statusColor[b.status]}
@@ -697,11 +728,33 @@ export default function PosPage() {
                           <CheckCircleIcon color="success" sx={{ display: 'block', ml: 'auto', mb: 0.5 }} />
                           {showOrigVsPaid(b) ? (
                             <Box>
+                              {b.paymentTaxSnapshot && b.paymentTaxSnapshot.ppnAmount > 0 ? (
+                                <>
+                                  <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                    Subtotal {fmtRp(b.paymentTaxSnapshot.subtotal)}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                    PPN {b.paymentTaxSnapshot.ppnPercentage}% {fmtRp(b.paymentTaxSnapshot.ppnAmount)}
+                                  </Typography>
+                                </>
+                              ) : null}
                               <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
-                                Tercatat {fmtRp(bookingSubtotalOrLegacy(b))}
+                                Tercatat {fmtRp(expectedPaidForDoneBooking(b))}
                               </Typography>
                               <Typography variant="body2" fontWeight={700} color="primary">
                                 Dibayar {fmtRp(b.paidAmount!)}
+                              </Typography>
+                            </Box>
+                          ) : b.paymentTaxSnapshot && b.paymentTaxSnapshot.ppnAmount > 0 ? (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                Subtotal {fmtRp(b.paymentTaxSnapshot.subtotal)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                PPN {b.paymentTaxSnapshot.ppnPercentage}% {fmtRp(b.paymentTaxSnapshot.ppnAmount)}
+                              </Typography>
+                              <Typography variant="body2" fontWeight={500}>
+                                {fmtRp(b.paidAmount ?? expectedPaidForDoneBooking(b))}
                               </Typography>
                             </Box>
                           ) : (
@@ -793,6 +846,7 @@ export default function PosPage() {
                   booking={payDialog.booking}
                   assigneeLabel={ui.assigneeReceiptLabel}
                   customerPhone={payDialog.booking.customerPhone}
+                  ppnPercentage={ppnPercentage}
                 />
               )}
             </DialogContent>
@@ -822,8 +876,9 @@ export default function PosPage() {
                 autoFocus
               />
               {(() => {
-                const inv =
+                const subtotal =
                   payDialog.booking != null ? bookingSubtotalOrLegacy(payDialog.booking) : null;
+                const inv = subtotal != null ? subtotal + calcPpn(subtotal) : null;
                 const cash = parseRupiahInput(payCashTenderedInput);
                 if (inv != null && inv >= 1 && cash != null && cash >= inv) {
                   return (
@@ -926,20 +981,25 @@ export default function PosPage() {
                       booking={payDialog.booking}
                       assigneeLabel={ui.assigneeReceiptLabel}
                       customerPhone={payDialog.booking.customerPhone}
+                      ppnPercentage={ppnPercentage}
                     />
                   </Box>
                 )}
                 <Box sx={{ flexShrink: 0, textAlign: 'center', pt: 0.5 }}>
                   {qrisImageBase64 ? (
                     <Box
+                      onClick={() => setQrisFullScreen(true)}
                       sx={{
                         border: '1px solid',
                         borderColor: 'divider',
                         borderRadius: 2,
                         overflow: 'hidden',
-                        mb: 1.5,
+                        mb: 0.5,
                         bgcolor: 'white',
                         p: 1,
+                        cursor: 'zoom-in',
+                        transition: 'box-shadow 0.15s',
+                        '&:hover': { boxShadow: 4 },
                       }}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -969,14 +1029,40 @@ export default function PosPage() {
                     </Box>
                   )}
 
+                  {qrisImageBase64 && (
+                    <Typography variant="caption" color="text.disabled" display="block" mb={0.5}>
+                      Ketuk gambar untuk perbesar
+                    </Typography>
+                  )}
                   <Typography variant="body2" color="text.secondary" mb={1}>
                     {qrisImageBase64
                       ? 'Minta pelanggan scan QR di atas'
                       : 'Minta pelanggan scan QRIS yang tersedia di kasir'}
                   </Typography>
-                  <Typography variant="h5" fontWeight={900} color="primary">
-                    Rp {(payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0).toLocaleString('id-ID')}
-                  </Typography>
+                  {(() => {
+                    const subtotal = payDialog.booking ? bookingSubtotalOrLegacy(payDialog.booking) : 0;
+                    const ppnAmt = calcPpn(subtotal);
+                    const total = subtotal + ppnAmt;
+                    return ppnPercentage > 0 ? (
+                      <Box sx={{ mb: 0.5 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                          <Typography variant="body2" color="text.secondary">Subtotal</Typography>
+                          <Typography variant="body2">{fmtRp(subtotal)}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+                          <Typography variant="body2" color="text.secondary">PPN {ppnPercentage}%</Typography>
+                          <Typography variant="body2">{fmtRp(ppnAmt)}</Typography>
+                        </Box>
+                        <Typography variant="h5" fontWeight={900} color="primary">
+                          Rp {total.toLocaleString('id-ID')}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Typography variant="h5" fontWeight={900} color="primary">
+                        Rp {subtotal.toLocaleString('id-ID')}
+                      </Typography>
+                    );
+                  })()}
                 </Box>
               </Box>
 
@@ -1317,6 +1403,35 @@ export default function PosPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLastServicePhotoDialog({ open: false, booking: null, data: null, loading: false })}>
+            Tutup
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* QRIS Full Screen */}
+      <Dialog
+        open={qrisFullScreen && !!qrisImageBase64}
+        onClose={() => setQrisFullScreen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { bgcolor: 'white', borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ textAlign: 'center', fontWeight: 600, pb: 0.5 }}>
+          Scan QRIS
+        </DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 1.5 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={qrisImageBase64 || ''}
+            alt="QRIS"
+            style={{ width: '100%', maxWidth: 360, objectFit: 'contain', display: 'block', borderRadius: 8 }}
+          />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+            Arahkan kamera pelanggan ke kode QR di atas
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
+          <Button variant="outlined" onClick={() => setQrisFullScreen(false)}>
             Tutup
           </Button>
         </DialogActions>

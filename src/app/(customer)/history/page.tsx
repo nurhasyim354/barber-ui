@@ -28,6 +28,7 @@ interface LastDoneVisit {
   services?: { serviceName: string; unitPrice: number; quantity: number; lineSubtotal?: number }[];
   totalSubtotal?: number;
   paidAmount?: number;
+  paymentTaxSnapshot?: UiBooking['paymentTaxSnapshot'];
   queueNumber: number;
   staffName: string | null;
   date: string;
@@ -141,8 +142,14 @@ export default function HistoryPage() {
 
   const listedSubtotal = (x: Pick<UiBooking, 'totalSubtotal' | 'servicePrice'>) => bookingSubtotalOrLegacy(x);
 
-  const showOriginalVsPaid = (listed: number, paidAmount?: number) =>
-    paidAmount != null && paidAmount !== listed;
+  const expectedPaidForHistoryRow = (x: Pick<UiBooking, 'paymentTaxSnapshot' | 'totalSubtotal' | 'servicePrice'>) => {
+    const snap = x.paymentTaxSnapshot;
+    if (snap) return snap.subtotal + snap.ppnAmount;
+    return bookingSubtotalOrLegacy(x);
+  };
+
+  const showOriginalVsPaid = (expectedListed: number, paidAmount?: number) =>
+    paidAmount != null && paidAmount !== expectedListed;
 
   return (
     <AppPageShell variant="withBottomNav">
@@ -208,16 +215,35 @@ export default function HistoryPage() {
                       {new Date(lastDone.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                       {lastDone.staffName ? ` · ${lastDone.staffName}` : ''}
                     </Typography>
-                    {showOriginalVsPaid(listedSubtotal(lastDone), lastDone.paidAmount) ? (
+                    {showOriginalVsPaid(expectedPaidForHistoryRow(lastDone as Pick<UiBooking, 'paymentTaxSnapshot' | 'totalSubtotal' | 'servicePrice'>), lastDone.paidAmount) ? (
                       <Typography variant="body2" sx={{ mt: 0.75 }}>
+                        {lastDone.paymentTaxSnapshot && lastDone.paymentTaxSnapshot.ppnAmount > 0 ? (
+                          <Box component="span" display="block" sx={{ mb: 0.5 }}>
+                            <Typography component="span" variant="caption" color="text.secondary" display="block">
+                              Subtotal {fmtRp(lastDone.paymentTaxSnapshot.subtotal)} · PPN {lastDone.paymentTaxSnapshot.ppnPercentage}% {fmtRp(lastDone.paymentTaxSnapshot.ppnAmount)}
+                            </Typography>
+                          </Box>
+                        ) : null}
                         <Box component="span" color="text.secondary">Harga tercatat: </Box>
-                        <Box component="span" fontWeight={600}>{fmtRp(listedSubtotal(lastDone))}</Box>
+                        <Box component="span" fontWeight={600}>{fmtRp(expectedPaidForHistoryRow(lastDone as Pick<UiBooking, 'paymentTaxSnapshot' | 'totalSubtotal' | 'servicePrice'>))}</Box>
                         {' · '}
                         <Box component="span" color="text.secondary">Dibayar: </Box>
                         <Box component="span" fontWeight={700} color="primary.main">
                           {fmtRp(lastDone.paidAmount!)}
                         </Box>
                       </Typography>
+                    ) : lastDone.paymentTaxSnapshot && lastDone.paymentTaxSnapshot.ppnAmount > 0 ? (
+                      <Box sx={{ mt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Subtotal {fmtRp(lastDone.paymentTaxSnapshot.subtotal)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          PPN {lastDone.paymentTaxSnapshot.ppnPercentage}% {fmtRp(lastDone.paymentTaxSnapshot.ppnAmount)}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={600} color="primary">
+                          {fmtRp(lastDone.paidAmount ?? expectedPaidForHistoryRow(lastDone as Pick<UiBooking, 'paymentTaxSnapshot' | 'totalSubtotal' | 'servicePrice'>))}
+                        </Typography>
+                      </Box>
                     ) : (
                       <Typography variant="body2" fontWeight={600} color="primary" sx={{ mt: 0.5 }}>
                         {fmtRp(lastDone.paidAmount ?? listedSubtotal(lastDone))}
@@ -330,13 +356,35 @@ export default function HistoryPage() {
                             </Typography>
                           )}
                         </Box>
-                        {b.status === 'done' && showOriginalVsPaid(listedSubtotal(b), b.paidAmount) ? (
+                        {b.status === 'done' && showOriginalVsPaid(expectedPaidForHistoryRow(b), b.paidAmount) ? (
                           <Box className="text-right" sx={{ minWidth: 0, maxWidth: 160, ml: 1 }}>
+                            {b.paymentTaxSnapshot && b.paymentTaxSnapshot.ppnAmount > 0 ? (
+                              <>
+                                <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                  Subtotal {fmtRp(b.paymentTaxSnapshot.subtotal)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                                  PPN {b.paymentTaxSnapshot.ppnPercentage}% {fmtRp(b.paymentTaxSnapshot.ppnAmount)}
+                                </Typography>
+                              </>
+                            ) : null}
                             <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
-                              Tercatat {fmtRp(listedSubtotal(b))}
+                              Tercatat {fmtRp(expectedPaidForHistoryRow(b))}
                             </Typography>
                             <Typography fontWeight={700} color="primary" variant="body2" sx={{ mt: 0.25 }}>
                               Dibayar {fmtRp(b.paidAmount!)}
+                            </Typography>
+                          </Box>
+                        ) : b.status === 'done' && b.paymentTaxSnapshot && b.paymentTaxSnapshot.ppnAmount > 0 ? (
+                          <Box className="text-right" sx={{ minWidth: 0, maxWidth: 160, ml: 1 }}>
+                            <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                              Subtotal {fmtRp(b.paymentTaxSnapshot.subtotal)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
+                              PPN {b.paymentTaxSnapshot.ppnPercentage}% {fmtRp(b.paymentTaxSnapshot.ppnAmount)}
+                            </Typography>
+                            <Typography fontWeight={500} color="primary" variant="body2" sx={{ mt: 0.25 }}>
+                              {fmtRp(b.paidAmount ?? expectedPaidForHistoryRow(b))}
                             </Typography>
                           </Box>
                         ) : (

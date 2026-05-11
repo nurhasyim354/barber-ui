@@ -14,6 +14,10 @@ export interface ThermalReceipt {
   staffName: string | null;
   items: { name: string; qty: number; price: number; subtotal: number; unit?: string | null }[];
   subtotal: number;
+  /** Persentase PPN (0 = tidak ada PPN / tidak ditampilkan). */
+  ppnPercentage: number;
+  /** Nominal PPN = subtotal × ppnPercentage / 100 (0 jika ppnPercentage = 0). */
+  ppnAmount: number;
   total: number;
   paymentMethod: string;
   amountPaid: number;
@@ -131,6 +135,8 @@ export function buildThermalReceiptBodyInnerHtml(
   ${receipt.cashierName ? `<div>Kasir     : ${escHtml(receipt.cashierName)}</div>` : ''}
   ${notesBlock}
   <div class="divider"></div>
+  <div class="row"><span>Subtotal</span><span>Rp ${fmtId(receipt.subtotal)}</span></div>
+  ${receipt.ppnPercentage > 0 ? `<div class="row"><span>PPN ${receipt.ppnPercentage}%</span><span>Rp ${fmtId(receipt.ppnAmount)}</span></div>` : ''}
   <div class="center bold large spacer">TOTAL: Rp ${fmtId(receipt.total)}</div>
   <div>Metode    : ${escHtml(receipt.paymentMethod)}</div>
   <div>Dibayar   : Rp ${fmtId(receipt.amountPaid)}</div>
@@ -237,6 +243,9 @@ export function buildThermalReceiptEscPos(
     receipt.cashierName ? `Kasir     : ${receipt.cashierName}\n` : '',
     receipt.notes ? `Catatan   : ${receipt.notes}\n` : '',
     divider,
+    LEFT,
+    `Subtotal  : Rp ${receipt.subtotal.toLocaleString('id-ID')}\n`,
+    ...(receipt.ppnPercentage > 0 ? [`PPN ${receipt.ppnPercentage}%  : Rp ${receipt.ppnAmount.toLocaleString('id-ID')}\n`] : []),
     CENTER,
     BOLD_ON,
     `TOTAL: Rp ${receipt.total.toLocaleString('id-ID')}\n`,
