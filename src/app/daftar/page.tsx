@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Turnstile } from '@marsidev/react-turnstile';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -21,6 +22,9 @@ import { BUSINESS_VERTICALS, type BusinessVerticalId } from '@/lib/marketingLand
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 import MarketingSiteAppBar from '@/components/marketing/MarketingSiteAppBar';
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? '';
+const CAPTCHA_ENABLED = TURNSTILE_SITE_KEY.length > 0;
+
 function DaftarForm() {
   const searchParams = useSearchParams();
   const bisnisParam = searchParams.get('bisnis') ?? '';
@@ -36,6 +40,18 @@ function DaftarForm() {
   const [referralPhone, setReferralPhone] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(CAPTCHA_ENABLED ? null : '');
+  const [turnstileKey, setTurnstileKey] = useState(0);
+
+  const bumpTurnstile = () => setTurnstileKey((k) => k + 1);
+
+  const onTurnstileSuccess = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
+
+  const onTurnstileExpireOrError = useCallback(() => {
+    setTurnstileToken(null);
+  }, []);
 
   useEffect(() => {
     if (bisnisParam && BUSINESS_VERTICALS.some((b) => b.id === bisnisParam)) {
@@ -53,6 +69,10 @@ function DaftarForm() {
       toast.error('Isi nama outlet, alamat, nama PIC, dan nomor WA PIC yang valid');
       return;
     }
+    if (CAPTCHA_ENABLED && !turnstileToken) {
+      toast.error('Selesaikan verifikasi keamanan di bawah form');
+      return;
+    }
     setSubmitting(true);
     try {
       await api.post('/public/tenant-registrations', {
@@ -67,6 +87,7 @@ function DaftarForm() {
           const digits = referralPhone.replace(/\D/g, '');
           return digits.length >= 9 ? digits : undefined;
         })(),
+        ...(CAPTCHA_ENABLED && turnstileToken ? { turnstileToken } : {}),
       });
       toast.success('Outlet berhasil dibuat dan aktif. Silakan masuk dengan nomor WA PIC melalui halaman login.');
       setOutletName('');
@@ -76,9 +97,17 @@ function DaftarForm() {
       setReferralName('');
       setReferralPhone('');
       setMessage('');
+      if (CAPTCHA_ENABLED) {
+        setTurnstileToken(null);
+        bumpTurnstile();
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg || 'Gagal mengirim pengajuan. Coba lagi nanti.');
+      if (CAPTCHA_ENABLED) {
+        setTurnstileToken(null);
+        bumpTurnstile();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -170,6 +199,21 @@ function DaftarForm() {
             minRows={3}
             placeholder="Jumlah cabang, kota, kebutuhan khusus, dll."
           />
+          {CAPTCHA_ENABLED ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+              <Turnstile
+                key={turnstileKey}
+                siteKey={TURNSTILE_SITE_KEY}
+                onSuccess={onTurnstileSuccess}
+                onExpire={onTurnstileExpireOrError}
+                onError={onTurnstileExpireOrError}
+                options={{ language: 'id' }}
+              />
+              <Typography variant="caption" color="text.secondary" align="center">
+                Verifikasi anti-bot (Cloudflare Turnstile)
+              </Typography>
+            </Box>
+          ) : null}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <Button
               variant="contained"
@@ -180,6 +224,7 @@ function DaftarForm() {
                 !address.trim() ||
                 !contactName.trim() ||
                 phone.length < 9 ||
+                (CAPTCHA_ENABLED && !turnstileToken) ||
                 submitting
               }
             >
