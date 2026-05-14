@@ -22,7 +22,7 @@ import { BUSINESS_VERTICALS, type BusinessVerticalId } from '@/lib/marketingLand
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 import MarketingSiteAppBar from '@/components/marketing/MarketingSiteAppBar';
 
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? '';
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? '0x4AAAAAADPaHRVw1-SqhPdX';
 const CAPTCHA_ENABLED = TURNSTILE_SITE_KEY.length > 0;
 
 function DaftarForm() {
