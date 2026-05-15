@@ -61,7 +61,7 @@ export interface TenantUiLabels {
   /** Label dialog edit */
   editStaffTitle: string;
   /** Placeholder spesialisasi */
-  specialtyPlaceholder: string;
+  specialityPlaceholder: string;
   /** Placeholder catatan booking pelanggan (opsional) */
   bookingNotesPlaceholder: string;
   /** Label field nama */
@@ -88,7 +88,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Barber',
     addStaffTitle: 'Tambah Barber',
     editStaffTitle: 'Edit Barber',
-    specialtyPlaceholder: 'Contoh: Fade, Undercut, Classic Cut',
+    specialityPlaceholder: 'Contoh: Fade, Undercut, Classic Cut',
     bookingNotesPlaceholder: 'Contoh: potong pendek bagian samping',
     staffNameFieldLabel: 'Nama Barber *',
     deleteStaffTitle: 'Hapus Barber?',
@@ -107,7 +107,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Dokter',
     addStaffTitle: 'Tambah Dokter',
     editStaffTitle: 'Edit Dokter',
-    specialtyPlaceholder: 'Contoh: Umum, Anak, Jantung',
+    specialityPlaceholder: 'Contoh: Umum, Anak, Jantung',
     bookingNotesPlaceholder: 'Contoh: keluhan singkat, alergi obat (jika ada)',
     staffNameFieldLabel: 'Nama Dokter *',
     deleteStaffTitle: 'Hapus Dokter?',
@@ -126,7 +126,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Mekanik',
     addStaffTitle: 'Tambah Mekanik',
     editStaffTitle: 'Edit Mekanik',
-    specialtyPlaceholder: 'Contoh: Tune-up, Listrik, CVT',
+    specialityPlaceholder: 'Contoh: Tune-up, Listrik, CVT',
     bookingNotesPlaceholder: 'Contoh: Nomor Plat, suara mesin kasar, oli rembes',
     staffNameFieldLabel: 'Nama Mekanik *',
     deleteStaffTitle: 'Hapus Mekanik?',
@@ -145,7 +145,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Terapis',
     addStaffTitle: 'Tambah Terapis',
     editStaffTitle: 'Edit Terapis',
-    specialtyPlaceholder: 'Contoh: Facial, Massage, Hair spa',
+    specialityPlaceholder: 'Contoh: Facial, Massage, Hair spa',
     bookingNotesPlaceholder: 'Contoh: tekanan pijat ringan, kulit sensitif',
     staffNameFieldLabel: 'Nama Terapis *',
     deleteStaffTitle: 'Hapus Terapis?',
@@ -164,7 +164,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Staff',
     addStaffTitle: 'Tambah Staff',
     editStaffTitle: 'Edit Staff',
-    specialtyPlaceholder: 'Contoh: Poles, Mekanik, Elektrical',
+    specialityPlaceholder: 'Contoh: Poles, Mekanik, Elektrical',
     bookingNotesPlaceholder: 'Contoh: Nomor Plat, detail singkat kebutuhan, preferensi jadwal',
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
@@ -183,7 +183,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Staff',
     addStaffTitle: 'Tambah Staff',
     editStaffTitle: 'Edit Staff',
-    specialtyPlaceholder: 'Contoh: Konsultasi, Editing, Instalasi',
+    specialityPlaceholder: 'Contoh: Konsultasi, Editing, Instalasi',
     bookingNotesPlaceholder: 'Contoh: ID Pelanggan, nomor tujuan dll',
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
@@ -202,7 +202,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Staff',
     addStaffTitle: 'Tambah Staff',
     editStaffTitle: 'Edit Staff',
-    specialtyPlaceholder: 'Contoh: Konsultasi, Editing, Instalasi',
+    specialityPlaceholder: 'Contoh: Konsultasi, Editing, Instalasi',
     bookingNotesPlaceholder: 'Contoh: detail singkat kebutuhan, preferensi jadwal',
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
@@ -221,7 +221,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Pelayan',
     addStaffTitle: 'Tambah Pelayan',
     editStaffTitle: 'Edit Pelayan',
-    specialtyPlaceholder: 'Contoh: Chef, Waiter, Bartender',
+    specialityPlaceholder: 'Contoh: Chef, Waiter, Bartender',
     bookingNotesPlaceholder: 'Contoh: Ga pedes, Kuah Pisah dll',
     staffNameFieldLabel: 'Nama Pelayan *',
     deleteStaffTitle: 'Hapus Pelayan?',
@@ -240,7 +240,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Karyawan',
     addStaffTitle: 'Tambah Karyawan',
     editStaffTitle: 'Edit Karyawan',
-    specialtyPlaceholder: 'Contoh: Marketing',
+    specialityPlaceholder: 'Contoh: Marketing',
     bookingNotesPlaceholder: 'Contoh: detail singkat kebutuhan, preferensi jadwal',
     staffNameFieldLabel: 'Nama Karyawan *',
     deleteStaffTitle: 'Hapus Karyawan?',
@@ -259,7 +259,7 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffSingular: 'Operator',
     addStaffTitle: 'Tambah Operator',
     editStaffTitle: 'Edit Operator',
-    specialtyPlaceholder: 'Contoh: Cuci, Setrika, Dry Clean',
+    specialityPlaceholder: 'Contoh: Cuci, Setrika, Dry Clean',
     bookingNotesPlaceholder: 'Contoh: warna baju, instruksi khusus, estimasi kg',
     staffNameFieldLabel: 'Nama Operator *',
     deleteStaffTitle: 'Hapus Operator?',

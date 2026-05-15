@@ -18,32 +18,6 @@ export function hmToMinutes(hm: string): number | null {
   return h * 60 + mm;
 }
 
-export function slotToMinuteRange(slot: { start: string; end: string }): { a: number; b: number } | null {
-  const s = hmToMinutes(slot.start);
-  let e = hmToMinutes(slot.end);
-  if (s == null) return null;
-  if (e == null) return null;
-  if (String(slot.end).trim() === '24:00' || String(slot.end).trim() === '24.00') e = 24 * 60;
-  if (e <= s) return null;
-  return { a: s, b: e };
-}
-
-/** Tabrakan interval [start,end) — sama seperti backend. */
-export function appointmentIntervalsOverlap(x: { start: string; end: string }, y: { start: string; end: string }): boolean {
-  const rx = slotToMinuteRange(x);
-  const ry = slotToMinuteRange(y);
-  if (!rx || !ry) return false;
-  return rx.a < ry.b && ry.a < rx.b;
-}
-
-/** `true` jika jendela jadwal bertubrukan dengan salah satu slot yang sudah dibooking. */
-export function windowCollidesWithBooked(
-  window: { start: string; end: string },
-  booked: { start: string; end: string }[],
-): boolean {
-  return booked.some((b) => appointmentIntervalsOverlap(window, b));
-}
-
 export function formatSlotRangeLabel(slot: { start: string; end: string }): string {
   const a = normalizeHm(slot.start) ?? slot.start;
   const b = normalizeHm(slot.end) ?? slot.end;

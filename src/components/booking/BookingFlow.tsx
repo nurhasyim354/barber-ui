@@ -56,7 +56,7 @@ import {
   formatBookingQtyDisplay,
   parseBookingQuantityInput,
 } from '@/lib/bookingQty';
-import { formatSlotRangeLabel, windowCollidesWithBooked } from '@/lib/appointmentSlot';
+import { formatSlotRangeLabel } from '@/lib/appointmentSlot';
 
 export type BookingFlowVariant = 'customer' | 'staff';
 
@@ -191,7 +191,7 @@ interface StaffQueueRow {
   availabilityDaysHours?: Record<string, { start: string; end: string }[]> | null;
   selectedBookingDayKey?: string;
   selectedBookingDowKey?: string;
-  bookedAppointmentSlots?: { start: string; end: string }[];
+  speciality?: string | null;
 }
 
 type ActiveBooking = UiBooking & { tenantId?: string; estimatedServedAt?: string | null };
@@ -712,10 +712,10 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     return () => clearInterval(tick);
   }, [lastRefreshedAt]);
 
-  /** Prefetch antrian staff agar langkah pilih staff tidak gagal diam-diam (hanya alur pelanggan) */
+  /** Prefetch / sinkronkan antrian staff dengan tanggal antrian (layanan sudah dipilih; termasuk langkah pilih staff). */
   useEffect(() => {
     if (isStaffVariant) return;
-    if (!effectiveTenantId || bookStep !== 'service' || selectedServices.length === 0) return;
+    if (!effectiveTenantId || selectedServices.length === 0) return;
     if ((!user || user.role !== 'customer') && !guestBookingFlow) return;
     if (tenant?.subscriptionOverdue) return;
     const cap = tenant?.dailyBookingQuota;
@@ -737,7 +737,6 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   }, [
     user,
     effectiveTenantId,
-    bookStep,
     selectedServices.length,
     tenant?.subscriptionOverdue,
     tenant?.dailyBookingQuota,
@@ -876,12 +875,6 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     return [];
   }, [isStaffVariant, staffSelfQueueInfo, selectedStaff]);
 
-  const dialogBookedSlots = useMemo(() => {
-    if (isStaffVariant && staffSelfQueueInfo) return staffSelfQueueInfo.bookedAppointmentSlots ?? [];
-    if (selectedStaff) return selectedStaff.bookedAppointmentSlots ?? [];
-    return [];
-  }, [isStaffVariant, staffSelfQueueInfo, selectedStaff]);
-
   useEffect(() => {
     if (!isStaffVariant || !user?.staffId) {
       setStaffSelfQueueInfo(null);
@@ -910,13 +903,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     setSelectedAppointmentSlot((prev) => {
       const stillOk =
         prev &&
-        dialogAppointmentWindows.some((w) => w.start === prev.start && w.end === prev.end) &&
-        !windowCollidesWithBooked(prev, dialogBookedSlots);
+        dialogAppointmentWindows.some((w) => w.start === prev.start && w.end === prev.end);
       if (stillOk) return prev;
-      const free = dialogAppointmentWindows.find((w) => !windowCollidesWithBooked(w, dialogBookedSlots));
-      return free ?? dialogAppointmentWindows[0] ?? null;
+      return dialogAppointmentWindows[0] ?? null;
     });
-  }, [dialogOpen, dialogAppointmentWindows, dialogBookedSlots]);
+  }, [dialogOpen, dialogAppointmentWindows]);
 
   /** Snapshot outlet terbaru (bookingSeatCount, kuota, tagihan) sebelum konfirmasi — hindari state stale. */
   useEffect(() => {
@@ -1238,19 +1229,6 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     const needsApptSlot = Boolean(staffIdForAppt && apptWindows.length > 0);
     if (needsApptSlot && !selectedAppointmentSlot) {
       toast.error('Pilih jam kunjungan untuk staff.');
-      return;
-    }
-    if (
-      needsApptSlot &&
-      selectedAppointmentSlot &&
-      windowCollidesWithBooked(
-        selectedAppointmentSlot,
-        isStaffVariant && staffSelfQueueInfo
-          ? staffSelfQueueInfo.bookedAppointmentSlots ?? []
-          : selectedStaff?.bookedAppointmentSlots ?? [],
-      )
-    ) {
-      toast.error('Jam yang dipilih bentrok dengan janji lain. Pilih jendela lain.');
       return;
     }
     setSubmitting(true);
@@ -2134,7 +2112,9 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                       </Typography>
                     )}
                     {/* Tombol tambah item — hanya saat waiting & user login */}
+                    <br/>
                     {ab.status === 'waiting' && user && (
+                      
                       <Button
                         size="small"
                         variant="outlined"
@@ -2739,7 +2719,16 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                                   </IconButton>
                                 </Tooltip>
                               </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25, flexWrap: 'wrap' }}>
+                              {b.speciality != null && String(b.speciality).trim() !== '' && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mt: 0.35, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}
+                                >
+                                  {String(b.speciality).trim()}
+                                </Typography>
+                              )}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.35, flexWrap: 'wrap' }}>
                                 <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
                                 <Typography variant="body2" fontWeight={500}>
                                   {b.rating > 0 ? b.rating.toFixed(1) : 'Baru'}
@@ -2750,6 +2739,29 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                                   </Typography>
                                 )}
                               </Box>
+                              {(staffDayBlocked || staffUnavailable || staffFull) && (
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.75, alignItems: 'center' }}>
+                                  {staffDayBlocked && (
+                                    <Chip
+                                      label="Tidak tersedia di tanggal ini"
+                                      color="warning"
+                                      size="small"
+                                      sx={{ fontWeight: 700 }}
+                                    />
+                                  )}
+                                  {staffUnavailable && (
+                                    <Chip
+                                      label="Tidak terima booking"
+                                      color="default"
+                                      size="small"
+                                      sx={{ fontWeight: 700 }}
+                                    />
+                                  )}
+                                  {staffFull && !staffUnavailable && (
+                                    <Chip label="Kuota penuh" color="error" size="small" sx={{ fontWeight: 700 }} />
+                                  )}
+                                </Box>
+                              )}
                               {!(staffUnavailable || staffDayBlocked || staffFull) && (
                                 <Box sx={{ mt: 0.75 }}>
                                   <Chip
@@ -2770,32 +2782,10 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                                 </Typography>
                               )}
                             </Box>
-                            <Box sx={{ flexShrink: 0, textAlign: 'right', maxWidth: { xs: '42%', sm: 160 } }}>
-                              {staffDayBlocked && (
-                                <Chip
-                                  label="Tidak tersedia di tanggal ini"
-                                  color="warning"
-                                  size="small"
-                                  sx={{ fontWeight: 700, mb: 0.5 }}
-                                />
-                              )}
-                              {staffUnavailable && (
-                                <Chip
-                                  label="Tidak terima booking"
-                                  color="default"
-                                  size="small"
-                                  sx={{ fontWeight: 700, mb: 0.5 }}
-                                />
-                              )}
-                              {staffFull && !staffUnavailable && (
-                                <Chip label="Kuota penuh" color="error" size="small" sx={{ fontWeight: 700, mb: 0.5 }} />
-                              )}
-                            </Box>
                           </Box>
                           {(() => {
                             const wins = windowsForQueueRow(b);
                             if (wins.length === 0) return null;
-                            const booked = b.bookedAppointmentSlots ?? [];
                             return (
                               <Box sx={{ mt: 1.25, pt: 1.25, borderTop: 1, borderColor: 'divider' }}>
                                 <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
@@ -2810,19 +2800,16 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                                   )
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                  {wins.map((w) => {
-                                    const blocked = windowCollidesWithBooked(w, booked);
-                                    return (
-                                      <Chip
-                                        key={`${b.staffId}-${w.start}-${w.end}`}
-                                        size="small"
-                                        variant="outlined"
-                                        label={`${formatSlotRangeLabel(w)}${blocked ? ' · bentrok' : ''}`}
-                                        color={blocked ? 'default' : 'success'}
-                                        sx={{ fontSize: '0.68rem', fontWeight: 600 }}
-                                      />
-                                    );
-                                  })}
+                                  {wins.map((w) => (
+                                    <Chip
+                                      key={`${b.staffId}-${w.start}-${w.end}`}
+                                      size="small"
+                                      variant="outlined"
+                                      label={formatSlotRangeLabel(w)}
+                                      color="success"
+                                      sx={{ fontSize: '0.68rem', fontWeight: 600 }}
+                                    />
+                                  ))}
                                 </Box>
                               </Box>
                             );
@@ -3155,19 +3142,16 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                   Jadwal Anda hari ini
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {windowsForQueueRow(staffSelfQueueInfo).map((w) => {
-                    const blocked = windowCollidesWithBooked(w, staffSelfQueueInfo.bookedAppointmentSlots ?? []);
-                    return (
-                      <Chip
-                        key={`self-${w.start}-${w.end}`}
-                        size="small"
-                        variant="outlined"
-                        label={`${formatSlotRangeLabel(w)}${blocked ? ' · terisi' : ''}`}
-                        color={blocked ? 'default' : 'success'}
-                        sx={{ fontWeight: 600, fontSize: '0.7rem' }}
-                      />
-                    );
-                  })}
+                  {windowsForQueueRow(staffSelfQueueInfo).map((w) => (
+                    <Chip
+                      key={`self-${w.start}-${w.end}`}
+                      size="small"
+                      variant="outlined"
+                      label={formatSlotRangeLabel(w)}
+                      color="success"
+                      sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+                    />
+                  ))}
                 </Box>
               </Box>
             )}
@@ -3183,23 +3167,19 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                 Jam kunjungan
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                Pilih jendela janji. Yang bertabrakan dengan booking aktif berlabel &ldquo;penuh&rdquo;.
+                Pilih jendela jam kunjungan sesuai jadwal staff.
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                 {dialogAppointmentWindows.map((w) => {
-                  const blocked = windowCollidesWithBooked(w, dialogBookedSlots);
                   const sel =
                     selectedAppointmentSlot?.start === w.start && selectedAppointmentSlot?.end === w.end;
                   return (
                     <Chip
                       key={`${w.start}-${w.end}`}
-                      label={`${formatSlotRangeLabel(w)}${blocked ? ' · penuh' : ''}`}
-                      onClick={() => {
-                        if (!blocked) setSelectedAppointmentSlot(w);
-                      }}
+                      label={formatSlotRangeLabel(w)}
+                      onClick={() => setSelectedAppointmentSlot(w)}
                       color={sel ? 'primary' : 'default'}
                       variant={sel ? 'filled' : 'outlined'}
-                      disabled={blocked}
                       sx={{ fontWeight: 700 }}
                     />
                   );

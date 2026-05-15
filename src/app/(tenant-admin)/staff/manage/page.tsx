@@ -5,7 +5,7 @@ import {
     Box, Card, CardContent, Typography, Button, CircularProgress,
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Avatar, IconButton, Chip, Switch, Rating, Pagination,
-    List, ListItem, ListItemText,
+    List, ListItem, ListItemText, FormControlLabel,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -83,7 +83,7 @@ interface StaffMember {
     _id: string;
     name: string;
     photoUrl?: string;
-    specialty?: string;
+    speciality?: string | null;
     phone?: string;
     rating: number;
     totalReviews: number;
@@ -93,7 +93,7 @@ interface StaffMember {
     availabilityDaysHours?: Record<string, { start: string; end: string }[]> | null;
 }
 
-const defaultForm = { name: '', photoUrl: '', specialty: '', phone: '', dailyBookingQuota: '' as string };
+const defaultForm = { name: '', photoUrl: '', speciality: '', phone: '', dailyBookingQuota: '' as string };
 const PAGE_SIZE = 20;
 
 export default function StaffManagementPage() {
@@ -114,7 +114,7 @@ export default function StaffManagementPage() {
     const [photoUploading, setPhotoUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const importFileRef = useRef<HTMLInputElement>(null);
-    type ImportStaffRow = { name: string; phone: string; specialty: string; dailyBookingQuota: number | null };
+    type ImportStaffRow = { name: string; phone: string; speciality: string; dailyBookingQuota: number | null };
     const [importDialog, setImportDialog] = useState<{ open: boolean; rows: ImportStaffRow[]; errors: string[]; duplicates: string[] }>({ open: false, rows: [], errors: [], duplicates: [] });
     const [importing, setImporting] = useState(false);
     const [weeklySchedule, setWeeklySchedule] = useState(emptyWeeklySchedule());
@@ -156,7 +156,7 @@ export default function StaffManagementPage() {
         setForm({
             name: b.name,
             photoUrl: b.photoUrl || '',
-            specialty: b.specialty || '',
+            speciality: (b.speciality ?? '').trim(),
             phone: b.phone || '',
             dailyBookingQuota: dq,
         });
@@ -176,6 +176,8 @@ export default function StaffManagementPage() {
                     ? { dailyBookingQuota: null }
                     : { dailyBookingQuota: Math.min(9999, Math.max(1, parseInt(form.dailyBookingQuota, 10) || 1)) };
             const schedPayload = buildAvailabilityPayload(weeklySchedule);
+            const specialityTrim = form.speciality.trim();
+            const specialityPayload = { speciality: specialityTrim === '' ? null : specialityTrim.slice(0, 2000) };
             if (editId) {
                 await api.patch(`/staff/${editId}`, {
                     name: form.name,
@@ -184,6 +186,7 @@ export default function StaffManagementPage() {
                     isActive: true,
                     ...quotaPayload,
                     availabilityDaysHours: schedPayload,
+                    ...specialityPayload,
                 });
                 toast.success(`${ui.staffSingular} diupdate`);
             } else {
@@ -193,6 +196,7 @@ export default function StaffManagementPage() {
                     phone: form.phone,
                     ...quotaPayload,
                     ...(schedPayload ? { availabilityDaysHours: schedPayload } : {}),
+                    ...(specialityTrim !== '' ? { speciality: specialityTrim.slice(0, 2000) } : {}),
                 });
                 toast.success(`${ui.staffSingular} berhasil ditambahkan`);
             }
@@ -252,7 +256,7 @@ export default function StaffManagementPage() {
             name: 'Staff',
             rows: staffMembers.map((s) => ({
                 'Nama': s.name,
-                'Spesialisasi': s.specialty ?? '',
+                'Spesialisasi': s.speciality ?? '',
                 'No. HP': s.phone ?? '',
                 'Rating': s.rating || 0,
                 'Kuota Harian': s.dailyBookingQuota ?? '',
@@ -293,10 +297,11 @@ export default function StaffManagementPage() {
 
                 const quotaRaw = String(r['Kuota Harian'] ?? '').trim();
                 const quota = quotaRaw === '' ? null : Math.max(1, parseInt(quotaRaw, 10) || 1);
+                const specialityCell = String(r['Spesialisasi'] ?? '').trim();
                 rows.push({
                     name,
                     phone: String(r['No. HP'] ?? '').replace(/\D/g, ''),
-                    specialty: String(r['Spesialisasi'] ?? '').trim(),
+                    speciality: specialityCell,
                     dailyBookingQuota: quota,
                 });
             });
@@ -315,7 +320,7 @@ export default function StaffManagementPage() {
                 await api.post('/staff', {
                     name: row.name,
                     ...(row.phone ? { phone: row.phone } : {}),
-                    ...(row.specialty ? { specialty: row.specialty } : {}),
+                    ...(row.speciality ? { speciality: row.speciality.slice(0, 2000) } : {}),
                     ...(row.dailyBookingQuota != null ? { dailyBookingQuota: row.dailyBookingQuota } : {}),
                 });
                 ok++;
@@ -330,7 +335,7 @@ export default function StaffManagementPage() {
     const handleDownloadTemplate = () => {
         exportWorkbook([{
             name: 'Staff',
-            rows: [{ 'Nama': 'Budi', 'Spesialisasi': 'Pangkas rambut', 'No. HP': '08123456789', 'Kuota Harian': '' }],
+            rows: [{ 'Nama': 'Budi', 'Spesialisasi': 'Dokter gigi anak', 'No. HP': '08123456789', 'Kuota Harian': '' }],
         }], 'template_staff');
     };
 
@@ -395,8 +400,10 @@ export default function StaffManagementPage() {
                                                         <Chip label="Nonaktif" size="small" color="default" />
                                                     )}
                                                 </Box>
-                                                {b.specialty && (
-                                                    <Typography variant="body2" color="text.secondary">{b.specialty}</Typography>
+                                                {b.speciality != null && String(b.speciality).trim() !== '' && (
+                                                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                                                        {String(b.speciality).trim()}
+                                                    </Typography>
                                                 )}
                                                 {b.phone && (
                                                     <Typography variant="caption" color="text.secondary">📱 {b.phone}</Typography>
@@ -509,9 +516,13 @@ export default function StaffManagementPage() {
                         <TextField
                             fullWidth
                             label="Spesialisasi (opsional)"
-                            value={form.specialty}
-                            onChange={(e) => setForm({ ...form, specialty: e.target.value })}
-                            placeholder={ui.specialtyPlaceholder}
+                            value={form.speciality}
+                            onChange={(e) => setForm({ ...form, speciality: e.target.value })}
+                            placeholder="Singkat, untuk pelanggan di halaman booking"
+                            multiline
+                            minRows={2}
+                            inputProps={{ maxLength: 2000 }}
+                            helperText={`${form.speciality.length}/2000 · Tampil saat pelanggan memilih ${ui.staffSingular.toLowerCase()}`}
                         />
                         <TextField
                             fullWidth
@@ -540,105 +551,163 @@ export default function StaffManagementPage() {
                         />
 
                         <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2, mt: 1 }}>
-                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                                Jadwal jam tersedia (opsional)
+                            <Typography variant="subtitle2" fontWeight={600}>
+                                Jadwal mingguan
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                                Kosongkan semua untuk tidak membatasi hari. Jika diisi, pelanggan hanya bisa membooking pada hari
-                                dan rentang jam yang di-set (zona waktu kuota server). Format waktu sesuai jam lokal layar (24 jam).
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25, mb: 1 }}>
+                                Nyalakan hari kerja, lalu atur jam. Semua hari mati = tidak ada batas hari (sesuai kebijakan outlet).
                             </Typography>
                             <Button
+                                fullWidth
                                 size="small"
-                                variant="text"
-                                color="inherit"
-                                sx={{ mb: 1 }}
+                                variant="outlined"
+                                color="secondary"
+                                sx={{ mb: 1.5, textTransform: 'none' }}
                                 onClick={() => setWeeklySchedule(emptyWeeklySchedule())}
                             >
                                 Hapus semua jadwal
                             </Button>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflow: 'auto', pr: 0.5 }}>
-                                {STAFF_DAY_ROWS.map(({ key, label }) => (
-                                    <Box key={key}>
-                                        <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                                            {label}
-                                        </Typography>
-                                        {weeklySchedule[key].length === 0 ? (
-                                            <Button
-                                                size="small"
-                                                startIcon={<AddIcon />}
-                                                variant="outlined"
-                                                onClick={() =>
-                                                    setWeeklySchedule((prev) => ({
-                                                        ...prev,
-                                                        [key]: [{ start: '09:00', end: '17:00' }],
-                                                    }))}
-                                            >
-                                                Tambah jendela
-                                            </Button>
-                                        ) : (
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                {weeklySchedule[key].map((win, idx) => (
-                                                    <Box key={`${key}-${idx}`} sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                                                        <TextField
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {STAFF_DAY_ROWS.map(({ key, label }) => {
+                                    const wins = weeklySchedule[key];
+                                    const active = wins.length > 0;
+                                    return (
+                                        <Box
+                                            key={key}
+                                            sx={{
+                                                borderRadius: 2,
+                                                border: 1,
+                                                borderColor: 'divider',
+                                                overflow: 'hidden',
+                                                bgcolor: active ? 'action.hover' : 'background.paper',
+                                            }}
+                                        >
+                                            <Box sx={{ px: 1.25, py: 0.75, display: 'flex', alignItems: 'center' }}>
+                                                <FormControlLabel
+                                                    control={
+                                                        <Switch
                                                             size="small"
-                                                            type="time"
-                                                            label="Mulai"
-                                                            value={win.start}
-                                                            onChange={(e) => {
-                                                                const v = e.target.value;
-                                                                setWeeklySchedule((prev) => {
-                                                                    const next = [...prev[key]];
-                                                                    next[idx] = { ...next[idx], start: v };
-                                                                    return { ...prev, [key]: next };
-                                                                });
-                                                            }}
-                                                            InputLabelProps={{ shrink: true }}
-                                                            inputProps={{ step: 300 }}
-                                                        />
-                                                        <TextField
-                                                            size="small"
-                                                            type="time"
-                                                            label="Selesai"
-                                                            value={win.end}
-                                                            onChange={(e) => {
-                                                                const v = e.target.value;
-                                                                setWeeklySchedule((prev) => {
-                                                                    const next = [...prev[key]];
-                                                                    next[idx] = { ...next[idx], end: v };
-                                                                    return { ...prev, [key]: next };
-                                                                });
-                                                            }}
-                                                            InputLabelProps={{ shrink: true }}
-                                                            inputProps={{ step: 300 }}
-                                                        />
-                                                        <IconButton
-                                                            size="small"
-                                                            aria-label="Hapus jendela"
-                                                            onClick={() =>
+                                                            checked={active}
+                                                            onChange={(_, checked) =>
                                                                 setWeeklySchedule((prev) => ({
                                                                     ...prev,
-                                                                    [key]: prev[key].filter((_, i) => i !== idx),
+                                                                    [key]: checked ? [{ start: '09:00', end: '17:00' }] : [],
                                                                 }))}
-                                                        >
-                                                            <DeleteIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Box>
-                                                ))}
-                                                <Button
-                                                    size="small"
-                                                    startIcon={<AddIcon />}
-                                                    onClick={() =>
-                                                        setWeeklySchedule((prev) => ({
-                                                            ...prev,
-                                                            [key]: [...prev[key], { start: '09:00', end: '12:00' }],
-                                                        }))}
-                                                >
-                                                    Jendela lagi
-                                                </Button>
+                                                        />
+                                                    }
+                                                    label={<Typography variant="body2" fontWeight={600}>{label}</Typography>}
+                                                    sx={{ m: 0, flex: 1 }}
+                                                />
                                             </Box>
-                                        )}
-                                    </Box>
-                                ))}
+                                            {active && (
+                                                <Box sx={{ px: 1.25, pb: 1.25, pt: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                    {wins.map((win, idx) => (
+                                                        <Box
+                                                            key={`${key}-${idx}`}
+                                                            sx={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: { xs: 0.35, sm: 0.75 },
+                                                                flexWrap: 'nowrap',
+                                                                minWidth: 0,
+                                                            }}
+                                                        >
+                                                            <TextField
+                                                                size="small"
+                                                                type="time"
+                                                                value={win.start}
+                                                                onChange={(e) => {
+                                                                    const v = e.target.value;
+                                                                    setWeeklySchedule((prev) => {
+                                                                        const next = [...prev[key]];
+                                                                        next[idx] = { ...next[idx], start: v };
+                                                                        return { ...prev, [key]: next };
+                                                                    });
+                                                                }}
+                                                                InputLabelProps={{ shrink: true }}
+                                                                inputProps={{ step: 300 }}
+                                                                sx={{
+                                                                    width: { xs: 86, sm: 100 },
+                                                                    flexShrink: 0,
+                                                                    '& .MuiOutlinedInput-root': {
+                                                                        borderRadius: 1,
+                                                                        height: { xs: 34, sm: 40 },
+                                                                    },
+                                                                    '& .MuiOutlinedInput-input': {
+                                                                        py: { xs: '6px', sm: '8px' },
+                                                                        px: { xs: '6px', sm: '10px' },
+                                                                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                                                                    },
+                                                                }}
+                                                            />
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                                sx={{ flexShrink: 0, userSelect: 'none', fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
+                                                            >
+                                                                s.d
+                                                            </Typography>
+                                                            <TextField
+                                                                size="small"
+                                                                type="time"
+                                                                value={win.end}
+                                                                onChange={(e) => {
+                                                                    const v = e.target.value;
+                                                                    setWeeklySchedule((prev) => {
+                                                                        const next = [...prev[key]];
+                                                                        next[idx] = { ...next[idx], end: v };
+                                                                        return { ...prev, [key]: next };
+                                                                    });
+                                                                }}
+                                                                InputLabelProps={{ shrink: true }}
+                                                                inputProps={{ step: 300 }}
+                                                                sx={{
+                                                                    width: { xs: 86, sm: 100 },
+                                                                    flexShrink: 0,
+                                                                    '& .MuiOutlinedInput-root': {
+                                                                        borderRadius: 1,
+                                                                        height: { xs: 34, sm: 40 },
+                                                                    },
+                                                                    '& .MuiOutlinedInput-input': {
+                                                                        py: { xs: '6px', sm: '8px' },
+                                                                        px: { xs: '6px', sm: '10px' },
+                                                                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                                                                    },
+                                                                }}
+                                                            />
+                                                            <IconButton
+                                                                size="small"
+                                                                aria-label="Hapus rentang jam"
+                                                                edge="end"
+                                                                sx={{ ml: 'auto', flexShrink: 0, p: { xs: 0.35, sm: 0.5 } }}
+                                                                onClick={() =>
+                                                                    setWeeklySchedule((prev) => ({
+                                                                        ...prev,
+                                                                        [key]: prev[key].filter((_, i) => i !== idx),
+                                                                    }))}
+                                                            >
+                                                                <DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+                                                            </IconButton>
+                                                        </Box>
+                                                    ))}
+                                                    <Button
+                                                        size="small"
+                                                        startIcon={<AddIcon />}
+                                                        variant="text"
+                                                        sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
+                                                        onClick={() =>
+                                                            setWeeklySchedule((prev) => ({
+                                                                ...prev,
+                                                                [key]: [...prev[key], { start: '13:00', end: '15:00' }],
+                                                            }))}
+                                                    >
+                                                        Tambah rentang jam
+                                                    </Button>
+                                                </Box>
+                                            )}
+                                        </Box>
+                                    );
+                                })}
                             </Box>
                         </Box>
                     </Box>
@@ -706,7 +775,7 @@ export default function StaffManagementPage() {
                             <ListItem key={i} disablePadding>
                                 <ListItemText
                                     primary={r.name}
-                                    secondary={[r.specialty, r.phone].filter(Boolean).join(' · ') || '—'}
+                                    secondary={[r.speciality, r.phone].filter(Boolean).join(' · ') || '—'}
                                     primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
                                     secondaryTypographyProps={{ variant: 'caption' }}
                                 />
