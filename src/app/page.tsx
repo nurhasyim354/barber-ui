@@ -1,35 +1,28 @@
-'use client';
+import type { Metadata } from 'next';
+import { Italianno } from 'next/font/google';
+import JsonLdOrganization from '@/components/seo/JsonLdOrganization';
+import HomeClient from './home-client';
+import { pageMetadata } from '@/lib/seo';
+import { SITE_DESCRIPTION } from '@/lib/site';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Box, CircularProgress } from '@mui/material';
-import { useAuthStore } from '@/store/authStore';
-import HomeMarketing from '@/components/marketing/HomeMarketing';
+/** Giambattista (Wiescher Design) tidak tersedia gratis untuk web; Italianno ≈ nuansa script klasik Italia pada hero. */
+const marketingHeroScript = Italianno({
+  subsets: ['latin', 'latin-ext'],
+  weight: '400',
+  display: 'swap',
+});
 
-export default function Home() {
-  const router = useRouter();
-  const { user, isLoading, loadFromStorage } = useAuthStore();
+export const metadata: Metadata = pageMetadata(
+  'Platform booking & antrian multi-outlet',
+  SITE_DESCRIPTION,
+  { path: '/', keywords: ['beranda', 'landing', 'SaaS'] },
+);
 
-  useEffect(() => {
-    loadFromStorage();
-  }, [loadFromStorage]);
-
-  useEffect(() => {
-    if (isLoading) return;
-    if (!user) return;
-    if (user.role === 'super_admin') router.replace('/admin/tenants');
-    else if (user.role === 'tenant_admin') router.replace('/dashboard');
-    else if (user.role === 'staff') router.replace('/staff');
-    else router.replace('/booking');
-  }, [user, isLoading, router]);
-
-  if (isLoading || user) {
-    return (
-      <Box className="flex items-center justify-center" sx={{ minHeight: '100svh' }}>
-        <CircularProgress color="primary" />
-      </Box>
-    );
-  }
-
-  return <HomeMarketing />;
+export default function HomePage() {
+  return (
+    <>
+      <JsonLdOrganization />
+      <HomeClient marketingHeroHeadingFontFamily={marketingHeroScript.style.fontFamily} />
+    </>
+  );
 }

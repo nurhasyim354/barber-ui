@@ -164,7 +164,12 @@ function fmtRp(n: number) {
   return `Rp ${n.toLocaleString('id-ID')}`;
 }
 
-export default function HomeMarketing() {
+type HomeMarketingProps = {
+  /** Mis. Italianno dari `next/font/google` — dipakai untuk gaya mirip script seperti Giambattista. */
+  heroHeadingFontFamily?: string;
+};
+
+export default function HomeMarketing({ heroHeadingFontFamily }: HomeMarketingProps) {
   const theme = useTheme();
   const [vertical, setVertical] = useState<BusinessVertical>(BUSINESS_VERTICALS[1]);
   const [revenueSlider, setRevenueSlider] = useState(35); // juta Rp
@@ -198,10 +203,28 @@ export default function HomeMarketing() {
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px, position: 'relative', zIndex: 1 }}>
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={7}>
-              <Typography variant="h3" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.85rem', sm: '2.5rem', md: '3rem' }, lineHeight: 1.15 }}>
-                Antrian rapi, pendapatan lebih terukur
+              <Typography
+                variant="h3"
+                component="h1"
+                fontWeight={400}
+                sx={{
+                  fontSize: { xs: '2.35rem', sm: '2.85rem', md: '3.35rem' },
+                  lineHeight: 1.15,
+                  fontFamily:
+                    heroHeadingFontFamily ??
+                    '"Palace Script MT", "Segoe Script", "Lucida Handwriting", "Brush Script MT", "Apple Chancery", cursive',
+                  letterSpacing: heroHeadingFontFamily ? '0.015em' : '0.02em',
+                  background: (t) =>
+                    `linear-gradient(102deg, ${t.palette.primary.dark} 0%, ${t.palette.text.primary} 52%, ${alpha(t.palette.primary.main, 0.95)} 100%)`,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  filter: (t) => `drop-shadow(0 1px 1px ${alpha(t.palette.text.primary, t.palette.mode === 'dark' ? 0.35 : 0.12)})`,
+                }}
+              >
+                "Karena setiap detik sangat berharga"
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mt: 2, maxWidth: 560 }}>
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 4, maxWidth: 560 }}>
                 Booking, staff, kasir, laporan, dan pengingat WA dalam satu tempat. Pilih jenis bisnis, cek simulasi omzet,
                 lalu daftarkan outlet Anda.
               </Typography>
