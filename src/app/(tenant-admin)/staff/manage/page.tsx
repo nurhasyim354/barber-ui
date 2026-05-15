@@ -22,6 +22,15 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import {
+    StaffAvailabilityEditor,
+    expandScheduleForEditor,
+    scheduleHasAtLeastOneOpenSlot,
+    serializeScheduleForApi,
+    validateScheduleSlots,
+    type StaffAvailabilityDaysHours,
+    type StaffAvailabilityEditorValue,
+} from '@/components/staff/StaffAvailabilityEditor';
 
 interface StaffMember {
     _id: string;
@@ -33,9 +42,19 @@ interface StaffMember {
     reviewCount: number;
     isActive: boolean;
     isAvailable: boolean;
+    dailyBookingQuota?: number | null;
+    /** Jadwal mon…sun; opsional */
+    availabilityDaysHours?: StaffAvailabilityDaysHours | null;
 }
 
-const defaultForm = { name: '', photoUrl: '', specialty: '', phone: '' };
+const defaultForm = {
+    name: '',
+    photoUrl: '',
+    specialty: '',
+    phone: '',
+    dailyBookingQuota: '' as string,
+    availabilitySchedule: null as StaffAvailabilityEditorValue | null,
+};
 const PAGE_SIZE = 20;
 
 export default function StaffManagementPage() {
@@ -86,7 +105,19 @@ export default function StaffManagementPage() {
     };
 
     const handleEdit = (b: StaffMember) => {
-        setForm({ name: b.name, photoUrl: b.photoUrl || '', specialty: b.specialty || '', phone: b.phone || '' });
+        const dq =
+            b.dailyBookingQuota != null && b.dailyBookingQuota > 0 ? String(Math.min(9999, b.dailyBookingQuota)) : '';
+        setForm({
+            name: b.name,
+            photoUrl: b.photoUrl || '',
+            specialty: b.specialty || '',
+            phone: b.phone || '',
+            dailyBookingQuota: dq,
+            availabilitySchedule:
+                b.availabilityDaysHours && Object.keys(b.availabilityDaysHours).length > 0
+                    ? expandScheduleForEditor(b.availabilityDaysHours)
+                    : null,
+        });
         setEditId(b._id);
         setDialogOpen(true);
     };
@@ -95,13 +126,47 @@ export default function StaffManagementPage() {
 
     const handleSave = async () => {
         if (!form.name.trim()) { toast.error('Nama wajib diisi'); return; }
+        let availabilityDaysHours: StaffAvailabilityDaysHours | null;
+        if (form.availabilitySchedule === null) {
+            availabilityDaysHours = null;
+        } else {
+            const err = validateScheduleSlots(form.availabilitySchedule);
+            if (err) {
+                toast.error(err);
+                return;
+            }
+            if (!scheduleHasAtLeastOneOpenSlot(form.availabilitySchedule)) {
+                toast.error('Aktifkan jadwal: setidaknya satu hari harus buka dengan jam kerja.');
+                return;
+            }
+            availabilityDaysHours = serializeScheduleForApi(form.availabilitySchedule);
+        }
+        const quotaPayload = {
+            dailyBookingQuota:
+                form.dailyBookingQuota.trim() === ''
+                    ? null
+                    : Math.min(9999, Math.max(1, parseInt(form.dailyBookingQuota, 10) || 1)),
+        };
         setSaving(true);
         try {
             if (editId) {
-                await api.patch(`/staff/${editId}`, { ...form, isActive: true });
+                await api.patch(`/staff/${editId}`, {
+                    name: form.name,
+                    photoUrl: form.photoUrl,
+                    phone: form.phone,
+                    isActive: true,
+                    availabilityDaysHours,
+                    ...quotaPayload,
+                });
                 toast.success(`${ui.staffSingular} diupdate`);
             } else {
-                await api.post('/staff', form);
+                await api.post('/staff', {
+                    name: form.name,
+                    photoUrl: form.photoUrl,
+                    phone: form.phone,
+                    availabilityDaysHours,
+                    ...quotaPayload,
+                });
                 toast.success(`${ui.staffSingular} berhasil ditambahkan`);
             }
             setDialogOpen(false);
@@ -255,7 +320,7 @@ export default function StaffManagementPage() {
             )}
 
             {/* Add / Edit Dialog */}
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm" scroll="body">
                 <DialogTitle fontWeight={500}>{editId ? ui.editStaffTitle : ui.addStaffTitle}</DialogTitle>
                 <DialogContent>
                     <Box className="flex flex-col gap-4 pt-2">
@@ -325,6 +390,26 @@ export default function StaffManagementPage() {
                             inputMode="tel"
                             placeholder="08xx xxxx xxxx"
                             helperText={editId ? 'Kosongkan jika tidak ingin mengubah HP' : 'Jika diisi, staff bisa login via OTP WA'}
+                        />
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Kuota antrian aktif per hari (opsional)"
+                            value={form.dailyBookingQuota}
+                            onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, '');
+                                setForm((p) => ({
+                                    ...p,
+                                    dailyBookingQuota: v === '' ? '' : String(Math.min(9999, parseInt(v, 10))),
+                                }));
+                            }}
+                            inputProps={{ min: 1, max: 9999 }}
+                            placeholder="Ikuti batas outlet saja"
+                            helperText="Kosong = tidak ada batas khusus untuk staff ini (tetap terbatas kuota outlet jika di-set)."
+                        />
+                        <StaffAvailabilityEditor
+                            value={form.availabilitySchedule}
+                            onChange={(availabilitySchedule) => setForm((prev) => ({ ...prev, availabilitySchedule }))}
                         />
                     </Box>
                 </DialogContent>

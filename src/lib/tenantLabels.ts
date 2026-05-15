@@ -54,6 +54,10 @@ export interface TenantUiLabels {
   deleteStaffTitle: string;
   /** Receipt / POS: prefix nama penugasan */
   assigneeReceiptLabel: string;
+  /** Label posisi tempat layanan (kursi, ruangan, slot bengkel, …) */
+  seatLabel: string;
+  /** Opsi tanpa posisi tetap di form booking */
+  takeAwayLabel: string;
 }
 
 const LABELS: Record<TenantType, TenantUiLabels> = {
@@ -73,6 +77,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Barber *',
     deleteStaffTitle: 'Hapus Barber?',
     assigneeReceiptLabel: 'Barber',
+    seatLabel: 'Kursi',
+    takeAwayLabel: 'Tanpa kursi',
   },
   klinik: {
     navStaff: 'Dokter',
@@ -90,6 +96,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Dokter *',
     deleteStaffTitle: 'Hapus Dokter?',
     assigneeReceiptLabel: 'Dokter',
+    seatLabel: 'Ruangan',
+    takeAwayLabel: 'Tanpa ruangan',
   },
   bengkel_motor: {
     navStaff: 'Mekanik',
@@ -107,6 +115,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Mekanik *',
     deleteStaffTitle: 'Hapus Mekanik?',
     assigneeReceiptLabel: 'Mekanik',
+    seatLabel: 'Posisi',
+    takeAwayLabel: 'Antrian umum',
   },
   spa_kecantikan: {
     navStaff: 'Terapis',
@@ -124,6 +134,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Terapis *',
     deleteStaffTitle: 'Hapus Terapis?',
     assigneeReceiptLabel: 'Terapis',
+    seatLabel: 'Ruangan',
+    takeAwayLabel: 'Tanpa ruangan',
   },
   jasa_umum: {
     navStaff: 'Staff',
@@ -141,6 +153,8 @@ const LABELS: Record<TenantType, TenantUiLabels> = {
     staffNameFieldLabel: 'Nama Staff *',
     deleteStaffTitle: 'Hapus Staff?',
     assigneeReceiptLabel: 'Staff',
+    seatLabel: 'Posisi',
+    takeAwayLabel: 'Fleksibel',
   },
 };
 

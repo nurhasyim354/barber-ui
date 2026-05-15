@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, Button, CircularProgress,
-  TextField, Divider, IconButton, Chip,
+  TextField, Divider, IconButton, Chip, Switch, FormControlLabel,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
@@ -11,6 +11,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
 import UploadIcon from '@mui/icons-material/Upload';
+import ImageIcon from '@mui/icons-material/Image';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import toast from 'react-hot-toast';
 import { compressImage } from '@/lib/imageUtils';
@@ -21,6 +22,7 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { defaultBrandPalette } from '@/lib/uiStyleConfig';
+import { BOOKING_SEAT_COUNT_MAX, BOOKING_SEAT_COUNT_MIN } from '@/lib/bookingSeatLimits';
 
 interface TenantTheme {
   primaryColor: string;
@@ -43,9 +45,31 @@ interface TenantSettings {
   phone?: string;
   location?: { lat: number; lng: number } | null;
   qrisImageBase64?: string | null;
+  /** Logo di halaman login & booking */
+  tenantLogoBase64?: string | null;
   theme?: TenantTheme | null;
   /** 0 = nonaktif; kosong/null di DB = default server (21) */
   customerReturnReminderDays?: number | null;
+  /** Menit sebelum perkiraan dilayani — WA pengingat (0 = nonaktif). Hanya jika ETA > 2 jam. */
+  customerAppointmentReminderMinutes?: number | null;
+  /** Batas antrian aktif per hari (menunggu + sedang dilayani); null = tidak dibatasi */
+  dailyBookingQuota?: number | null;
+  /** Jumlah posisi di form booking; rentang lihat `@/lib/bookingSeatLimits` (sinkron API). `null` = pemilihan posisi tidak dipakai */
+  bookingSeatCount?: number | null;
+  /** Halaman /booking: tampil field qty per layanan */
+  showBookingQty?: boolean | null;
+  /** Izinkan akun staff (`staff`) membuat booking lewat API */
+  allowStaffCreateBooking?: boolean | null;
+  /** true = halaman booking pelanggan (QR) wajib OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
+  requireLoginOnCreateBooking?: boolean | null;
+  /** true = boleh booking hingga tanggal maju (kalender kuota server). */
+  allowBookOnFutureDates?: boolean | null;
+  /** Stok minimum pemicu peringatan di dashboard; 0/null = nonaktif */
+  outOfStockQtyReminder?: number | null;
+  /** Nomor antrian pertama tiap hari; null/undefined = default 1 */
+  startQueueAtNumber?: number | null;
+  /** Persentase PPN di struk; 0 = tidak tampil baris PPN; null/tidak ada = default 0 */
+  ppnPercentage?: number | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -54,6 +78,7 @@ export default function SettingsPage() {
   const { user, isLoading, loadFromStorage } = useAuthStore();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [tenant, setTenant] = useState<TenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,8 +96,23 @@ export default function SettingsPage() {
   // qrisImageBase64 state: null = unchanged/loading, '' = explicitly removed, 'data:...' = new or existing
   const [qrisImage, setQrisImage] = useState<string | null>(null);
   const [qrisUploading, setQrisUploading] = useState(false);
+  const [logoImage, setLogoImage] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [theme, setTheme] = useState<TenantTheme>(DEFAULT_THEME);
   const [customerReturnReminderDays, setCustomerReturnReminderDays] = useState(21);
+  const [customerAppointmentReminderMinutes, setCustomerAppointmentReminderMinutes] = useState(0);
+  /** string kosong = tidak dibatasi */
+  const [dailyBookingQuota, setDailyBookingQuota] = useState('');
+  const [bookingSeatCount, setBookingSeatCount] = useState('');
+  const [showBookingQty, setShowBookingQty] = useState(false);
+  const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
+  const [requireLoginOnCreateBooking, setRequireLoginOnCreateBooking] = useState(false);
+  const [allowBookOnFutureDates, setAllowBookOnFutureDates] = useState(false);
+  /** 0 = peringatan stok nonaktif */
+  const [outOfStockQtyReminder, setOutOfStockQtyReminder] = useState(0);
+  const [startQueueAtNumber, setStartQueueAtNumber] = useState(1);
+  /** null di DB = default 0; 0 = tidak tampil PPN */
+  const [ppnPercentage, setPpnPercentage] = useState(0);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -99,11 +139,31 @@ export default function SettingsPage() {
         gpsLng: t.location?.lng != null ? String(t.location.lng) : '',
       });
       setQrisImage(t.qrisImageBase64 || '');
+      setLogoImage(t.tenantLogoBase64 || '');
       setTheme(t.theme ?? DEFAULT_THEME);
       const rd = t.customerReturnReminderDays;
       if (rd === 0) setCustomerReturnReminderDays(0);
       else if (rd == null || Number.isNaN(Number(rd))) setCustomerReturnReminderDays(21);
       else setCustomerReturnReminderDays(Math.min(90, Math.max(1, Number(rd))));
+      const am = t.customerAppointmentReminderMinutes;
+      if (am == null || Number.isNaN(Number(am))) setCustomerAppointmentReminderMinutes(0);
+      else setCustomerAppointmentReminderMinutes(Math.min(180, Math.max(0, Number(am))));
+      const dq = t.dailyBookingQuota;
+      if (dq == null || dq <= 0 || Number.isNaN(Number(dq))) setDailyBookingQuota('');
+      else setDailyBookingQuota(String(Math.min(9999, Math.max(1, Math.floor(Number(dq))))));
+      const bsc = t.bookingSeatCount;
+      if (bsc == null || bsc < 1 || Number.isNaN(Number(bsc))) setBookingSeatCount('');
+      else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, Math.max(BOOKING_SEAT_COUNT_MIN, Math.floor(Number(bsc))))));
+      setShowBookingQty(t.showBookingQty === true);
+      setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
+      setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
+      setAllowBookOnFutureDates(t.allowBookOnFutureDates === true);
+      const osr = t.outOfStockQtyReminder;
+      setOutOfStockQtyReminder(osr == null || Number.isNaN(Number(osr)) ? 0 : Math.max(0, Math.floor(Number(osr))));
+      const sqn = t.startQueueAtNumber;
+      setStartQueueAtNumber(sqn == null || Number.isNaN(Number(sqn)) ? 1 : Math.max(1, Math.floor(Number(sqn))));
+      const ppn = t.ppnPercentage;
+      setPpnPercentage(ppn == null || Number.isNaN(Number(ppn)) ? 0 : Math.min(100, Math.max(0, Math.floor(Number(ppn)))));
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -131,8 +191,25 @@ export default function SettingsPage() {
         gpsLat: lat,
         gpsLng: lng,
         qrisImageBase64: qrisImage ?? undefined,
+        tenantLogoBase64: logoImage ?? undefined,
         theme,
         customerReturnReminderDays,
+        customerAppointmentReminderMinutes,
+        dailyBookingQuota: dailyBookingQuota.trim() === '' ? null : Math.min(9999, Math.max(1, parseInt(dailyBookingQuota, 10) || 1)),
+        bookingSeatCount:
+          bookingSeatCount.trim() === ''
+            ? null
+            : Math.min(
+                BOOKING_SEAT_COUNT_MAX,
+                Math.max(BOOKING_SEAT_COUNT_MIN, parseInt(bookingSeatCount, 10) || BOOKING_SEAT_COUNT_MIN),
+              ),
+        showBookingQty,
+        allowStaffCreateBooking,
+        requireLoginOnCreateBooking,
+        allowBookOnFutureDates,
+        outOfStockQtyReminder,
+        startQueueAtNumber,
+        ppnPercentage,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -168,6 +245,33 @@ export default function SettingsPage() {
     }
 
     // reset input agar file yang sama bisa dipilih ulang
+    e.target.value = '';
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar (JPG, PNG, dst.)');
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error('Ukuran gambar maksimal 2 MB');
+      return;
+    }
+
+    setLogoUploading(true);
+    try {
+      const base64 = await compressImage(file);
+      setLogoImage(base64);
+      toast.success('Logo siap — klik Simpan untuk menyimpan');
+    } catch {
+      toast.error('Gagal memproses gambar');
+    } finally {
+      setLogoUploading(false);
+    }
+
     e.target.value = '';
   };
 
@@ -270,6 +374,317 @@ export default function SettingsPage() {
                 onChange={(e) => setCustomerReturnReminderDays(Math.min(90, Math.max(0, Number(e.target.value) || 0)))}
                 inputProps={{ min: 0, max: 90 }}
                 helperText="Mis. 21 = sekitar tiga minggu setelah transaksi selesai."
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="Menit sebelum perkiraan dilayani (WA)"
+                value={customerAppointmentReminderMinutes}
+                onChange={(e) =>
+                  setCustomerAppointmentReminderMinutes(Math.min(180, Math.max(0, Number(e.target.value) || 0)))}
+                inputProps={{ min: 0, max: 180 }}
+                sx={{ mt: 2 }}
+                helperText="0 = nonaktif. Contoh: 30 = kirim WA ~30 menit sebelum perkiraan giliran. Hanya dijadwalkan jika estimasi dilayani lebih dari 2 jam dari saat booking diperbarui; membutuhkan staff sudah ditugaskan."
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={500} className="mb-2">
+                Kuota booking harian (outlet)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Batasi jumlah antrian <strong>aktif</strong> per hari kalender untuk seluruh outlet: status menunggu dan sedang
+                dilayani. Booking selesai atau batal membebaskan slot. Kosongkan untuk tidak membatasi.
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                label="Maks. antrian aktif per hari (opsional)"
+                value={dailyBookingQuota}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  if (v === '') setDailyBookingQuota('');
+                  else setDailyBookingQuota(String(Math.min(9999, parseInt(v, 10))));
+                }}
+                inputProps={{ min: 1, max: 9999 }}
+                placeholder="Tidak dibatasi"
+                helperText="Anda juga bisa set batas per staff di menu Kelola Staff."
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="Jumlah Kursi / Lokasi untuk booking"
+                value={bookingSeatCount}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  if (v === '') setBookingSeatCount('');
+                  else setBookingSeatCount(String(Math.min(BOOKING_SEAT_COUNT_MAX, parseInt(v, 10))));
+                }}
+                inputProps={{ min: BOOKING_SEAT_COUNT_MIN, max: BOOKING_SEAT_COUNT_MAX }}
+                placeholder="Tidak dipakai"
+                sx={{ mt: 2 }}
+                helperText={`Jika diisi (${BOOKING_SEAT_COUNT_MIN}–${BOOKING_SEAT_COUNT_MAX}), pelanggan wajib pilih nomor posisi saat booking; tidak boleh bentrok antara antrian menunggu / sedang dilayani pada hari yang sama.`}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={500} className="mb-2">
+                Halaman booking pelanggan
+              </Typography>
+              <FormControlLabel
+                control={(
+                  <Switch
+                    checked={showBookingQty}
+                    onChange={(_, v) => setShowBookingQty(v)}
+                  />
+                )}
+                label="Tampilkan jumlah (qty) per layanan"
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                Jika dimatikan, setiap layanan dianggap qty 1; pelanggan tidak melihat field kuantitas.
+              </Typography>
+              <FormControlLabel
+                sx={{ mt: 2, display: 'flex', alignItems: 'flex-start' }}
+                control={(
+                  <Switch
+                    checked={allowStaffCreateBooking}
+                    onChange={(_, v) => setAllowStaffCreateBooking(v)}
+                  />
+                )}
+                label={(
+                  <Box>
+                    <Typography variant="body2">Izinkan staff membuat booking</Typography>
+                    <Typography variant="caption" color="text.secondary" component="span" display="block">
+                      Jika dimatikan, akun staff hanya mengelola antrian; pembuatan booking dari aplikasi pelanggan tidak berubah.
+                    </Typography>
+                  </Box>
+                )}
+              />
+              <FormControlLabel
+                sx={{ mt: 2, display: 'flex', alignItems: 'flex-start' }}
+                control={(
+                  <Switch
+                    checked={requireLoginOnCreateBooking}
+                    onChange={(_, v) => setRequireLoginOnCreateBooking(v)}
+                  />
+                )}
+                label={(
+                  <Box>
+                    <Typography variant="body2">Wajib login OTP untuk booking (QR / pelanggan)</Typography>
+                    <Typography variant="caption" color="text.secondary" component="span" display="block">
+                      Jika dimatikan, pengunjung QR bisa booking sebagai tamu dengan nama (HP opsional). Jika diaktifkan,
+                      alur lama dengan OTP tetap dipakai.
+                    </Typography>
+                  </Box>
+                )}
+              />
+              <FormControlLabel
+                sx={{ mt: 2, display: 'flex', alignItems: 'flex-start' }}
+                control={(
+                  <Switch
+                    checked={allowBookOnFutureDates}
+                    onChange={(_, v) => setAllowBookOnFutureDates(v)}
+                  />
+                )}
+                label={(
+                  <Box>
+                    <Typography variant="body2">Izinkan booking ke tanggal berikutnya</Typography>
+                    <Typography variant="caption" color="text.secondary" component="span" display="block">
+                      Jika diaktifkan, pelanggan dan staff dapat memilih tanggal kunjungan (hingga 60 hari ke depan).
+                      Jam tetap mengikuti jadwal masing-masing staff dan zona kuota server.
+                    </Typography>
+                  </Box>
+                )}
+              />
+              {/* Peringatan Stok Menipis */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  Peringatan stok menipis
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Tampilkan peringatan di dashboard jika stok layanan / produk ≤ nilai ini.
+                  Isi <strong>0</strong> untuk menonaktifkan peringatan.
+                </Typography>
+                <TextField
+                  label="Batas stok minimum"
+                  type="number"
+                  size="small"
+                  value={outOfStockQtyReminder}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setOutOfStockQtyReminder(Number.isNaN(v) ? 0 : Math.max(0, v));
+                  }}
+                  inputProps={{ min: 0, step: 1 }}
+                  helperText={outOfStockQtyReminder === 0 ? 'Peringatan dinonaktifkan' : `Peringatan muncul saat stok ≤ ${outOfStockQtyReminder}`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
+
+              {/* Nomor antrian awal */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  Nomor antrian awal per hari
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Antrian pertama setiap hari dimulai dari nomor ini. Default: <strong>1</strong>.
+                  Misal isi <strong>101</strong> agar antrian hari ini mulai dari #101.
+                </Typography>
+                <TextField
+                  label="Mulai dari nomor"
+                  type="number"
+                  size="small"
+                  value={startQueueAtNumber}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setStartQueueAtNumber(Number.isNaN(v) ? 1 : Math.max(1, v));
+                  }}
+                  inputProps={{ min: 1, step: 1 }}
+                  helperText={`Antrian pertama hari ini (jika belum ada booking): #${startQueueAtNumber}`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
+
+              {/* PPN */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  PPN di struk (%)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Persentase PPN yang ditampilkan di nota / struk pembayaran.
+                  Isi <strong>0</strong> untuk menyembunyikan baris PPN. Default platform: <strong>0%</strong> (tidak ada PPN).
+                </Typography>
+                <TextField
+                  label="PPN (%)"
+                  type="number"
+                  size="small"
+                  value={ppnPercentage}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 0);
+                    setPpnPercentage(Number.isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
+                  }}
+                  inputProps={{ min: 0, max: 100, step: 1 }}
+                  helperText={ppnPercentage === 0 ? 'Baris PPN tidak ditampilkan di struk' : `PPN ${ppnPercentage}% akan ditampilkan di struk`}
+                  sx={{ width: 220 }}
+                />
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Logo Outlet */}
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <ImageIcon color="primary" />
+                  <Typography variant="subtitle1" fontWeight={500}>
+                    Logo Outlet
+                  </Typography>
+                </Box>
+                {logoImage && (
+                  <Chip
+                    label={`~${Math.round((logoImage.length * 0.75) / 1024)} KB`}
+                    size="small"
+                    variant="outlined"
+                    color="default"
+                  />
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                Ditampilkan di halaman login dan booking pelanggan. Gunakan gambar persegi dengan latar putih/transparan.
+              </Typography>
+
+              {logoImage ? (
+                <>
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      mb: 2,
+                      textAlign: 'center',
+                      bgcolor: 'white',
+                      p: 2,
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logoImage}
+                      alt="Logo outlet"
+                      style={{ maxWidth: 160, maxHeight: 160, objectFit: 'contain' }}
+                    />
+                  </Box>
+                  <Box display="flex" gap={1.5}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UploadIcon />}
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={logoUploading}
+                    >
+                      Ganti Logo
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteOutlineIcon />}
+                      onClick={() => {
+                        setLogoImage('');
+                        toast('Logo dihapus — klik Simpan untuk menyimpan', { icon: '🗑️' });
+                      }}
+                    >
+                      Hapus
+                    </Button>
+                  </Box>
+                </>
+              ) : (
+                <>
+                  <Box
+                    sx={{
+                      border: '2px dashed',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      p: 4,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+                      transition: 'all 0.2s',
+                    }}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    <ImageIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary" mb={1}>
+                      Belum ada logo outlet
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={logoUploading ? <CircularProgress size={14} /> : <UploadIcon />}
+                      disabled={logoUploading}
+                    >
+                      {logoUploading ? 'Memproses...' : 'Pilih Gambar'}
+                    </Button>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    Format JPG / PNG / SVG · Maksimal 2 MB · Disarankan persegi (mis. 512×512 px)
+                  </Typography>
+                </>
+              )}
+
+              {/* Hidden file input */}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleLogoFileChange}
               />
             </CardContent>
           </Card>

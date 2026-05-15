@@ -27,6 +27,14 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import {
+  bookingServicesLabel,
+  bookingSubtotalOrLegacy,
+  formatAppointmentSlotLabel,
+  formatBookingQueueDate,
+  getReceiptServiceLines,
+  type UiBooking,
+} from '@/lib/bookingDisplay';
 
 interface Booking {
   _id: string;
@@ -39,6 +47,10 @@ interface Booking {
   notes?: string;
   staffId?: string;
   staffName?: string;
+  /** Posisi kursi / slot outlet (opsional). */
+  seatPosition?: number | null;
+  /** Slot janji bila booking dengan staff. */
+  appointmentSlot?: { start: string; end: string } | null;
   date: string;
 }
 
@@ -487,7 +499,33 @@ export default function PosPage() {
                 <CardContent>
                   <Box className="flex justify-between items-start mb-2">
                     <Box>
-                      <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexWrap: 'wrap' }}>
+                        <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                        {b.seatPosition != null &&
+                          Number.isFinite(Number(b.seatPosition)) &&
+                          Number(b.seatPosition) >= 1 && (
+                          <Chip
+                            label={`Posisi ${Number(b.seatPosition)}`}
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                          />
+                        )}
+                        {formatBookingQueueDate(b.date) && (
+                          <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                            {formatBookingQueueDate(b.date)}
+                          </Typography>
+                        )}
+                        {b.appointmentSlot?.start && b.appointmentSlot?.end && (
+                          <Chip
+                            label={formatAppointmentSlotLabel(b.appointmentSlot)}
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            sx={{ fontWeight: 600 }}
+                          />
+                        )}
+                      </Box>
                       <Typography fontWeight={600}>{b.customerName}</Typography>
                       <Typography variant="body2" color="text.secondary">{b.serviceName}</Typography>
                       {b.staffName && (

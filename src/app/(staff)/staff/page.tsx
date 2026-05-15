@@ -27,6 +27,14 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import { StaffBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
+import {
+  bookingServicesLabel,
+  bookingSubtotalOrLegacy,
+  formatAppointmentSlotLabel,
+  formatBookingQueueDate,
+  getReceiptServiceLines,
+  type UiBooking,
+} from '@/lib/bookingDisplay';
 
 interface Booking {
   _id: string;
@@ -39,6 +47,8 @@ interface Booking {
   notes?: string;
   staffId?: string;
   staffName?: string;
+  seatPosition?: number | null;
+  appointmentSlot?: { start: string; end: string } | null;
   date: string;
 }
 
@@ -524,6 +534,25 @@ export default function StaffQueuePage() {
                       <Box>
                         <Box className="flex items-center gap-2">
                           <Typography variant="h6" fontWeight={600}>#{b.queueNumber}</Typography>
+                          {b.seatPosition != null &&
+                            Number.isFinite(Number(b.seatPosition)) &&
+                            Number(b.seatPosition) >= 1 && (
+                            <Chip label={`Posisi ${Number(b.seatPosition)}`} size="small" variant="outlined" color="secondary" />
+                          )}
+                          {formatBookingQueueDate(b.date) && (
+                            <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                              {formatBookingQueueDate(b.date)}
+                            </Typography>
+                          )}
+                          {b.appointmentSlot?.start && b.appointmentSlot?.end && (
+                            <Chip
+                              label={formatAppointmentSlotLabel(b.appointmentSlot)}
+                              size="small"
+                              variant="outlined"
+                              color="info"
+                              sx={{ fontWeight: 600 }}
+                            />
+                          )}
                           {mine ? (
                             <Chip label="Antrian Saya" size="small" color="primary" variant="outlined" />
                           ) : (

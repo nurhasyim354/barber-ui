@@ -9,16 +9,22 @@ import { useRouter } from 'next/navigation';
 interface Props {
   title: string;
   back?: boolean;
+  /** Jika diisi, dipanggil saat tombol kembali diklik; default `router.back()`. */
+  onBack?: () => void;
   right?: React.ReactNode;
 }
 
-export default function PageHeader({ title, back, right }: Props) {
+export default function PageHeader({ title, back, onBack, right }: Props) {
   const router = useRouter();
   return (
     <AppBar position="sticky" color="primary" elevation={0}>
       <Toolbar>
         {back && (
-          <IconButton edge="start" color="inherit" onClick={() => router.back()}>
+          <IconButton
+            edge="start"
+            color="inherit"
+            onClick={() => (onBack ? onBack() : router.back())}
+          >
             <ArrowBackIcon />
           </IconButton>
         )}
