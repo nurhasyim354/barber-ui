@@ -27,6 +27,58 @@ import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 
+type StaffDayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+const STAFF_DAY_ROWS: { key: StaffDayKey; label: string }[] = [
+    { key: 'mon', label: 'Senin' },
+    { key: 'tue', label: 'Selasa' },
+    { key: 'wed', label: 'Rabu' },
+    { key: 'thu', label: 'Kamis' },
+    { key: 'fri', label: 'Jumat' },
+    { key: 'sat', label: 'Sabtu' },
+    { key: 'sun', label: 'Minggu' },
+];
+
+type TimeWindow = { start: string; end: string };
+
+function emptyWeeklySchedule(): Record<StaffDayKey, TimeWindow[]> {
+    return { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
+}
+
+function parseAvailabilityFromApi(raw: unknown): Record<StaffDayKey, TimeWindow[]> {
+    const out = emptyWeeklySchedule();
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    const o = raw as Record<string, unknown>;
+    for (const { key } of STAFF_DAY_ROWS) {
+        const v = o[key];
+        if (!Array.isArray(v)) continue;
+        out[key] = v
+            .map((x) => {
+                if (!x || typeof x !== 'object') return null;
+                const start = String((x as { start?: string }).start ?? '').replace(/\./g, ':').trim();
+                const end = String((x as { end?: string }).end ?? '').replace(/\./g, ':').trim();
+                if (!start || !end) return null;
+                return { start, end };
+            })
+            .filter(Boolean) as TimeWindow[];
+    }
+    return out;
+}
+
+function buildAvailabilityPayload(sched: Record<StaffDayKey, TimeWindow[]>): Record<string, { start: string; end: string }[]> | null {
+    const out: Record<string, { start: string; end: string }[]> = {};
+    for (const { key } of STAFF_DAY_ROWS) {
+        const wins = sched[key]
+            .map((w) => ({
+                start: w.start.replace(/\./g, ':').trim(),
+                end: w.end.replace(/\./g, ':').trim(),
+            }))
+            .filter((w) => w.start && w.end);
+        if (wins.length > 0) out[key] = wins;
+    }
+    return Object.keys(out).length > 0 ? out : null;
+}
+
 interface StaffMember {
     _id: string;
     name: string;
@@ -38,6 +90,7 @@ interface StaffMember {
     isActive: boolean;
     isAvailable: boolean;
     dailyBookingQuota?: number | null;
+    availabilityDaysHours?: Record<string, { start: string; end: string }[]> | null;
 }
 
 const defaultForm = { name: '', photoUrl: '', specialty: '', phone: '', dailyBookingQuota: '' as string };
@@ -64,6 +117,7 @@ export default function StaffManagementPage() {
     type ImportStaffRow = { name: string; phone: string; specialty: string; dailyBookingQuota: number | null };
     const [importDialog, setImportDialog] = useState<{ open: boolean; rows: ImportStaffRow[]; errors: string[]; duplicates: string[] }>({ open: false, rows: [], errors: [], duplicates: [] });
     const [importing, setImporting] = useState(false);
+    const [weeklySchedule, setWeeklySchedule] = useState(emptyWeeklySchedule());
 
     useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -92,6 +146,7 @@ export default function StaffManagementPage() {
     const openAdd = () => {
         setForm(defaultForm);
         setEditId(null);
+        setWeeklySchedule(emptyWeeklySchedule());
         setDialogOpen(true);
     };
 
@@ -106,6 +161,7 @@ export default function StaffManagementPage() {
             dailyBookingQuota: dq,
         });
         setEditId(b._id);
+        setWeeklySchedule(parseAvailabilityFromApi(b.availabilityDaysHours));
         setDialogOpen(true);
     };
 
@@ -119,6 +175,7 @@ export default function StaffManagementPage() {
                 form.dailyBookingQuota.trim() === ''
                     ? { dailyBookingQuota: null }
                     : { dailyBookingQuota: Math.min(9999, Math.max(1, parseInt(form.dailyBookingQuota, 10) || 1)) };
+            const schedPayload = buildAvailabilityPayload(weeklySchedule);
             if (editId) {
                 await api.patch(`/staff/${editId}`, {
                     name: form.name,
@@ -126,6 +183,7 @@ export default function StaffManagementPage() {
                     phone: form.phone,
                     isActive: true,
                     ...quotaPayload,
+                    availabilityDaysHours: schedPayload,
                 });
                 toast.success(`${ui.staffSingular} diupdate`);
             } else {
@@ -134,13 +192,15 @@ export default function StaffManagementPage() {
                     photoUrl: form.photoUrl,
                     phone: form.phone,
                     ...quotaPayload,
+                    ...(schedPayload ? { availabilityDaysHours: schedPayload } : {}),
                 });
                 toast.success(`${ui.staffSingular} berhasil ditambahkan`);
             }
             setDialogOpen(false);
             loadStaffPage(page);
-        } catch {
-            toast.error('Gagal menyimpan data staff');
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+            toast.error(msg || 'Gagal menyimpan data staff');
         } finally {
             setSaving(false);
         }
@@ -391,7 +451,7 @@ export default function StaffManagementPage() {
             )}
 
             {/* Add / Edit Dialog */}
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
                 <DialogTitle fontWeight={500}>{editId ? ui.editStaffTitle : ui.addStaffTitle}</DialogTitle>
                 <DialogContent>
                     <Box className="flex flex-col gap-4 pt-2">
@@ -478,6 +538,109 @@ export default function StaffManagementPage() {
                             placeholder="Ikuti batas outlet saja"
                             helperText="Kosong = tidak ada batas khusus untuk staff ini (tetap terbatas kuota outlet jika di-set)."
                         />
+
+                        <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2, mt: 1 }}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                                Jadwal jam tersedia (opsional)
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                                Kosongkan semua untuk tidak membatasi hari. Jika diisi, pelanggan hanya bisa membooking pada hari
+                                dan rentang jam yang di-set (zona waktu kuota server). Format waktu sesuai jam lokal layar (24 jam).
+                            </Typography>
+                            <Button
+                                size="small"
+                                variant="text"
+                                color="inherit"
+                                sx={{ mb: 1 }}
+                                onClick={() => setWeeklySchedule(emptyWeeklySchedule())}
+                            >
+                                Hapus semua jadwal
+                            </Button>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflow: 'auto', pr: 0.5 }}>
+                                {STAFF_DAY_ROWS.map(({ key, label }) => (
+                                    <Box key={key}>
+                                        <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                                            {label}
+                                        </Typography>
+                                        {weeklySchedule[key].length === 0 ? (
+                                            <Button
+                                                size="small"
+                                                startIcon={<AddIcon />}
+                                                variant="outlined"
+                                                onClick={() =>
+                                                    setWeeklySchedule((prev) => ({
+                                                        ...prev,
+                                                        [key]: [{ start: '09:00', end: '17:00' }],
+                                                    }))}
+                                            >
+                                                Tambah jendela
+                                            </Button>
+                                        ) : (
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                {weeklySchedule[key].map((win, idx) => (
+                                                    <Box key={`${key}-${idx}`} sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                                                        <TextField
+                                                            size="small"
+                                                            type="time"
+                                                            label="Mulai"
+                                                            value={win.start}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                setWeeklySchedule((prev) => {
+                                                                    const next = [...prev[key]];
+                                                                    next[idx] = { ...next[idx], start: v };
+                                                                    return { ...prev, [key]: next };
+                                                                });
+                                                            }}
+                                                            InputLabelProps={{ shrink: true }}
+                                                            inputProps={{ step: 300 }}
+                                                        />
+                                                        <TextField
+                                                            size="small"
+                                                            type="time"
+                                                            label="Selesai"
+                                                            value={win.end}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                setWeeklySchedule((prev) => {
+                                                                    const next = [...prev[key]];
+                                                                    next[idx] = { ...next[idx], end: v };
+                                                                    return { ...prev, [key]: next };
+                                                                });
+                                                            }}
+                                                            InputLabelProps={{ shrink: true }}
+                                                            inputProps={{ step: 300 }}
+                                                        />
+                                                        <IconButton
+                                                            size="small"
+                                                            aria-label="Hapus jendela"
+                                                            onClick={() =>
+                                                                setWeeklySchedule((prev) => ({
+                                                                    ...prev,
+                                                                    [key]: prev[key].filter((_, i) => i !== idx),
+                                                                }))}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Box>
+                                                ))}
+                                                <Button
+                                                    size="small"
+                                                    startIcon={<AddIcon />}
+                                                    onClick={() =>
+                                                        setWeeklySchedule((prev) => ({
+                                                            ...prev,
+                                                            [key]: [...prev[key], { start: '09:00', end: '12:00' }],
+                                                        }))}
+                                                >
+                                                    Jendela lagi
+                                                </Button>
+                                            </Box>
+                                        )}
+                                    </Box>
+                                ))}
+                            </Box>
+                        </Box>
                     </Box>
                 </DialogContent>
                 <DialogActions className="p-4 gap-2">

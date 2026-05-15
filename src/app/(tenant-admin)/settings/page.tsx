@@ -76,6 +76,8 @@ interface TenantSettings {
   startQueueAtNumber?: number | null;
   /** Persentase PPN di struk; 0 = tidak tampil baris PPN; null/tidak ada = default 0 */
   ppnPercentage?: number | null;
+  /** true = pelanggan boleh booking untuk hari/tanggal selain hari ini (kalender kuota). */
+  allowBookOnFutureDates?: boolean | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -116,6 +118,8 @@ export default function SettingsPage() {
   const [showBookingQty, setShowBookingQty] = useState(false);
   const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
   const [requireLoginOnCreateBooking, setRequireLoginOnCreateBooking] = useState(false);
+  /** Booking untuk tanggal mendatang (kalender kuota) */
+  const [allowBookOnFutureDates, setAllowBookOnFutureDates] = useState(false);
   /** 0 = peringatan stok nonaktif */
   const [outOfStockQtyReminder, setOutOfStockQtyReminder] = useState(0);
   const [startQueueAtNumber, setStartQueueAtNumber] = useState(1);
@@ -163,6 +167,7 @@ export default function SettingsPage() {
       setShowBookingQty(t.showBookingQty === true);
       setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
       setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
+      setAllowBookOnFutureDates(t.allowBookOnFutureDates === true);
       const osr = t.outOfStockQtyReminder;
       setOutOfStockQtyReminder(osr == null || Number.isNaN(Number(osr)) ? 0 : Math.max(0, Math.floor(Number(osr))));
       const sqn = t.startQueueAtNumber;
@@ -223,6 +228,7 @@ export default function SettingsPage() {
         showBookingQty,
         allowStaffCreateBooking,
         requireLoginOnCreateBooking,
+        allowBookOnFutureDates,
         outOfStockQtyReminder,
         startQueueAtNumber,
         ppnPercentage,
@@ -521,6 +527,24 @@ export default function SettingsPage() {
                     <Typography variant="caption" color="text.secondary" component="span" display="block">
                       Jika dimatikan, pengunjung QR bisa booking sebagai tamu dengan nama (HP opsional). Jika diaktifkan,
                       alur lama dengan OTP tetap dipakai.
+                    </Typography>
+                  </Box>
+                )}
+              />
+              <FormControlLabel
+                sx={{ mt: 2, display: 'flex', alignItems: 'flex-start' }}
+                control={(
+                  <Switch
+                    checked={allowBookOnFutureDates}
+                    onChange={(_, v) => setAllowBookOnFutureDates(v)}
+                  />
+                )}
+                label={(
+                  <Box>
+                    <Typography variant="body2">Izinkan booking untuk tanggal mendatang</Typography>
+                    <Typography variant="caption" color="text.secondary" component="span" display="block">
+                      Jika diaktifkan, pelanggan memilih tanggal antrian sesuai kalender operasional (zona kuota server).
+                      Matikan jika outlet hanya menerima antrian &ldquo;walk-in&rdquo; hari ini.
                     </Typography>
                   </Box>
                 )}

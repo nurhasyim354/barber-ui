@@ -56,8 +56,64 @@ import {
   formatBookingQtyDisplay,
   parseBookingQuantityInput,
 } from '@/lib/bookingQty';
+import { formatSlotRangeLabel, windowCollidesWithBooked } from '@/lib/appointmentSlot';
 
 export type BookingFlowVariant = 'customer' | 'staff';
+
+const STAFF_SCHEDULE_DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+type StaffScheduleDayKey = (typeof STAFF_SCHEDULE_DAY_KEYS)[number];
+
+const STAFF_SCHEDULE_DAY_LABEL_ID: Record<StaffScheduleDayKey, string> = {
+  mon: 'Senin',
+  tue: 'Selasa',
+  wed: 'Rabu',
+  thu: 'Kamis',
+  fri: 'Jumat',
+  sat: 'Sabtu',
+  sun: 'Minggu',
+};
+
+function normalizeStaffDayWindowsRaw(raw: unknown): { start: string; end: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((x) => ({
+      start: String((x as { start?: unknown }).start ?? '').trim(),
+      end: String((x as { end?: unknown }).end ?? '').trim(),
+    }))
+    .filter((x) => x.start && x.end);
+}
+
+function windowsForQueueRow(row: {
+  availabilityDaysHours?: Record<string, { start: string; end: string }[]> | null;
+  selectedBookingDowKey?: string;
+}): { start: string; end: string }[] {
+  const dow = row.selectedBookingDowKey;
+  if (!dow || !row.availabilityDaysHours) return [];
+  return normalizeStaffDayWindowsRaw(row.availabilityDaysHours[dow]);
+}
+
+/** Jika `null`, outlet tidak membatasi hari kerja per staff di data ini. */
+function buildStaffWeeklyScheduleDayRows(
+  availabilityDaysHours?: Record<string, { start: string; end: string }[]> | null,
+):
+  | null
+  | { dayKey: StaffScheduleDayKey; label: string; windows: { start: string; end: string }[] }[] {
+  if (!availabilityDaysHours || typeof availabilityDaysHours !== 'object') return null;
+  const sk = availabilityDaysHours as Record<string, unknown>;
+  let anyWindows = false;
+  for (const key of STAFF_SCHEDULE_DAY_KEYS) {
+    if (normalizeStaffDayWindowsRaw(sk[key]).length > 0) {
+      anyWindows = true;
+      break;
+    }
+  }
+  if (!anyWindows) return null;
+  return STAFF_SCHEDULE_DAY_KEYS.map((dayKey) => ({
+    dayKey,
+    label: STAFF_SCHEDULE_DAY_LABEL_ID[dayKey],
+    windows: normalizeStaffDayWindowsRaw(sk[dayKey]),
+  }));
+}
 
 export interface BookingFlowProps {
   variant?: BookingFlowVariant;
@@ -93,6 +149,10 @@ interface TenantInfo {
   outOfStockQtyReminder?: number;
   /** Persentase PPN (0 = tidak ada PPN, tidak ditampilkan). */
   ppnPercentage?: number;
+  /** true = pelanggan boleh booking untuk tanggal selain hari ini (kalender zona kuota). */
+  allowBookOnFutureDates?: boolean;
+  /** Hari ini `YYYY-MM-DD` di zona kuota outlet — sinkron dengan backend. */
+  quotaTodayDayKey?: string;
 }
 
 interface ServicePhotoDoc {
@@ -126,6 +186,12 @@ interface StaffQueueRow {
   dailyBookingQuota?: number | null;
   /** false = sedang tidak terima booking (dari staff / toggle ketersediaan) */
   isAvailable?: boolean;
+  /** false jika staff punya jadwal mingguan dan hari yang dipilih libur */
+  canBookOnSelectedDay?: boolean;
+  availabilityDaysHours?: Record<string, { start: string; end: string }[]> | null;
+  selectedBookingDayKey?: string;
+  selectedBookingDowKey?: string;
+  bookedAppointmentSlots?: { start: string; end: string }[];
 }
 
 type ActiveBooking = UiBooking & { tenantId?: string; estimatedServedAt?: string | null };
@@ -142,6 +208,7 @@ type BookingResult = Pick<
   | 'servicePrice'
   | 'services'
   | 'seatPosition'
+  | 'appointmentSlot'
 >;
 
 interface LastDoneVisit {
@@ -204,9 +271,15 @@ const formatEstimatedServe = (iso: string) =>
   });
 
 /** Pelanggan memilih `extra` booking aktif baru — melebihi kuota outlet? */
-function tenantQuotaExceeded(tenant: TenantInfo | null, extra: number): boolean {
+function tenantQuotaExceeded(
+  tenant: TenantInfo | null,
+  extra: number,
+  selectedQuotaDayKey?: string,
+): boolean {
   const cap = tenant?.dailyBookingQuota;
   if (cap == null || cap <= 0) return false;
+  const todayKey = tenant?.quotaTodayDayKey;
+  if (todayKey && selectedQuotaDayKey && selectedQuotaDayKey > todayKey) return false;
   const used = tenant?.todayActiveBookingCount ?? 0;
   return used + extra > cap;
 }
@@ -304,10 +377,16 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const [staffQueueLoading, setStaffQueueLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [manualRefreshing, setManualRefreshing] = useState(false);
+  /** Profil antrian staff login (mode staff) — jadwal & slot terbooking */
+  const [staffSelfQueueInfo, setStaffSelfQueueInfo] = useState<StaffQueueRow | null>(null);
+  /** Slot janji untuk booking bersama staff yang punya jadwal jam */
+  const [selectedAppointmentSlot, setSelectedAppointmentSlot] = useState<{ start: string; end: string } | null>(null);
   /** Waktu terakhir data berhasil dimuat (untuk label "X detik lalu") */
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   /** Hitung mundur detik ke auto-refresh berikutnya */
   const [refreshCountdown, setRefreshCountdown] = useState(Math.round(QUEUE_AUTO_RELOAD_MS / 1000));
+  /** Tanggal antrian (`YYYY-MM-DD` zona kuota). Diisi dari `tenant.quotaTodayDayKey`; bisa diubah jika outlet mengizinkan. */
+  const [bookingQuotaDayKey, setBookingQuotaDayKey] = useState('');
 
   /** QR dengan tenantId di URL: tunggu GET info outlet sebelum branch OTP vs tamu. */
   const [qrTenantReady, setQrTenantReady] = useState(() => !tenantIdParam);
@@ -320,6 +399,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     open: false,
     service: null,
   });
+  /** Dialog jadwal mingguan staff (step pilih staff, pelanggan). */
+  const [staffScheduleDialogRow, setStaffScheduleDialogRow] = useState<StaffQueueRow | null>(null);
 
   /** Mencegah auto-add QR service dipanggil lebih dari sekali per mount */
   const qrAutoAddAttemptedRef = useRef(false);
@@ -340,6 +421,32 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   useEffect(() => {
     if (guestFormName.trim()) setGuestBookingNameAttempted(false);
   }, [guestFormName]);
+
+  const effectiveQuotaDayKey = bookingQuotaDayKey || tenant?.quotaTodayDayKey || '';
+
+  const staffQueueReqConfig = useMemo(
+    () => (effectiveQuotaDayKey.length >= 10 ? { params: { date: effectiveQuotaDayKey } as const } : {}),
+    [effectiveQuotaDayKey],
+  );
+
+  useEffect(() => {
+    const q = tenant?.quotaTodayDayKey;
+    if (!q) return;
+    if (tenant.allowBookOnFutureDates !== true) {
+      setBookingQuotaDayKey(q);
+      return;
+    }
+    setBookingQuotaDayKey((prev) => {
+      if (!prev) return q;
+      if (prev < q) return q;
+      return prev;
+    });
+  }, [tenant?._id, tenant?.quotaTodayDayKey, tenant?.allowBookOnFutureDates]);
+
+  useEffect(() => {
+    setSelectedStaff(null);
+    setSelectedAppointmentSlot(null);
+  }, [bookingQuotaDayKey]);
 
   const assertGuestHasName = (): boolean => {
     if (!guestBookingFlow) return true;
@@ -563,7 +670,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           })
           .catch(() => {});
         api
-          .get(`/tenants/${effectiveTenantId}/staff/queue`)
+          .get(`/tenants/${effectiveTenantId}/staff/queue`, staffQueueReqConfig)
           .then((r) => {
             if (Array.isArray(r.data)) setStaffQueue(r.data);
           })
@@ -578,7 +685,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       void loadBookingData({ silent: true });
       if (bookStep === 'staff' && !isStaffVariant) {
         api
-          .get(`/tenants/${effectiveTenantId}/staff/queue`)
+          .get(`/tenants/${effectiveTenantId}/staff/queue`, staffQueueReqConfig)
           .then((r) => {
             if (Array.isArray(r.data)) setStaffQueue(r.data);
           })
@@ -586,7 +693,15 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       }
     }, QUEUE_AUTO_RELOAD_MS);
     return () => clearInterval(id);
-  }, [user, effectiveTenantId, bookStep, loadBookingData, isStaffVariant, guestBookingFlow]);
+  }, [
+    user,
+    effectiveTenantId,
+    bookStep,
+    loadBookingData,
+    isStaffVariant,
+    guestBookingFlow,
+    staffQueueReqConfig,
+  ]);
 
   /** Countdown detik ke auto-refresh berikutnya — tick tiap detik */
   useEffect(() => {
@@ -605,10 +720,12 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     if (tenant?.subscriptionOverdue) return;
     const cap = tenant?.dailyBookingQuota;
     const used = tenant?.todayActiveBookingCount ?? 0;
-    if (cap != null && cap > 0 && used >= cap) return;
+    const todayK = tenant?.quotaTodayDayKey;
+    const futurePick = !!(todayK && effectiveQuotaDayKey && effectiveQuotaDayKey > todayK);
+    if (!futurePick && cap != null && cap > 0 && used >= cap) return;
     let cancelled = false;
     api
-      .get(`/tenants/${effectiveTenantId}/staff/queue`)
+      .get(`/tenants/${effectiveTenantId}/staff/queue`, staffQueueReqConfig)
       .then((r) => {
         if (cancelled) return;
         if (Array.isArray(r.data)) setStaffQueue(r.data);
@@ -628,29 +745,31 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     tenant,
     isStaffVariant,
     guestBookingFlow,
+    effectiveQuotaDayKey,
+    staffQueueReqConfig,
   ]);
 
   useEffect(() => {
     if (!guestBookingFlow || !tenantIdParam) return;
     setPageLoading(true);
-    void api
-      .get(`/tenants/${tenantIdParam}`)
-      .then((r) => {
-        setTenant(r.data);
-      })
-      .catch(() => {});
-    Promise.all([
-      api.get(`/public/tenants/${tenantIdParam}/services`),
-      api.get(`/tenants/${tenantIdParam}/staff/queue`).catch(() => ({ data: [] as StaffQueueRow[] })),
-    ])
-      .then(([svcRes, qRes]) => {
+    void (async () => {
+      try {
+        const tRes = await api.get(`/tenants/${tenantIdParam}`);
+        setTenant(tRes.data);
+        const dk = String(tRes.data?.quotaTodayDayKey ?? '').trim();
+        const qParams = dk.length >= 10 ? { params: { date: dk } as const } : {};
+        const [svcRes, qRes] = await Promise.all([
+          api.get(`/public/tenants/${tenantIdParam}/services`),
+          api.get(`/tenants/${tenantIdParam}/staff/queue`, qParams).catch(() => ({ data: [] as StaffQueueRow[] })),
+        ]);
         setServices(Array.isArray(svcRes.data) ? svcRes.data : []);
         setStaffQueue(Array.isArray(qRes.data) ? qRes.data : []);
-      })
-      .catch(() => {
+      } catch {
         toast.error('Gagal memuat layanan');
-      })
-      .finally(() => setPageLoading(false));
+      } finally {
+        setPageLoading(false);
+      }
+    })();
   }, [guestBookingFlow, tenantIdParam]);
 
   // ── Registration actions ───────────────────────────────────────────────────
@@ -751,6 +870,54 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const seatPickerBlocksSubmit = seatSlotCount != null && seatAvailabilityLoading;
   const bookingLabels = getTenantUiLabels(tenant?.tenantType ?? user?.tenantType);
 
+  const dialogAppointmentWindows = useMemo((): { start: string; end: string }[] => {
+    if (isStaffVariant && staffSelfQueueInfo) return windowsForQueueRow(staffSelfQueueInfo);
+    if (selectedStaff) return windowsForQueueRow(selectedStaff);
+    return [];
+  }, [isStaffVariant, staffSelfQueueInfo, selectedStaff]);
+
+  const dialogBookedSlots = useMemo(() => {
+    if (isStaffVariant && staffSelfQueueInfo) return staffSelfQueueInfo.bookedAppointmentSlots ?? [];
+    if (selectedStaff) return selectedStaff.bookedAppointmentSlots ?? [];
+    return [];
+  }, [isStaffVariant, staffSelfQueueInfo, selectedStaff]);
+
+  useEffect(() => {
+    if (!isStaffVariant || !user?.staffId) {
+      setStaffSelfQueueInfo(null);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .get<StaffQueueRow>(`/staff/${user.staffId}/queue`, staffQueueReqConfig)
+      .then((r) => {
+        if (!cancelled) setStaffSelfQueueInfo(r.data);
+      })
+      .catch(() => {
+        if (!cancelled) setStaffSelfQueueInfo(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isStaffVariant, user?.staffId, staffQueueReqConfig]);
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (dialogAppointmentWindows.length === 0) {
+      setSelectedAppointmentSlot(null);
+      return;
+    }
+    setSelectedAppointmentSlot((prev) => {
+      const stillOk =
+        prev &&
+        dialogAppointmentWindows.some((w) => w.start === prev.start && w.end === prev.end) &&
+        !windowCollidesWithBooked(prev, dialogBookedSlots);
+      if (stillOk) return prev;
+      const free = dialogAppointmentWindows.find((w) => !windowCollidesWithBooked(w, dialogBookedSlots));
+      return free ?? dialogAppointmentWindows[0] ?? null;
+    });
+  }, [dialogOpen, dialogAppointmentWindows, dialogBookedSlots]);
+
   /** Snapshot outlet terbaru (bookingSeatCount, kuota, tagihan) sebelum konfirmasi — hindari state stale. */
   useEffect(() => {
     if (!dialogOpen || !effectiveTenantId) return;
@@ -779,6 +946,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     void api
       .get<{ occupiedSeatPositions?: number[] }>(
         `/public/tenants/${effectiveTenantId}/occupied-seat-positions`,
+        staffQueueReqConfig,
       )
       .then((res) => {
         if (cancelled) return;
@@ -797,7 +965,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     return () => {
       cancelled = true;
     };
-  }, [dialogOpen, seatSlotCount, effectiveTenantId]);
+  }, [dialogOpen, seatSlotCount, effectiveTenantId, staffQueueReqConfig]);
 
   useEffect(() => {
     if (seatSlotCount == null) return;
@@ -808,11 +976,18 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     });
   }, [seatSlotCount, availableSeatSlots]);
 
-  const outletQuotaFull =
-    !!tenant?.dailyBookingQuota &&
-    tenant.dailyBookingQuota > 0 &&
-    (tenant.todayActiveBookingCount ?? 0) >= tenant.dailyBookingQuota;
-  const tenantSlotsExceededForCart = tenantQuotaExceeded(tenant, totalCartQty);
+  const outletQuotaFull = useMemo(() => {
+    if (!tenant?.dailyBookingQuota || tenant.dailyBookingQuota <= 0) return false;
+    const todayKey = tenant.quotaTodayDayKey;
+    const sel = effectiveQuotaDayKey;
+    if (todayKey && sel && sel > todayKey) return false;
+    return (tenant.todayActiveBookingCount ?? 0) >= tenant.dailyBookingQuota;
+  }, [tenant, effectiveQuotaDayKey]);
+
+  const tenantSlotsExceededForCart = useMemo(
+    () => tenantQuotaExceeded(tenant, totalCartQty, effectiveQuotaDayKey || undefined),
+    [tenant, totalCartQty, effectiveQuotaDayKey],
+  );
 
   // ── Booking actions ────────────────────────────────────────────────────────
   const toggleService = (svc: Service) => {
@@ -896,7 +1071,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
       return;
     }
-    if (tenantQuotaExceeded(tenant, totalCartQty)) {
+    if (tenantQuotaExceeded(tenant, totalCartQty, effectiveQuotaDayKey || undefined)) {
       toast.error(
         'Kuota antrian aktif harian outlet tidak cukup untuk jumlah layanan ini. Kurangi pilihan atau coba lagi nanti.',
       );
@@ -908,7 +1083,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     setBookStep('staff');
     setStaffQueueLoading(true);
     api
-      .get(`/tenants/${effectiveTenantId}/staff/queue`)
+      .get(`/tenants/${effectiveTenantId}/staff/queue`, staffQueueReqConfig)
       .then((r) => {
         if (Array.isArray(r.data)) setStaffQueue(r.data);
         else {
@@ -930,7 +1105,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
       return;
     }
-    if (tenantQuotaExceeded(tenant, totalCartQty)) {
+    if (tenantQuotaExceeded(tenant, totalCartQty, effectiveQuotaDayKey || undefined)) {
       toast.error(
         'Kuota antrian aktif harian outlet tidak cukup untuk jumlah layanan ini. Kurangi pilihan atau coba lagi nanti.',
       );
@@ -1004,7 +1179,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       toast.error('Outlet tidak dapat menerima booking baru saat ini (tagihan berlangganan).');
       return;
     }
-    if (tenantQuotaExceeded(tenant, totalCartQty)) {
+    if (tenantQuotaExceeded(tenant, totalCartQty, effectiveQuotaDayKey || undefined)) {
       toast.error('Kuota antrian aktif harian outlet tidak cukup untuk booking ini.');
       return;
     }
@@ -1014,6 +1189,20 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     }
     if (selectedStaff && selectedStaff.isAvailable === false) {
       toast.error(`${bookingLabels.staffSingular} ini sedang tidak menerima booking baru.`);
+      return;
+    }
+    if (selectedStaff && selectedStaff.canBookOnSelectedDay === false) {
+      toast.error(
+        `${bookingLabels.staffSingular} ini tidak tersedia pada tanggal antrian yang dipilih (di luar jadwal).`,
+      );
+      return;
+    }
+    if (
+      isStaffVariant &&
+      staffSelfQueueInfo &&
+      staffSelfQueueInfo.canBookOnSelectedDay === false
+    ) {
+      toast.error('Anda tidak tersedia pada tanggal antrian ini menurut jadwal yang di-set admin.');
       return;
     }
     if (isStaffVariant && (!user?.staffId || String(user.staffId).trim() === '')) {
@@ -1039,8 +1228,44 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         return;
       }
     }
+    const staffIdForAppt = isStaffVariant ? user?.staffId : selectedStaff?.staffId;
+    const apptWindows =
+      isStaffVariant && staffSelfQueueInfo
+        ? windowsForQueueRow(staffSelfQueueInfo)
+        : selectedStaff
+          ? windowsForQueueRow(selectedStaff)
+          : [];
+    const needsApptSlot = Boolean(staffIdForAppt && apptWindows.length > 0);
+    if (needsApptSlot && !selectedAppointmentSlot) {
+      toast.error('Pilih jam kunjungan untuk staff.');
+      return;
+    }
+    if (
+      needsApptSlot &&
+      selectedAppointmentSlot &&
+      windowCollidesWithBooked(
+        selectedAppointmentSlot,
+        isStaffVariant && staffSelfQueueInfo
+          ? staffSelfQueueInfo.bookedAppointmentSlots ?? []
+          : selectedStaff?.bookedAppointmentSlots ?? [],
+      )
+    ) {
+      toast.error('Jam yang dipilih bentrok dengan janji lain. Pilih jendela lain.');
+      return;
+    }
     setSubmitting(true);
     try {
+      /** Selalu kirim tanggal kalender yang dipakai UI (bukan hanya jika ≠ hari ini), agar konsisten dengan zona kuota backend. */
+      const bookingDayKeyOk =
+        typeof effectiveQuotaDayKey === 'string' &&
+        effectiveQuotaDayKey.length >= 10 &&
+        /^\d{4}-\d{2}-\d{2}$/.test(effectiveQuotaDayKey);
+      const bookingDatePayload =
+        tenant?.allowBookOnFutureDates === true && bookingDayKeyOk
+          ? { bookingDate: effectiveQuotaDayKey }
+          : {};
+      const appointmentBody =
+        staffIdForAppt && selectedAppointmentSlot ? { appointmentSlot: selectedAppointmentSlot } : {};
       const res = guestBookingFlow && tenantIdParam
         ? await api.post(`/public/tenants/${tenantIdParam}/bookings`, {
             guestName: guestFormName.trim(),
@@ -1049,6 +1274,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             staffId: selectedStaff?.staffId,
             notes,
             ...(seatSlotCount != null ? { seatPosition: bookingSeatPick ?? null } : {}),
+            ...bookingDatePayload,
+            ...appointmentBody,
           })
         : await api.post('/bookings', {
             tenantId: effectiveTenantId,
@@ -1067,6 +1294,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               ? { customerId: selectedBookingCustomer._id }
               : {}),
             ...(seatSlotCount != null ? { seatPosition: bookingSeatPick ?? null } : {}),
+            ...bookingDatePayload,
+            ...appointmentBody,
           });
       const result = res.data as BookingResult;
       setDialogOpen(false);
@@ -1582,6 +1811,25 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
       {isStaffVariant && tenant && effectiveTenantId && (
         <Box sx={{ px: 2, pt: 2, pb: 2, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+          {tenant.allowBookOnFutureDates === true && tenant.quotaTodayDayKey && (
+            <TextField
+              type="date"
+              label="Tanggal antrian"
+              size="small"
+              value={bookingQuotaDayKey || tenant.quotaTodayDayKey}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v || !tenant.quotaTodayDayKey) return;
+                if (v < tenant.quotaTodayDayKey) return;
+                setBookingQuotaDayKey(v);
+              }}
+              inputProps={{ min: tenant.quotaTodayDayKey }}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+              sx={{ mb: 2, maxWidth: 360 }}
+              helperText="Booking staff memakai tanggal antrian ini."
+            />
+          )}
           {/* Toggle mode customer */}
           <ToggleButtonGroup
             value={staffCustomerMode}
@@ -1836,6 +2084,16 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                         {bookingLabels.staffSingular}: {ab.staffName}
                       </Typography>
                     )}
+                    {ab.appointmentSlot &&
+                      typeof ab.appointmentSlot.start === 'string' &&
+                      typeof ab.appointmentSlot.end === 'string' && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                        Janji:{' '}
+                        <Box component="span" fontWeight={700} color="primary.main">
+                          {formatSlotRangeLabel(ab.appointmentSlot)}
+                        </Box>
+                      </Typography>
+                    )}
                     <Chip
                       label={statusLabel(ab.status)}
                       color={statusColor(ab.status) as 'warning' | 'info' | 'secondary' | 'success' | 'default'}
@@ -2028,6 +2286,26 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                   />
                 )}
               </Box>
+
+              {tenant?.allowBookOnFutureDates === true && tenant.quotaTodayDayKey && (
+                <TextField
+                  type="date"
+                  label="Tanggal antrian"
+                  size="small"
+                  value={bookingQuotaDayKey || tenant.quotaTodayDayKey}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v || !tenant.quotaTodayDayKey) return;
+                    if (v < tenant.quotaTodayDayKey) return;
+                    setBookingQuotaDayKey(v);
+                  }}
+                  inputProps={{ min: tenant.quotaTodayDayKey }}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                  sx={{ maxWidth: 360, mb: 2 }}
+                  helperText="Antrian mengikuti tanggal dan zona waktu operasional outlet."
+                />
+              )}
 
               {services.length > 0 && (
                 <TextField
@@ -2253,6 +2531,25 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           {/* Step 2: Select staff (hanya pelanggan) */}
           {bookStep === 'staff' && selectedServices.length > 0 && !isStaffVariant && (
             <>
+              {tenant?.allowBookOnFutureDates === true && tenant.quotaTodayDayKey && (
+                <TextField
+                  type="date"
+                  label="Tanggal antrian"
+                  size="small"
+                  value={bookingQuotaDayKey || tenant.quotaTodayDayKey}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v || !tenant.quotaTodayDayKey) return;
+                    if (v < tenant.quotaTodayDayKey) return;
+                    setBookingQuotaDayKey(v);
+                  }}
+                  inputProps={{ min: tenant.quotaTodayDayKey }}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                  sx={{ maxWidth: 360, mb: 2 }}
+                  helperText="Ubah tanggal untuk melihat ketersediaan staf di hari lain."
+                />
+              )}
               {/* Selected services summary */}
               <Card
                 sx={{
@@ -2375,12 +2672,14 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     const sel = selectedStaff?.staffId === b.staffId;
                     const staffFull = staffQuotaExceeded(b, totalCartQty);
                     const staffUnavailable = b.isAvailable === false;
+                    const staffDayBlocked = b.canBookOnSelectedDay === false;
                     const cardDisabled =
                       !!tenant?.subscriptionOverdue ||
                       outletQuotaFull ||
                       tenantSlotsExceededForCart ||
                       staffFull ||
-                      staffUnavailable;
+                      staffUnavailable ||
+                      staffDayBlocked;
                     return (
                       <Card
                         key={b.staffId}
@@ -2407,7 +2706,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                         }}
                       >
                         <CardContent sx={{ py: '14px !important' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                             <Avatar
                               src={b.photoUrl ?? undefined}
                               sx={{
@@ -2421,9 +2720,26 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                             >
                               {!b.photoUrl && b.staffName.charAt(0).toUpperCase()}
                             </Avatar>
-                            <Box flex={1}>
-                              <Typography fontWeight={500} fontSize="0.97rem">{b.staffName}</Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                            <Box flex={1} minWidth={0}>
+                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.25, minWidth: 0 }}>
+                                <Typography fontWeight={500} fontSize="0.97rem" sx={{ flex: 1, minWidth: 0, lineHeight: 1.35 }}>
+                                  {b.staffName}
+                                </Typography>
+                                <Tooltip title="Lihat jadwal mingguan">
+                                  <IconButton
+                                    size="small"
+                                    sx={{ p: 0.35, flexShrink: 0, color: 'text.secondary', mt: -0.25 }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setStaffScheduleDialogRow(b);
+                                    }}
+                                    aria-label={`Jadwal ${b.staffName}`}
+                                  >
+                                    <InfoOutlinedIcon sx={{ fontSize: 20 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25, flexWrap: 'wrap' }}>
                                 <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
                                 <Typography variant="body2" fontWeight={500}>
                                   {b.rating > 0 ? b.rating.toFixed(1) : 'Baru'}
@@ -2434,8 +2750,35 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                                   </Typography>
                                 )}
                               </Box>
+                              {!(staffUnavailable || staffDayBlocked || staffFull) && (
+                                <Box sx={{ mt: 0.75 }}>
+                                  <Chip
+                                    icon={<HourglassTopIcon sx={{ fontSize: '12px !important' }} />}
+                                    label={waitLabel(b.estimatedWaitMinutes)}
+                                    color={waitColor(b.estimatedWaitMinutes)}
+                                    size="small"
+                                    sx={{ fontWeight: 700, height: 26 }}
+                                  />
+                                </Box>
+                              )}
+                              {b.queueCount > 0 && (
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                  {b.queueCount} orang antri
+                                  {b.dailyBookingQuota != null && b.dailyBookingQuota > 0
+                                    ? ` · max ${b.dailyBookingQuota}/hari`
+                                    : ''}
+                                </Typography>
+                              )}
                             </Box>
-                            <Box sx={{ textAlign: 'right' }}>
+                            <Box sx={{ flexShrink: 0, textAlign: 'right', maxWidth: { xs: '42%', sm: 160 } }}>
+                              {staffDayBlocked && (
+                                <Chip
+                                  label="Tidak tersedia di tanggal ini"
+                                  color="warning"
+                                  size="small"
+                                  sx={{ fontWeight: 700, mb: 0.5 }}
+                                />
+                              )}
                               {staffUnavailable && (
                                 <Chip
                                   label="Tidak terima booking"
@@ -2447,22 +2790,43 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                               {staffFull && !staffUnavailable && (
                                 <Chip label="Kuota penuh" color="error" size="small" sx={{ fontWeight: 700, mb: 0.5 }} />
                               )}
-                              <Chip
-                                icon={<HourglassTopIcon sx={{ fontSize: '12px !important' }} />}
-                                label={waitLabel(b.estimatedWaitMinutes)}
-                                color={waitColor(b.estimatedWaitMinutes)} size="small"
-                                sx={{ fontWeight: 700, height: 26 }}
-                              />
-                              {b.queueCount > 0 && (
-                                <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
-                                  {b.queueCount} orang antri
-                                  {b.dailyBookingQuota != null && b.dailyBookingQuota > 0
-                                    ? ` · max ${b.dailyBookingQuota}/hari`
-                                    : ''}
-                                </Typography>
-                              )}
                             </Box>
                           </Box>
+                          {(() => {
+                            const wins = windowsForQueueRow(b);
+                            if (wins.length === 0) return null;
+                            const booked = b.bookedAppointmentSlots ?? [];
+                            return (
+                              <Box sx={{ mt: 1.25, pt: 1.25, borderTop: 1, borderColor: 'divider' }}>
+                                <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                                  Jam buka (
+                                  {b.selectedBookingDayKey && /^\d{4}-\d{2}-\d{2}$/.test(b.selectedBookingDayKey)
+                                    ? new Date(`${b.selectedBookingDayKey}T12:00:00`).toLocaleDateString('id-ID', {
+                                        weekday: 'short',
+                                        day: 'numeric',
+                                        month: 'short',
+                                      })
+                                    : 'tanggal antrian'}
+                                  )
+                                </Typography>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                  {wins.map((w) => {
+                                    const blocked = windowCollidesWithBooked(w, booked);
+                                    return (
+                                      <Chip
+                                        key={`${b.staffId}-${w.start}-${w.end}`}
+                                        size="small"
+                                        variant="outlined"
+                                        label={`${formatSlotRangeLabel(w)}${blocked ? ' · bentrok' : ''}`}
+                                        color={blocked ? 'default' : 'success'}
+                                        sx={{ fontSize: '0.68rem', fontWeight: 600 }}
+                                      />
+                                    );
+                                  })}
+                                </Box>
+                              </Box>
+                            );
+                          })()}
                         </CardContent>
                       </Card>
                     );
@@ -2783,7 +3147,66 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                 )}
               </>
             )}
+            {isStaffVariant &&
+              staffSelfQueueInfo &&
+              windowsForQueueRow(staffSelfQueueInfo).length > 0 && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ mb: 0.75 }}>
+                  Jadwal Anda hari ini
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {windowsForQueueRow(staffSelfQueueInfo).map((w) => {
+                    const blocked = windowCollidesWithBooked(w, staffSelfQueueInfo.bookedAppointmentSlots ?? []);
+                    return (
+                      <Chip
+                        key={`self-${w.start}-${w.end}`}
+                        size="small"
+                        variant="outlined"
+                        label={`${formatSlotRangeLabel(w)}${blocked ? ' · terisi' : ''}`}
+                        color={blocked ? 'default' : 'success'}
+                        sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+                      />
+                    );
+                  })}
+                </Box>
+              </Box>
+            )}
           </Box>
+
+          {dialogAppointmentWindows.length > 0 && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography
+                variant="overline"
+                display="block"
+                sx={{ fontWeight: 700, letterSpacing: 1, fontSize: '0.62rem', color: 'primary.main', mb: 0.75 }}
+              >
+                Jam kunjungan
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                Pilih jendela janji. Yang bertabrakan dengan booking aktif berlabel &ldquo;penuh&rdquo;.
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {dialogAppointmentWindows.map((w) => {
+                  const blocked = windowCollidesWithBooked(w, dialogBookedSlots);
+                  const sel =
+                    selectedAppointmentSlot?.start === w.start && selectedAppointmentSlot?.end === w.end;
+                  return (
+                    <Chip
+                      key={`${w.start}-${w.end}`}
+                      label={`${formatSlotRangeLabel(w)}${blocked ? ' · penuh' : ''}`}
+                      onClick={() => {
+                        if (!blocked) setSelectedAppointmentSlot(w);
+                      }}
+                      color={sel ? 'primary' : 'default'}
+                      variant={sel ? 'filled' : 'outlined'}
+                      disabled={blocked}
+                      sx={{ fontWeight: 700 }}
+                    />
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
 
           {/* Foto dokumentasi terakhir */}
           {lastHaircut && lastHaircut.photos.length > 0 && (
@@ -3180,6 +3603,96 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                   disabled={!!tenant?.subscriptionOverdue || outletQuotaFull || isServiceOutOfStock(svc)}
                 >
                   {selectedServices.find((s) => s._id === svc._id) ? 'Batalkan Pilihan' : 'Pilih Layanan Ini'}
+                </Button>
+              </DialogActions>
+            </>
+          );
+        })()}
+      </Dialog>
+
+      {/* Dialog jadwal mingguan staff (booking pelanggan) */}
+      <Dialog
+        open={staffScheduleDialogRow !== null}
+        onClose={() => setStaffScheduleDialogRow(null)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        {staffScheduleDialogRow && (() => {
+          const row = staffScheduleDialogRow;
+          const weekly = buildStaffWeeklyScheduleDayRows(row.availabilityDaysHours);
+          return (
+            <>
+              <DialogTitle sx={{ fontWeight: 700, pb: 0.5 }}>
+                Jadwal {row.staffName}
+              </DialogTitle>
+              <DialogContent sx={{ pt: 0.5 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Jam layanan per hari. Ubah &ldquo;Tanggal antrian&rdquo; di atas untuk memilih hari booking.
+                </Typography>
+                {!weekly ? (
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    {bookingLabels.staffSingular} ini tidak punya batasan jadwal mingguan di profilnya — bisa
+                    melayani di semua hari sesuai tanggal antrian yang Anda pilih.
+                  </Alert>
+                ) : (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                    {weekly.map((d) => {
+                      const isSelectedQueueDay = row.selectedBookingDowKey === d.dayKey;
+                      return (
+                        <Box
+                          key={d.dayKey}
+                          sx={{
+                            py: 0.75,
+                            px: 1,
+                            borderRadius: 2,
+                            bgcolor: isSelectedQueueDay ? 'primary.main' : 'transparent',
+                            color: isSelectedQueueDay ? 'primary.contrastText' : 'text.primary',
+                            border: 1,
+                            borderColor: isSelectedQueueDay ? 'primary.main' : 'divider',
+                          }}
+                        >
+                          <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5, opacity: 0.95 }}>
+                            {d.label}
+                            {isSelectedQueueDay && ' · tanggal antrian'}
+                          </Typography>
+                          {d.windows.length === 0 ? (
+                            <Typography variant="body2" sx={{ opacity: isSelectedQueueDay ? 0.9 : 1 }}>
+                              Tidak melayani
+                            </Typography>
+                          ) : (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {d.windows.map((w) => (
+                                <Chip
+                                  key={`${d.dayKey}-${w.start}-${w.end}`}
+                                  size="small"
+                                  label={formatSlotRangeLabel(w)}
+                                  color={isSelectedQueueDay ? 'default' : 'success'}
+                                  variant="outlined"
+                                  sx={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    ...(isSelectedQueueDay
+                                      ? {
+                                          bgcolor: 'rgba(255,255,255,0.2)',
+                                          color: 'inherit',
+                                          borderColor: 'rgba(255,255,255,0.35)',
+                                        }
+                                      : {}),
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                )}
+              </DialogContent>
+              <DialogActions sx={{ px: 2.5, pb: 2 }}>
+                <Button fullWidth variant="contained" onClick={() => setStaffScheduleDialogRow(null)}>
+                  Tutup
                 </Button>
               </DialogActions>
             </>
