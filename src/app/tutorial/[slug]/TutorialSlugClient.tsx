@@ -30,7 +30,7 @@ export default function TutorialSlugClient({ page }: { page: TutorialPageDef }) 
 
       <Chip label={audienceLabel(page.audience)} size="small" sx={{ mb: 2 }} color="primary" variant="outlined" />
 
-      <Typography variant="h4" component="h1" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.4rem', sm: '2rem' } }}>
+      <Typography variant="h4" component="h1" fontWeight={600} sx={{ mb: 1, fontSize: { xs: '1.4rem', sm: '2rem' } }}>
         {page.title}
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>

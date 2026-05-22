@@ -952,7 +952,7 @@ export default function ServicesPage() {
                   <Typography fontWeight={700} variant="body2" sx={{ lineHeight: 1.2, wordBreak: 'break-word' }}>
                     {stickerService.name}
                   </Typography>
-                  <Typography fontWeight={800} color="primary" sx={{ fontSize: '1rem' }}>
+                  <Typography fontWeight={600} color="primary" sx={{ fontSize: '1rem' }}>
                     Rp {stickerService.price.toLocaleString('id-ID')}
                     {stickerService.unit ? ` / ${stickerService.unit}` : ''}
                   </Typography>

@@ -20,7 +20,7 @@ const mailHref = `mailto:${SITE_BRANDING.contactEmail}?subject=${mailSubject}`;
 export default function ContactPage() {
   return (
     <TutorialMarketingShell subtitle="Kontak">
-      <Typography variant="h4" component="h1" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+      <Typography variant="h4" component="h1" fontWeight={600} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
         Kontak
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 560 }}>

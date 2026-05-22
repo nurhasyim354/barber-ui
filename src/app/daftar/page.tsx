@@ -115,7 +115,7 @@ function DaftarForm() {
 
   return (
     <Container maxWidth="sm" sx={{ py: 4, px: UI_LAYOUT.containerGutters.px }}>
-      <Typography variant="h4" fontWeight={800} gutterBottom>
+      <Typography variant="h4" fontWeight={600} gutterBottom>
         Daftar sebagai tenant
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>

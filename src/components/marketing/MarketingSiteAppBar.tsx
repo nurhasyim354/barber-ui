@@ -87,7 +87,7 @@ export default function MarketingSiteAppBar({ showBack, backHref, pageHint }: Ma
             flexShrink: 0,
           }}
         >
-          <Typography variant="h6" component="span" fontWeight={800} color="primary">
+          <Typography variant="h6" component="span" fontWeight={600} color="primary">
             Booking App
           </Typography>
         </Button>

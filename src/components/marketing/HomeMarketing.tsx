@@ -284,7 +284,7 @@ export default function HomeMarketing({ heroHeadingFontFamily }: HomeMarketingPr
         }}
       >
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px, position: 'relative', zIndex: 1 }}>
-          <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+          <Typography variant="h4" fontWeight={600} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
             Kenapa harus pakai?
           </Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ mb: 4, maxWidth: 640, mx: 'auto' }}>
@@ -324,7 +324,7 @@ export default function HomeMarketing({ heroHeadingFontFamily }: HomeMarketingPr
 
       {/* Features */}
       <Container maxWidth="lg" sx={{ py: { xs: 6, md: 8 }, px: UI_LAYOUT.containerGutters.px }}>
-        <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+        <Typography variant="h4" fontWeight={600} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
           Fitur unggulan
         </Typography>
         <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mb: 2, maxWidth: 640, mx: 'auto' }}>
@@ -368,7 +368,7 @@ export default function HomeMarketing({ heroHeadingFontFamily }: HomeMarketingPr
       {/* Business picker + simulation */}
       <Box sx={{ bgcolor: (t) => (t.palette.mode === 'light' ? 'grey.50' : 'grey.900'), py: { xs: 6, md: 8 } }}>
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px }}>
-          <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+          <Typography variant="h4" fontWeight={600} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
             Pilih jenis bisnis Anda
           </Typography>
           <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mb: 3, maxWidth: 560, mx: 'auto' }}>
@@ -430,7 +430,7 @@ export default function HomeMarketing({ heroHeadingFontFamily }: HomeMarketingPr
               <Typography fontWeight={700} gutterBottom>
                 Omzet bulanan perkiraan saat ini
               </Typography>
-              <Typography variant="h5" fontWeight={800} color="primary" sx={{ mb: 2 }}>
+              <Typography variant="h5" fontWeight={600} color="primary" sx={{ mb: 2 }}>
                 {fmtRp(baseRp)}
               </Typography>
               <Slider
@@ -506,7 +506,7 @@ export default function HomeMarketing({ heroHeadingFontFamily }: HomeMarketingPr
       {/* Footer CTA */}
       <Box sx={{ py: 6, textAlign: 'center', borderTop: 1, borderColor: 'divider' }}>
         <Container maxWidth="sm">
-          <Typography variant="h5" fontWeight={800} gutterBottom>
+          <Typography variant="h5" fontWeight={600} gutterBottom>
             Siap digitalisasi antrian & kasir?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>

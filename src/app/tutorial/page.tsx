@@ -38,7 +38,7 @@ export default function TutorialHubPage() {
 
   return (
     <TutorialMarketingShell subtitle="Panduan">
-      <Typography variant="h4" component="h1" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+      <Typography variant="h4" component="h1" fontWeight={600} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
         Panduan fitur
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 640 }}>

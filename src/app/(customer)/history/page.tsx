@@ -174,7 +174,7 @@ export default function HistoryPage() {
           {(lastDone || (lastPhotos && lastPhotos.photos.length > 0)) && (
             <Card sx={{ mb: 3, borderRadius: 2 }}>
               <CardContent>
-                <Typography variant="subtitle2" fontWeight={800} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <PhotoLibraryIcon fontSize="small" color="primary" />
                   Terakhir di {tenantInfo?.name ?? 'outlet'}
                 </Typography>

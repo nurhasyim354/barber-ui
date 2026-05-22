@@ -136,8 +136,8 @@ export function PaymentBookingDetailCard({
         ) : null}
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <Typography fontWeight={800}>Total</Typography>
-          <Typography fontWeight={800} color="primary" variant="subtitle1">
+          <Typography fontWeight={600}>Total</Typography>
+          <Typography fontWeight={600} color="primary" variant="subtitle1">
             Rp {total.toLocaleString('id-ID')}
           </Typography>
         </Box>

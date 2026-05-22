@@ -2135,7 +2135,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
           {(lastDoneVisit || (lastHaircut && lastHaircut.photos.length > 0)) && (
             <Card sx={{ mb: 3, borderRadius: 3, border: 1, borderColor: 'divider' }}>
               <CardContent>
-                <Typography variant="subtitle2" fontWeight={800} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <PhotoLibraryIcon fontSize="small" color="primary" />
                   Kunjungan & hasil layanan terakhir
                 </Typography>
@@ -3101,7 +3101,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             )}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75, alignItems: 'center' }}>
               <Typography variant="body2" fontWeight={700}>Total</Typography>
-              <Typography fontWeight={800} color="primary" fontSize="1.05rem">
+              <Typography fontWeight={600} color="primary" fontSize="1.05rem">
                 Rp {(totalPrice + ppnAmount).toLocaleString('id-ID')}
               </Typography>
             </Box>
@@ -3349,7 +3349,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             </Typography>
             {/* Ringkasan total saat collapsed */}
             {!floatingCartExpanded && (
-              <Typography variant="subtitle2" fontWeight={800} color="primary" sx={{ flexShrink: 0 }}>
+              <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ flexShrink: 0 }}>
                 Rp {(totalPrice + ppnAmount).toLocaleString('id-ID')}
               </Typography>
             )}
@@ -3420,7 +3420,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                 <Typography variant="caption" color="text.secondary">
                   Total waktu {formatDuration(totalDuration)}
                 </Typography>
-                <Typography fontWeight={800} color="primary" variant="subtitle1">
+                <Typography fontWeight={600} color="primary" variant="subtitle1">
                   Rp {(totalPrice + ppnAmount).toLocaleString('id-ID')}
                 </Typography>
               </Box>
