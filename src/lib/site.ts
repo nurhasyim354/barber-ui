@@ -41,7 +41,7 @@ export const SITE_KEYWORDS: string[] = [
  * Produksi: set `NEXT_PUBLIC_SITE_URL` (mis. https://app.domain.com).
  */
 export function getSiteOrigin(): string {
-  const raw = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://booking.nh-apps.com').trim();
+  const raw = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://bookita.nh-apps.com').trim();
   if (raw) return raw.replace(/\/$/, '');
   return 'http://localhost:3000';
 }
