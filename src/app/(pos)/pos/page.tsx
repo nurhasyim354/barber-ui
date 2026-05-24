@@ -45,6 +45,7 @@ import {
   getReceiptServiceLines,
   type UiBooking,
 } from '@/lib/bookingDisplay';
+import { formatSlotRangeLabel } from '@/lib/appointmentSlot';
 import {
   buildThermalReceiptEscPos,
   buildThermalReceiptPrintHtmlDocument,
@@ -521,6 +522,16 @@ export default function PosPage() {
                         dengan  {b.staffName}
                         </Typography>
                       )}
+                      {b.appointmentSlot &&
+                        typeof b.appointmentSlot.start === 'string' &&
+                        typeof b.appointmentSlot.end === 'string' && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                          Janji:{' '}
+                          <Box component="span" fontWeight={700} color="primary.main">
+                            {formatSlotRangeLabel(b.appointmentSlot)}
+                          </Box>
+                        </Typography>
+                      )}
                       {b.notes && (
                         <Typography variant="body2" className="italic text-gray-400">
                           &quot;{b.notes}&quot;
@@ -698,6 +709,16 @@ export default function PosPage() {
                                 </Link>
                               )}
                             </Box>
+                          )}
+                          {b.appointmentSlot &&
+                            typeof b.appointmentSlot.start === 'string' &&
+                            typeof b.appointmentSlot.end === 'string' && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                              Janji:{' '}
+                              <Box component="span" fontWeight={700} color="primary.main">
+                                {formatSlotRangeLabel(b.appointmentSlot)}
+                              </Box>
+                            </Typography>
                           )}
                           {posLines.length > 0 ? (
                             <Box component="div" sx={{ mt: 0.25 }}>
@@ -1291,14 +1312,26 @@ export default function PosPage() {
         <DialogTitle fontWeight={500}>Ganti {ui.staffSingular}</DialogTitle>
         <DialogContent sx={{ pt: 0 }}>
           {staffAssignDialog.booking && (
-            <Typography variant="body2" color="text.secondary" mb={1}>
-              Booking #{staffAssignDialog.booking.queueNumber}
-              {formatBookingQueueDate(staffAssignDialog.booking.date)
-                ? ` · ${formatBookingQueueDate(staffAssignDialog.booking.date)}`
-                : ''}
-              {' — '}
-              {staffAssignDialog.booking.customerName}
-            </Typography>
+            <Box sx={{ mb: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Booking #{staffAssignDialog.booking.queueNumber}
+                {formatBookingQueueDate(staffAssignDialog.booking.date)
+                  ? ` · ${formatBookingQueueDate(staffAssignDialog.booking.date)}`
+                  : ''}
+                {' — '}
+                {staffAssignDialog.booking.customerName}
+              </Typography>
+              {staffAssignDialog.booking.appointmentSlot &&
+                typeof staffAssignDialog.booking.appointmentSlot.start === 'string' &&
+                typeof staffAssignDialog.booking.appointmentSlot.end === 'string' && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Janji:{' '}
+                  <Box component="span" fontWeight={700} color="primary.main">
+                    {formatSlotRangeLabel(staffAssignDialog.booking.appointmentSlot)}
+                  </Box>
+                </Typography>
+              )}
+            </Box>
           )}
           <List disablePadding>
             {/* Opsi tanpa staff */}

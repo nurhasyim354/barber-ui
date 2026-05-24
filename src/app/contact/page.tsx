@@ -13,14 +13,15 @@ import {
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import TutorialMarketingShell from '@/components/tutorial/TutorialMarketingShell';
 import { SITE_BRANDING } from '@/lib/siteBranding';
+import { SITE_NAME } from '@/lib/site';
 
-const mailSubject = encodeURIComponent('Pertanyaan Booking App');
+const mailSubject = encodeURIComponent(`Pertanyaan ${SITE_NAME}`);
 const mailHref = `mailto:${SITE_BRANDING.contactEmail}?subject=${mailSubject}`;
 
 export default function ContactPage() {
   return (
     <TutorialMarketingShell subtitle="Kontak">
-      <Typography variant="h4" component="h1" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+      <Typography variant="h4" component="h1" fontWeight={600} sx={{ mb: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
         Kontak
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 560 }}>

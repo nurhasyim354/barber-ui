@@ -164,7 +164,12 @@ function fmtRp(n: number) {
   return `Rp ${n.toLocaleString('id-ID')}`;
 }
 
-export default function HomeMarketing() {
+type HomeMarketingProps = {
+  /** Mis. Italianno dari `next/font/google` — dipakai untuk gaya mirip script seperti Giambattista. */
+  heroHeadingFontFamily?: string;
+};
+
+export default function HomeMarketing({ heroHeadingFontFamily }: HomeMarketingProps) {
   const theme = useTheme();
   const [vertical, setVertical] = useState<BusinessVertical>(BUSINESS_VERTICALS[1]);
   const [revenueSlider, setRevenueSlider] = useState(35); // juta Rp
@@ -198,10 +203,28 @@ export default function HomeMarketing() {
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px, position: 'relative', zIndex: 1 }}>
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={7}>
-              <Typography variant="h3" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.85rem', sm: '2.5rem', md: '3rem' }, lineHeight: 1.15 }}>
-                Antrian rapi, pendapatan lebih terukur
+              <Typography
+                variant="h3"
+                component="h1"
+                fontWeight={400}
+                sx={{
+                  fontSize: { xs: '2.35rem', sm: '2.85rem', md: '3.35rem' },
+                  lineHeight: 1.15,
+                  fontFamily:
+                    heroHeadingFontFamily ??
+                    '"Palace Script MT", "Segoe Script", "Lucida Handwriting", "Brush Script MT", "Apple Chancery", cursive',
+                  letterSpacing: heroHeadingFontFamily ? '0.015em' : '0.02em',
+                  background: (t) =>
+                    `linear-gradient(102deg, ${t.palette.primary.dark} 0%, ${t.palette.text.primary} 52%, ${alpha(t.palette.primary.main, 0.95)} 100%)`,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  filter: (t) => `drop-shadow(0 1px 1px ${alpha(t.palette.text.primary, t.palette.mode === 'dark' ? 0.35 : 0.12)})`,
+                }}
+              >
+                "Karena setiap detik sangat berharga"
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mt: 2, maxWidth: 560 }}>
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 4, maxWidth: 560 }}>
                 Booking, staff, kasir, laporan, dan pengingat WA dalam satu tempat. Pilih jenis bisnis, cek simulasi omzet,
                 lalu daftarkan outlet Anda.
               </Typography>
@@ -261,7 +284,7 @@ export default function HomeMarketing() {
         }}
       >
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px, position: 'relative', zIndex: 1 }}>
-          <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+          <Typography variant="h4" fontWeight={600} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
             Kenapa harus pakai?
           </Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center" sx={{ mb: 4, maxWidth: 640, mx: 'auto' }}>
@@ -301,7 +324,7 @@ export default function HomeMarketing() {
 
       {/* Features */}
       <Container maxWidth="lg" sx={{ py: { xs: 6, md: 8 }, px: UI_LAYOUT.containerGutters.px }}>
-        <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+        <Typography variant="h4" fontWeight={600} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
           Fitur unggulan
         </Typography>
         <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mb: 2, maxWidth: 640, mx: 'auto' }}>
@@ -345,7 +368,7 @@ export default function HomeMarketing() {
       {/* Business picker + simulation */}
       <Box sx={{ bgcolor: (t) => (t.palette.mode === 'light' ? 'grey.50' : 'grey.900'), py: { xs: 6, md: 8 } }}>
         <Container maxWidth="lg" sx={{ px: UI_LAYOUT.containerGutters.px }}>
-          <Typography variant="h4" fontWeight={800} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+          <Typography variant="h4" fontWeight={600} textAlign="center" sx={{ mb: 1, fontSize: { xs: '1.5rem', md: '2rem' } }}>
             Pilih jenis bisnis Anda
           </Typography>
           <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mb: 3, maxWidth: 560, mx: 'auto' }}>
@@ -407,7 +430,7 @@ export default function HomeMarketing() {
               <Typography fontWeight={700} gutterBottom>
                 Omzet bulanan perkiraan saat ini
               </Typography>
-              <Typography variant="h5" fontWeight={800} color="primary" sx={{ mb: 2 }}>
+              <Typography variant="h5" fontWeight={600} color="primary" sx={{ mb: 2 }}>
                 {fmtRp(baseRp)}
               </Typography>
               <Slider
@@ -483,7 +506,7 @@ export default function HomeMarketing() {
       {/* Footer CTA */}
       <Box sx={{ py: 6, textAlign: 'center', borderTop: 1, borderColor: 'divider' }}>
         <Container maxWidth="sm">
-          <Typography variant="h5" fontWeight={800} gutterBottom>
+          <Typography variant="h5" fontWeight={600} gutterBottom>
             Siap digitalisasi antrian & kasir?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>

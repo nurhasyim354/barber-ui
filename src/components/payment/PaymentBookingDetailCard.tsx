@@ -8,6 +8,7 @@ import {
   getReceiptServiceLines,
 } from '@/lib/bookingDisplay';
 import { formatBookingQtyDisplay } from '@/lib/bookingQty';
+import { formatSlotRangeLabel } from '@/lib/appointmentSlot';
 
 export type PaymentBookingDetailCardProps = {
   booking: UiBooking;
@@ -53,8 +54,18 @@ export function PaymentBookingDetailCard({
           </Typography>
         )}
         {booking.staffName && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.25 }}>
             {assigneeLabel}: {booking.staffName}
+          </Typography>
+        )}
+        {booking.appointmentSlot &&
+          typeof booking.appointmentSlot.start === 'string' &&
+          typeof booking.appointmentSlot.end === 'string' && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Janji:{' '}
+            <Box component="span" fontWeight={700} color="primary.main">
+              {formatSlotRangeLabel(booking.appointmentSlot)}
+            </Box>
           </Typography>
         )}
 
@@ -125,8 +136,8 @@ export function PaymentBookingDetailCard({
         ) : null}
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <Typography fontWeight={800}>Total</Typography>
-          <Typography fontWeight={800} color="primary" variant="subtitle1">
+          <Typography fontWeight={600}>Total</Typography>
+          <Typography fontWeight={600} color="primary" variant="subtitle1">
             Rp {total.toLocaleString('id-ID')}
           </Typography>
         </Box>

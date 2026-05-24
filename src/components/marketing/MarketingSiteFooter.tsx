@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Box, Container, Stack, Typography } from '@mui/material';
 import { SITE_BRANDING } from '@/lib/siteBranding';
+import { SITE_LOGO_PATH, SITE_NAME, SITE_TAGLINE } from '@/lib/site';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
 
 export default function MarketingSiteFooter() {
@@ -23,9 +24,17 @@ export default function MarketingSiteFooter() {
           justifyContent="space-between"
           alignItems={{ xs: 'flex-start', sm: 'center' }}
         >
-          <Typography variant="caption" color="text.secondary" sx={{ order: { xs: 2, sm: 1 } }}>
-            Hak cipta {SITE_BRANDING.copyrightLine}
-          </Typography>
+          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ order: { xs: 2, sm: 1 }, maxWidth: { sm: '60%' } }}>
+            <Box
+              component="img"
+              src={SITE_LOGO_PATH}
+              alt={`${SITE_NAME} — ${SITE_TAGLINE}`}
+              sx={{ height: 22, width: 'auto', flexShrink: 0, opacity: 0.9 }}
+            />
+            <Typography variant="caption" color="text.secondary" component="span">
+              Hak cipta {SITE_BRANDING.copyrightLine}
+            </Typography>
+          </Stack>
           <Stack direction="row" spacing={2} sx={{ order: { xs: 1, sm: 2 } }}>
             <Typography
               variant="caption"

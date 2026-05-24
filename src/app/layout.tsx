@@ -1,12 +1,9 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import ThemeRegistry from '@/components/ThemeRegistry';
+import { rootMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Booking App',
-  description:
-    'Platform booking dan antrian untuk klinik, barbershop, bengkel, dan bisnis lainnya. Daftar tenant, kelola outlet, kasir, dan laporan.',
-};
+export const metadata: Metadata = rootMetadata();
 
 export const viewport = {
   width: 'device-width',

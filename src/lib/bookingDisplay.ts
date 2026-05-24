@@ -41,6 +41,8 @@ export type UiBooking = {
   staffName?: string;
   /** Posisi (1…N); hadir saat outlet mengaktifkan pemilihan posisi di booking */
   seatPosition?: number | null;
+  /** Janji waktu (HH:mm–HH:mm, zona kuota) bila booking dengan staff ber-jadwal */
+  appointmentSlot?: { start: string; end: string } | null;
   date: string;
 };
 
