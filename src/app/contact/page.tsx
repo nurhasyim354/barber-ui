@@ -13,8 +13,9 @@ import {
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import TutorialMarketingShell from '@/components/tutorial/TutorialMarketingShell';
 import { SITE_BRANDING } from '@/lib/siteBranding';
+import { SITE_NAME } from '@/lib/site';
 
-const mailSubject = encodeURIComponent('Pertanyaan Booking App');
+const mailSubject = encodeURIComponent(`Pertanyaan ${SITE_NAME}`);
 const mailHref = `mailto:${SITE_BRANDING.contactEmail}?subject=${mailSubject}`;
 
 export default function ContactPage() {

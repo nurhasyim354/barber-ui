@@ -21,6 +21,7 @@ import LoginIcon from '@mui/icons-material/Login';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import { TUTORIAL_PAGES, audienceLabel } from '@/lib/tutorialContent';
+import { SITE_LOGO_PATH, SITE_NAME, SITE_TAGLINE } from '@/lib/site';
 
 export type MarketingSiteAppBarProps = {
   /** Tombol kembali di kiri header */
@@ -85,11 +86,21 @@ export default function MarketingSiteAppBar({ showBack, backHref, pageHint }: Ma
             minWidth: 0,
             px: showBack ? 0.5 : 1,
             flexShrink: 0,
+            alignItems: 'center',
           }}
         >
-          <Typography variant="h6" component="span" fontWeight={600} color="primary">
-            Booking App
-          </Typography>
+          <Box
+            component="img"
+            src={SITE_LOGO_PATH}
+            alt={`${SITE_NAME} — ${SITE_TAGLINE}`}
+            sx={{
+              height: { xs: 34, sm: 38 },
+              width: 'auto',
+              maxWidth: { xs: 200, sm: 228 },
+              display: 'block',
+              objectFit: 'contain',
+            }}
+          />
         </Button>
         {pageHint ? (
           <Typography

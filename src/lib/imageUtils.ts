@@ -69,3 +69,31 @@ export async function compressImage(file: File): Promise<string> {
 export async function compressImages(files: File[]): Promise<string[]> {
   return Promise.all(files.map(compressImage));
 }
+
+/**
+ * Untuk `<img src={...}>`: pastikan tenant logo dari API valid.
+ *
+ * - Data URL mengandung line break / whitespace (JSON/transfer kadang memecah baris pada base64).
+ * - Payload base64 tanpa prefix `data:...`.
+ * - URL http(s) absolut.
+ */
+export function normalizeTenantLogoSrc(raw: string | null | undefined): string | null {
+  if (raw == null || typeof raw !== 'string') return null;
+  let s = raw.trim();
+  if (!s) return null;
+  s = s.replace(/\s+/g, '');
+  if (/^https?:\/\//i.test(s)) return s;
+  const dataHeader = /^data:image\/([a-zA-Z0-9.+-]+)(?:;[^;,]+)*;base64,(.*)$/i.exec(s);
+  if (dataHeader) {
+    const mime = dataHeader[1]?.toLowerCase();
+    const b64part = dataHeader[2];
+    if (!mime || !b64part) return null;
+    return `data:image/${mime};base64,${b64part}`;
+  }
+  const stripped = s.replace(/^data:image\/[^;]+;base64,?/i, '').replace(/^,+/, '');
+  if (!stripped) return null;
+  if (/^iVBORw0KGgo/i.test(stripped)) return `data:image/png;base64,${stripped}`;
+  if (/^R0lGOD/i.test(stripped)) return `data:image/gif;base64,${stripped}`;
+  if (/^UklGR/i.test(stripped)) return `data:image/webp;base64,${stripped}`;
+  return `data:image/jpeg;base64,${stripped}`;
+}

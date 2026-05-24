@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import {
   SITE_DESCRIPTION,
+  SITE_ICON_PATH,
   SITE_KEYWORDS,
+  SITE_LOGO_PATH,
   SITE_NAME,
   getMetadataBase,
   getSiteOrigin,
@@ -25,6 +27,11 @@ export function rootMetadata(): Metadata {
     authors: [{ name: SITE_NAME, url: origin }],
     creator: SITE_NAME,
     publisher: SITE_NAME,
+    icons: {
+      icon: [{ url: SITE_ICON_PATH, type: 'image/x-icon', sizes: 'any' }],
+      shortcut: [{ url: SITE_ICON_PATH, type: 'image/x-icon' }],
+      apple: [{ url: SITE_ICON_PATH }],
+    },
     formatDetection: {
       telephone: true,
       email: false,
@@ -38,11 +45,20 @@ export function rootMetadata(): Metadata {
       siteName: SITE_NAME,
       title: defaultTitle,
       description: SITE_DESCRIPTION,
+      images: [
+        {
+          url: SITE_LOGO_PATH,
+          width: 1024,
+          height: 682,
+          alt: SITE_NAME,
+        },
+      ],
     },
     twitter: {
-      card: 'summary',
+      card: 'summary_large_image',
       title: defaultTitle,
       description: SITE_DESCRIPTION,
+      images: [SITE_LOGO_PATH],
     },
     robots: {
       index: true,
@@ -84,10 +100,13 @@ export function pageMetadata(
       title: `${title} · ${SITE_NAME}`,
       description: desc,
       url,
+      images: [{ url: SITE_LOGO_PATH, width: 1024, height: 682, alt: SITE_NAME }],
     },
     twitter: {
+      card: 'summary_large_image',
       title: `${title} · ${SITE_NAME}`,
       description: desc,
+      images: [SITE_LOGO_PATH],
     },
     alternates: {
       canonical: url,

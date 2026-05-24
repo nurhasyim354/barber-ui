@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Card, CardContent, Typography, TextField,
@@ -16,6 +16,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { UI_LAYOUT } from '@/lib/uiStyleConfig';
+import { SITE_NAME } from '@/lib/site';
+import { normalizeTenantLogoSrc } from '@/lib/imageUtils';
 
 function safeInternalRedirect(raw: string | null): string | null {
   if (!raw) return null;
@@ -63,6 +65,16 @@ export default function LoginPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<TenantPublicInfo | null>(null);
   const [tenantLoading, setTenantLoading] = useState(false);
+  const [tenantLogoLoadFailed, setTenantLogoLoadFailed] = useState(false);
+
+  const tenantLogoSrc = useMemo(
+    () => normalizeTenantLogoSrc(tenantInfo?.tenantLogoBase64),
+    [tenantInfo?.tenantLogoBase64],
+  );
+
+  useEffect(() => {
+    setTenantLogoLoadFailed(false);
+  }, [tenantInfo?.tenantLogoBase64]);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -229,7 +241,7 @@ export default function LoginPage() {
           <Box sx={{ width: 80, height: 80, mx: 'auto', mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <CircularProgress size={36} />
           </Box>
-        ) : tenantInfo?.tenantLogoBase64 ? (
+        ) : tenantInfo && tenantLogoSrc && !tenantLogoLoadFailed ? (
           /* Logo tenant custom */
           <Box
             sx={{
@@ -245,9 +257,10 @@ export default function LoginPage() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={tenantInfo.tenantLogoBase64}
+              src={tenantLogoSrc}
               alt={tenantInfo.name}
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              onError={() => setTenantLogoLoadFailed(true)}
             />
           </Box>
         ) : (
@@ -294,7 +307,7 @@ export default function LoginPage() {
               fontWeight={600}
               sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
             >
-              Booking App
+              {SITE_NAME}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
               Masuk untuk melanjutkan

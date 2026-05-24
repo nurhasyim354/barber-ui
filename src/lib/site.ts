@@ -1,12 +1,20 @@
 /** Nama produk (marketing & SEO). */
-export const SITE_NAME = 'Booking App';
+export const SITE_NAME = 'Bookita';
+
+/** Slogan singkat (alt text, manifest, copy). */
+export const SITE_TAGLINE = 'Booking & Antrian Made Easy';
+
+/** Logo marketing di `public/` (JPEG). */
+export const SITE_LOGO_PATH = '/bookita-logo.png';
+export const SITE_ICON_PATH = '/favicon.ico';
 
 /** Deskripsi default untuk meta tag & JSON-LD. */
 export const SITE_DESCRIPTION =
-  'Platform booking dan antrian multi-outlet untuk restaurant, barbershop, salon, klinik, bengkel, laundry, spa, dan bisnis jasa lainnya. Antrian digital, POS, laporan, dan pengingat pelanggan.';
+  'Bookita — Booking & Antrian Made Easy. Platform booking dan antrian multi-outlet untuk restaurant, barbershop, salon, klinik, bengkel, laundry, spa, dan bisnis jasa lainnya. Antrian digital, POS, laporan, dan pengingat pelanggan.';
 
 /** Kata kunci umum (bahasa Indonesia + istilah teknis singkat). */
 export const SITE_KEYWORDS: string[] = [
+  'Bookita',
   'booking online',
   'antrian digital',
   'SaaS booking',
