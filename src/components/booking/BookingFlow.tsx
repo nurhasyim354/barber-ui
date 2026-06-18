@@ -58,7 +58,7 @@ import {
 } from '@/lib/bookingQty';
 import { formatSlotRangeLabel } from '@/lib/appointmentSlot';
 
-export type BookingFlowVariant = 'customer' | 'staff';
+export type BookingFlowVariant = 'customer' | 'staff' | 'admin';
 
 const STAFF_SCHEDULE_DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 type StaffScheduleDayKey = (typeof STAFF_SCHEDULE_DAY_KEYS)[number];
@@ -143,6 +143,8 @@ interface TenantInfo {
   allowStaffCreateBooking?: boolean;
   /** true = QR/booking hanya lewat OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
   requireLoginOnCreateBooking?: boolean;
+  /** true = catatan wajib diisi saat booking */
+  requireNotes?: boolean;
   /** Jumlah posisi di form booking; `null` = tanpa pemilihan posisi (API: `GET /tenants/:id` selalu number | null). */
   bookingSeatCount?: number | null;
   /** 0 = peringatan stok nonaktif; >0 = tampilkan info stok jika stockQty ≤ nilai ini */
@@ -306,17 +308,19 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
   const router = useRouter();
 
   const isStaffVariant = variant === 'staff';
+  const isAdminVariant = variant === 'admin';
+  const isOperatorVariant = isStaffVariant || isAdminVariant;
 
   const tenantIdParam = searchParams.get('tenantId');
   const customerPhoneParam = searchParams.get('customerPhone');
   const addServiceParam = searchParams.get('addService');
   const isQrFlow =
-    !isStaffVariant && !!(tenantIdParam && searchParams.get('type') === 'booking');
+    !isOperatorVariant && !!(tenantIdParam && searchParams.get('type') === 'booking');
 
   const { user, isLoading: authLoading, loadFromStorage, setAuth } = useAuthStore();
 
-  /** Staff: hanya outlet login; pelanggan: QR/param bisa mengarahkan salon */
-  const effectiveTenantId = isStaffVariant
+  /** Staff/admin: hanya outlet login; pelanggan: QR/param bisa mengarahkan salon */
+  const effectiveTenantId = isOperatorVariant
     ? user?.tenantId ?? null
     : tenantIdParam ?? user?.tenantId ?? null;
 
@@ -488,14 +492,21 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       }
       return;
     }
+    if (isAdminVariant) {
+      if (user.role !== 'tenant_admin' && user.role !== 'super_admin') {
+        router.replace('/dashboard');
+        return;
+      }
+      return;
+    }
     if (user.role !== 'customer') {
       router.replace('/dashboard');
       return;
     }
-  }, [user, authLoading, isQrFlow, isStaffVariant, router]);
+  }, [user, authLoading, isQrFlow, isStaffVariant, isAdminVariant, router]);
 
   useEffect(() => {
-    if (!isStaffVariant || !effectiveTenantId || !user?.tenantId) return;
+    if (!isOperatorVariant || !effectiveTenantId || !user?.tenantId) return;
     const ac = new AbortController();
     const tmr = window.setTimeout(() => {
       setCustomersLoading(true);
@@ -519,16 +530,16 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       ac.abort();
       window.clearTimeout(tmr);
     };
-  }, [customerSearchInput, isStaffVariant, effectiveTenantId, user?.tenantId]);
+  }, [customerSearchInput, isOperatorVariant, effectiveTenantId, user?.tenantId]);
 
   useEffect(() => {
-    if (!isStaffVariant) return;
+    if (!isOperatorVariant) return;
     setSelectedServices([]);
     setServiceQty({});
     setQtyDraftByService({});
     setSelectedStaff(null);
     setBookStep('service');
-  }, [selectedBookingCustomer?._id, isStaffVariant]);
+  }, [selectedBookingCustomer?._id, isOperatorVariant]);
 
   useEffect(() => {
     const n = tenant?.bookingSeatCount;
@@ -551,7 +562,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     }
     if (!silent) setPageLoading(true);
     try {
-      if (isStaffVariant) {
+      if (isOperatorVariant) {
         const [svcRes, tenantRes, todayWrapped] = await Promise.all([
           api.get(`/tenants/${effectiveTenantId}/services`),
           api.get(`/tenants/${effectiveTenantId}`),
@@ -559,7 +570,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         ]);
         setServices(svcRes.data);
         setTenant(tenantRes.data);
-        if (tenantRes.data?.allowStaffCreateBooking !== true) {
+        if (isStaffVariant && tenantRes.data?.allowStaffCreateBooking !== true) {
           toast.error('Staff tidak diizinkan membuat booking di outlet ini.');
           router.replace('/staff');
           return;
@@ -634,14 +645,15 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       setLastRefreshedAt(new Date());
       setRefreshCountdown(Math.round(QUEUE_AUTO_RELOAD_MS / 1000));
     }
-  }, [effectiveTenantId, isQrFlow, isStaffVariant, selectedBookingCustomer, router]);
+  }, [effectiveTenantId, isQrFlow, isOperatorVariant, isStaffVariant, selectedBookingCustomer, router]);
 
   // Muat data booking + outlet setelah auth & effectiveTenantId siap (history/today boleh gagal tanpa memblokir tenant)
   useEffect(() => {
     if (authLoading) return;
     if (!user || !effectiveTenantId) return;
     if (isStaffVariant && user.role !== 'staff') return;
-    if (!isStaffVariant && user.role !== 'customer') return;
+    if (isAdminVariant && user.role !== 'tenant_admin' && user.role !== 'super_admin') return;
+    if (!isOperatorVariant && user.role !== 'customer') return;
     void loadBookingData();
   }, [
     authLoading,
@@ -649,6 +661,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     effectiveTenantId,
     selectedBookingCustomer?._id,
     isStaffVariant,
+    isAdminVariant,
+    isOperatorVariant,
     loadBookingData,
   ]);
 
@@ -680,7 +694,8 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     }
     if (!user) return;
     if (isStaffVariant && user.role !== 'staff') return;
-    if (!isStaffVariant && user.role !== 'customer') return;
+    if (isAdminVariant && user.role !== 'tenant_admin' && user.role !== 'super_admin') return;
+    if (!isOperatorVariant && user.role !== 'customer') return;
     const id = setInterval(() => {
       void loadBookingData({ silent: true });
       if (bookStep === 'staff' && !isStaffVariant) {
@@ -1206,6 +1221,19 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
       setStaffGuestNameAttempted(true);
       return;
     }
+    if (isAdminVariant && staffCustomerMode === 'guest' && !staffGuestName.trim()) {
+      toast.error('Nama customer wajib diisi');
+      setStaffGuestNameAttempted(true);
+      return;
+    }
+    if (isAdminVariant && staffCustomerMode === 'existing' && !selectedBookingCustomer) {
+      toast.error('Pilih pelanggan terdaftar atau gunakan mode Tamu Baru');
+      return;
+    }
+    if (tenant?.requireNotes === true && !notes.trim()) {
+      toast.error('Catatan wajib diisi');
+      return;
+    }
     if (selectedServices.length === 0) return;
     if (!assertGuestHasName()) return;
     if (seatSlotCount != null) {
@@ -1261,14 +1289,14 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             staffId: isStaffVariant ? user?.staffId ?? undefined : selectedStaff?.staffId,
             notes,
             // Staff mode tamu: kirim nama + HP customer baru
-            ...(isStaffVariant && staffCustomerMode === 'guest' && staffGuestName.trim()
+            ...(isOperatorVariant && staffCustomerMode === 'guest' && staffGuestName.trim()
               ? {
                   guestName: staffGuestName.trim(),
                   ...(staffGuestPhone.trim() ? { guestPhone: staffGuestPhone.trim() } : {}),
                 }
               : {}),
-            // Staff mode pelanggan terdaftar: kirim customerId jika dipilih
-            ...(isStaffVariant && staffCustomerMode === 'existing' && selectedBookingCustomer
+            // Staff/admin mode pelanggan terdaftar: kirim customerId jika dipilih
+            ...(isOperatorVariant && staffCustomerMode === 'existing' && selectedBookingCustomer
               ? { customerId: selectedBookingCustomer._id }
               : {}),
             ...(seatSlotCount != null ? { seatPosition: bookingSeatPick ?? null } : {}),
@@ -1301,6 +1329,24 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         setStaffGuestNameAttempted(false);
         void loadBookingData();
         router.push('/staff');
+      } else if (isAdminVariant) {
+        const customerLabel =
+          staffCustomerMode === 'guest' && staffGuestName.trim()
+            ? staffGuestName.trim()
+            : selectedBookingCustomer?.name ?? null;
+        const okMsg = customerLabel
+          ? `Order untuk ${customerLabel} berhasil! Nomor antrian: #${result.queueNumber}`
+          : `Order berhasil! Nomor antrian: #${result.queueNumber}`;
+        toast.success(okMsg, { duration: 5000 });
+        setBookStep('service');
+        setSelectedServices([]);
+        setSelectedStaff(null);
+        setStaffGuestName('');
+        setStaffGuestPhone('');
+        setStaffGuestNameAttempted(false);
+        setSelectedBookingCustomer(null);
+        void loadBookingData();
+        router.push('/pos');
       } else {
         const okMsg = `Booking berhasil! Nomor antrian Anda: #${result.queueNumber}`;
         toast.success(okMsg, { duration: 6000 });
@@ -1702,13 +1748,15 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
     >
       <PageHeader
         title={bookingLabels.bookingPageTitle}
-        back={(bookStep === 'staff' && !isStaffVariant) || isStaffVariant}
+        back={(bookStep === 'staff' && !isStaffVariant) || isOperatorVariant}
         onBack={
           bookStep === 'staff' && !isStaffVariant
             ? () => setBookStep('service')
             : isStaffVariant
               ? () => router.push('/staff')
-              : undefined
+              : isAdminVariant
+                ? () => router.push('/customers')
+                : undefined
         }
         right={
           (!isStaffVariant && user?.role === 'customer') ||
@@ -1787,7 +1835,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
         </Box>
       )}
 
-      {isStaffVariant && tenant && effectiveTenantId && (
+      {isOperatorVariant && tenant && effectiveTenantId && (
         <Box sx={{ px: 2, pt: 2, pb: 2, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
           {tenant.allowBookOnFutureDates === true && tenant.quotaTodayDayKey && (
             <TextField
@@ -1805,7 +1853,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               InputLabelProps={{ shrink: true }}
               fullWidth
               sx={{ mb: 2, maxWidth: 360 }}
-              helperText="Booking staff memakai tanggal antrian ini."
+              helperText={isAdminVariant ? 'Tanggal antrian untuk order ini.' : 'Booking staff memakai tanggal antrian ini.'}
             />
           )}
           {/* Toggle mode customer */}
@@ -1874,7 +1922,11 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                   {...params}
                   label="Cari pelanggan terdaftar"
                   placeholder="Cari nama atau nomor HP…"
-                  helperText="Kosong = booking atas nama akun staff"
+                  helperText={
+                    isAdminVariant
+                      ? 'Wajib pilih pelanggan atau gunakan mode Tamu Baru'
+                      : 'Kosong = booking atas nama akun staff'
+                  }
                 />
               )}
             />
@@ -1938,6 +1990,15 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               </Typography>
               <Button variant="contained" onClick={() => router.push('/staff')}>
                 Kembali ke antrian
+              </Button>
+            </>
+          ) : isAdminVariant ? (
+            <>
+              <Typography color="text.secondary" sx={{ mb: 1 }}>
+                Akun admin tidak terhubung ke outlet.
+              </Typography>
+              <Button variant="contained" onClick={() => router.push('/customers')}>
+                Kembali ke pelanggan
               </Button>
             </>
           ) : (
@@ -2127,74 +2188,6 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
                     )}
                   </Box>
                 ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Kunjungan terakhir + foto hasil layanan + info reminder */}
-          {(lastDoneVisit || (lastHaircut && lastHaircut.photos.length > 0)) && (
-            <Card sx={{ mb: 3, borderRadius: 3, border: 1, borderColor: 'divider' }}>
-              <CardContent>
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <PhotoLibraryIcon fontSize="small" color="primary" />
-                  Kunjungan & hasil layanan terakhir
-                </Typography>
-                {lastDoneVisit && (
-                  <Box sx={{ mb: lastHaircut?.photos?.length ? 1.5 : 0 }}>
-                    <Typography fontWeight={700}>
-                      {bookingServicesLabel({
-                        serviceName: lastDoneVisit.serviceName,
-                        services: lastDoneVisit.services,
-                      })}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {new Date(lastDoneVisit.date).toLocaleDateString('id-ID', {
-                        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-                      })}
-                      {lastDoneVisit.staffName ? ` · ${lastDoneVisit.staffName}` : ''}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      {(() => {
-                        const sub = bookingSubtotalOrLegacy({
-                          totalSubtotal: lastDoneVisit.totalSubtotal,
-                          servicePrice: lastDoneVisit.servicePrice,
-                        });
-                        const snap = lastDoneVisit.paymentTaxSnapshot;
-                        const total =
-                          snap != null
-                            ? snap.subtotal + snap.ppnAmount
-                            : lastDoneVisit.paidAmount ?? sub;
-                        if (snap && snap.ppnAmount > 0) {
-                          return `Subtotal Rp ${snap.subtotal.toLocaleString('id-ID')} · PPN ${snap.ppnPercentage}% Rp ${snap.ppnAmount.toLocaleString('id-ID')} · Total Rp ${total.toLocaleString('id-ID')} · antrian #${lastDoneVisit.queueNumber}`;
-                        }
-                        return `Rp ${total.toLocaleString('id-ID')} · antrian #${lastDoneVisit.queueNumber}`;
-                      })()}
-                    </Typography>
-                  </Box>
-                )}
-                {lastHaircut && lastHaircut.photos.length > 0 && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                      Foto dokumentasi terakhir
-                      {' · '}
-                      {new Date(lastHaircut.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
-                      {lastHaircut.photos.map((src, i) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={i}
-                          src={src}
-                          alt={`Hasil-${i + 1}`}
-                          style={{
-                            height: 88, width: 88, objectFit: 'cover', borderRadius: 12, flexShrink: 0,
-                            border: '1px solid rgba(0,0,0,0.08)',
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                )}
               </CardContent>
             </Card>
           )}
@@ -3114,6 +3107,10 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, lineHeight: 1.45 }}>
                 Anda akan ditugaskan sebagai pelaksana untuk booking ini. Pembayaran dilakukan di halaman antrian.
               </Typography>
+            ) : isAdminVariant ? (
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, lineHeight: 1.45 }}>
+                Order masuk antrian outlet. Pembayaran dilakukan di halaman POS.
+              </Typography>
             ) : (
               <>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -3269,9 +3266,13 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
 
           {/* Catatan */}
           <TextField
-            fullWidth multiline rows={3} label="Catatan (opsional)"
+            fullWidth multiline rows={3}
+            label={tenant?.requireNotes ? 'Catatan' : 'Catatan (opsional)'}
+            required={tenant?.requireNotes === true}
             placeholder={bookingLabels.bookingNotesPlaceholder}
             value={notes} onChange={(e) => setNotes(e.target.value)}
+            error={tenant?.requireNotes === true && !notes.trim()}
+            helperText={tenant?.requireNotes === true && !notes.trim() ? 'Catatan wajib diisi' : undefined}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
             InputProps={{
               startAdornment: (
@@ -3306,7 +3307,7 @@ export function BookingFlow({ variant = 'customer', bottomNav }: BookingFlowProp
             startIcon={submitting ? undefined : <CheckCircleIcon />}
             sx={{ borderRadius: 2.5, py: 1.2, fontWeight: 700 }}
           >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : isStaffVariant ? 'Masuk antrian' : 'Booking!'}
+            {submitting ? <CircularProgress size={20} color="inherit" /> : isStaffVariant ? 'Masuk antrian' : isAdminVariant ? 'Buat order' : 'Booking!'}
           </Button>
         </DialogActions>
       </Dialog>
