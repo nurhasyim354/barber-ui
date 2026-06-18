@@ -16,6 +16,7 @@ export default function robots(): MetadataRoute.Robots {
           '/pos/',
           '/login',
           '/verify-phone-change',
+          '/invoice/',
           '/api/',
           '/_next/',
         ],

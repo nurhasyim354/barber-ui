@@ -25,6 +25,8 @@ export type UiBooking = {
   paidAmount?: number;
   /** Id dokumen pembayaran untuk cetak ulang nota */
   paymentId?: string;
+  /** Token halaman invoice publik (`/invoice/:token`) */
+  publicInvoiceToken?: string;
   /**
    * Snapshot PPN/DPP dari pembayaran (booking `done`).
    * Jangan digabung/ditimpa dengan config tenant terkini.

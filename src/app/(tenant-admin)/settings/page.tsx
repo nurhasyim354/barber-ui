@@ -17,6 +17,7 @@ import QrCodeIcon from '@mui/icons-material/QrCode2';
 import ImageIcon from '@mui/icons-material/Image';
 import UploadIcon from '@mui/icons-material/Upload';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ChatIcon from '@mui/icons-material/Chat';
 import PaletteIcon from '@mui/icons-material/Palette';
 import toast from 'react-hot-toast';
 import { compressImage } from '@/lib/imageUtils';
@@ -30,6 +31,7 @@ import { defaultBrandPalette } from '@/lib/uiStyleConfig';
 import PhoneChangeSection from '@/components/account/PhoneChangeSection';
 import SwitchOutletControl from '@/components/account/SwitchOutletControl';
 import { BOOKING_SEAT_COUNT_MAX, BOOKING_SEAT_COUNT_MIN } from '@/lib/bookingSeatLimits';
+import { buildBookingPageUrl } from '@/lib/bookingUrl';
 import { getPresetsForType, type TenantThemePreset } from '@/lib/tenantThemePresets';
 
 interface TenantTheme {
@@ -78,6 +80,15 @@ interface TenantSettings {
   ppnPercentage?: number | null;
   /** true = pelanggan boleh booking untuk hari/tanggal selain hari ini (kalender kuota). */
   allowBookOnFutureDates?: boolean | null;
+  /** Pakai gateway WA milik outlet (add-on Rp 50.000/bulan) */
+  useMyOwnWhatsApp?: boolean | null;
+  /** Kirim link invoice publik ke WA pelanggan setelah pembayaran */
+  sendInvoiceToCustomerWA?: boolean | null;
+  tenantWaPhoneNumber?: string | null;
+  hasTenantWaApiKey?: boolean;
+  tenantWaApiKeyMasked?: string | null;
+  /** Alias unik link booking/QR; kosong = pakai ID tenant */
+  tenantLinkSlug?: string | null;
 }
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -125,6 +136,17 @@ export default function SettingsPage() {
   const [startQueueAtNumber, setStartQueueAtNumber] = useState(1);
   /** null di DB = default 0; 0 = tidak tampil PPN */
   const [ppnPercentage, setPpnPercentage] = useState(0);
+  const [useMyOwnWhatsApp, setUseMyOwnWhatsApp] = useState(false);
+  const [sendInvoiceToCustomerWA, setSendInvoiceToCustomerWA] = useState(false);
+  const [tenantWaPhoneNumber, setTenantWaPhoneNumber] = useState('');
+  const [tenantWaApiKey, setTenantWaApiKey] = useState('');
+  const [hasTenantWaApiKey, setHasTenantWaApiKey] = useState(false);
+  const [tenantLinkSlug, setTenantLinkSlug] = useState('');
+  const [siteOrigin, setSiteOrigin] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') setSiteOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
@@ -174,6 +196,12 @@ export default function SettingsPage() {
       setStartQueueAtNumber(sqn == null || Number.isNaN(Number(sqn)) ? 1 : Math.max(1, Math.floor(Number(sqn))));
       const ppn = t.ppnPercentage;
       setPpnPercentage(ppn == null || Number.isNaN(Number(ppn)) ? 0 : Math.min(100, Math.max(0, Math.floor(Number(ppn)))));
+      setUseMyOwnWhatsApp(t.useMyOwnWhatsApp === true);
+      setSendInvoiceToCustomerWA(t.sendInvoiceToCustomerWA === true);
+      setTenantWaPhoneNumber(t.tenantWaPhoneNumber || '');
+      setHasTenantWaApiKey(t.hasTenantWaApiKey === true);
+      setTenantWaApiKey('');
+      setTenantLinkSlug(t.tenantLinkSlug ?? '');
     } catch {
       toast.error('Gagal memuat data tenant');
     } finally {
@@ -195,6 +223,17 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error('Nama Tenant wajib diisi'); return; }
+
+    if (useMyOwnWhatsApp) {
+      if (!tenantWaPhoneNumber.trim()) {
+        toast.error('Nomor WhatsApp pengirim wajib diisi jika menggunakan WA milik outlet');
+        return;
+      }
+      if (!hasTenantWaApiKey && !tenantWaApiKey.trim()) {
+        toast.error('API key WhatsApp wajib diisi jika menggunakan WA milik outlet');
+        return;
+      }
+    }
 
     const lat = form.gpsLat ? parseFloat(form.gpsLat) : null;
     const lng = form.gpsLng ? parseFloat(form.gpsLng) : null;
@@ -232,6 +271,13 @@ export default function SettingsPage() {
         outOfStockQtyReminder,
         startQueueAtNumber,
         ppnPercentage,
+        useMyOwnWhatsApp,
+        sendInvoiceToCustomerWA,
+        ...(useMyOwnWhatsApp && {
+          tenantWaPhoneNumber: tenantWaPhoneNumber.trim() || null,
+          tenantWaApiKey: tenantWaApiKey.trim() || (hasTenantWaApiKey ? '__UNCHANGED__' : ''),
+        }),
+        tenantLinkSlug: tenantLinkSlug.trim() || null,
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
@@ -402,6 +448,18 @@ export default function SettingsPage() {
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="08xxxxxxxxxx"
                 />
+                <TextField
+                  fullWidth
+                  label="Link alias"
+                  value={tenantLinkSlug}
+                  onChange={(e) => setTenantLinkSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                  placeholder="mis. salon-abc"
+                  helperText={
+                    tenantId && siteOrigin
+                      ? `Link booking: ${buildBookingPageUrl(siteOrigin, tenantId, tenantLinkSlug.trim() || null)}`
+                      : 'Alias unik untuk QR/link booking. Kosongkan untuk memakai ID outlet. Huruf kecil, angka, strip; min. 3 karakter.'
+                  }
+                />
               </Box>
             </CardContent>
           </Card>
@@ -435,6 +493,69 @@ export default function SettingsPage() {
                 sx={{ mt: 2 }}
                 helperText="0 = nonaktif. Contoh: 30 = kirim WA ~30 menit sebelum perkiraan giliran. Hanya dijadwalkan jika estimasi dilayani lebih dari 2 jam dari saat booking diperbarui; membutuhkan staff sudah ditugaskan."
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <ChatIcon color="primary" />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  WhatsApp outlet
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Secara default notifikasi ke pelanggan dikirim lewat WhatsApp platform. Aktifkan opsi di bawah jika
+                outlet ingin memakai nomor &amp; API key WhatsApp sendiri (add-on{' '}
+                <strong>Rp 50.000/bulan</strong> ditambahkan ke tagihan langganan).
+              </Typography>
+              <FormControlLabel
+                control={(
+                  <Switch
+                    checked={useMyOwnWhatsApp}
+                    onChange={(_, v) => setUseMyOwnWhatsApp(v)}
+                  />
+                )}
+                label="Gunakan WhatsApp milik outlet"
+              />
+              {useMyOwnWhatsApp && (
+                <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <TextField
+                    fullWidth
+                    label="Nomor WhatsApp pengirim *"
+                    value={tenantWaPhoneNumber}
+                    onChange={(e) => setTenantWaPhoneNumber(e.target.value)}
+                    placeholder="08xxxxxxxxxx"
+                    helperText="Nomor terdaftar di gateway WA (Hubungi Admin))."
+                  />
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="API key WhatsApp *"
+                    value={tenantWaApiKey}
+                    onChange={(e) => setTenantWaApiKey(e.target.value)}
+                    placeholder={hasTenantWaApiKey ? 'Kosongkan jika tidak ingin mengubah' : 'Token dari provider WA (Hubungi Admin)'}
+                    helperText={
+                      hasTenantWaApiKey
+                        ? `Tersimpan: ${tenant?.tenantWaApiKeyMasked ?? '****'} — isi ulang hanya jika ingin mengganti.`
+                        : 'Wajib diisi saat pertama kali mengaktifkan.'
+                    }
+                  />
+                </Box>
+              )}
+              <Divider sx={{ my: 2 }} />
+              <FormControlLabel
+                control={(
+                  <Switch
+                    checked={sendInvoiceToCustomerWA}
+                    onChange={(_, v) => setSendInvoiceToCustomerWA(v)}
+                  />
+                )}
+                label="Kirim link invoice ke pelanggan via WhatsApp"
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Setelah pembayaran lunas, pelanggan dengan nomor HP terdaftar menerima tautan halaman invoice publik.
+              </Typography>
             </CardContent>
           </Card>
 
