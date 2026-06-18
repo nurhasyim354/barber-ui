@@ -281,8 +281,8 @@ export default function SettingsPage() {
       });
       toast.success('Pengaturan berhasil disimpan');
       loadTenant();
-    } catch {
-      toast.error('Gagal menyimpan pengaturan');
+    } catch(err) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menyimpan pengaturan');
     } finally {
       setSaving(false);
     }
