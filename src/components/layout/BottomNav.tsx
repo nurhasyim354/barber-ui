@@ -136,8 +136,8 @@ export function TenantAdminBottomNav() {
   const { logout, user } = useAuthStore();
   const L = getTenantUiLabels(user?.tenantType);
 
-  const routes = ['/dashboard', '/pos', '/staff/manage', '/customers', '/services'];
-  const value = routes.findIndex((r) => pathname.startsWith(r));
+  const routes = ['/dashboard', '/pos', '/staff/manage', '/customers', '/order', '/services'];
+  const value = routes.findIndex((r) => pathname === r || (r !== '/dashboard' && pathname.startsWith(`${r}/`)) || (r === '/dashboard' && pathname.startsWith('/dashboard')));
 
   return (
     <Paper elevation={8} className="fixed bottom-0 left-0 right-0 safe-bottom z-50">
@@ -161,6 +161,7 @@ export function TenantAdminBottomNav() {
         <BottomNavigationAction label="POS" icon={<ReceiptIcon />} />
         <BottomNavigationAction label={L.navStaff} icon={<PersonIcon />} />
         <BottomNavigationAction label="Pelanggan" icon={<PeopleIcon />} />
+        <BottomNavigationAction label="Buat Order" icon={<AddCircleOutlineIcon />} />
         <BottomNavigationAction label={L.navServices} icon={<ContentCutIcon />} />
       </BottomNavigation>
     </Paper>

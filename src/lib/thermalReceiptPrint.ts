@@ -67,6 +67,16 @@ export function getBrowserThermalPrintPageCss(): string {
   `;
 }
 
+export const RECEIPT_NOTES_MAX_LENGTH = 60;
+
+/** Catatan nota/invoice — trim, kosong diabaikan, maks 60 karakter. */
+export function formatReceiptNotes(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim();
+  if (!s) return '';
+  if (s.length <= RECEIPT_NOTES_MAX_LENGTH) return s;
+  return `${s.slice(0, RECEIPT_NOTES_MAX_LENGTH)}…`;
+}
+
 function escHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -116,7 +126,8 @@ export function buildThermalReceiptBodyInnerHtml(
           receipt.storePhone ? escHtml(receipt.storePhone) : ''
         }</div>`
       : '';
-  const notesBlock = receipt.notes ? `<div>Catatan   : ${escHtml(receipt.notes)}</div>` : '';
+  const notesText = formatReceiptNotes(receipt.notes);
+  const notesBlock = notesText ? `<div>Catatan   : ${escHtml(notesText)}</div>` : '';
 
   return `
   <div class="center bold large spacer">${escHtml(receipt.storeName)}</div>
@@ -241,7 +252,10 @@ export function buildThermalReceiptEscPos(
     `Pelanggan : ${receipt.customerName}\n`,
     receipt.staffName ? `${opts.assigneeLabel}    : ${receipt.staffName}\n` : '',
     receipt.cashierName ? `Kasir     : ${receipt.cashierName}\n` : '',
-    receipt.notes ? `Catatan   : ${receipt.notes}\n` : '',
+    (() => {
+      const n = formatReceiptNotes(receipt.notes);
+      return n ? `Catatan   : ${n}\n` : '';
+    })(),
     divider,
     LEFT,
     `Subtotal  : Rp ${receipt.subtotal.toLocaleString('id-ID')}\n`,

@@ -21,6 +21,7 @@ import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
 import { buildBookingPageUrl } from '@/lib/bookingUrl';
+import { PUBLIC_TENANT_NAME_SX, PUBLIC_TENANT_SUBTITLE_SX } from '@/lib/publicBrandLabel';
 
 export default function BookingQrPage() {
   const router = useRouter();
@@ -131,11 +132,11 @@ export default function BookingQrPage() {
         <QrCode2Icon sx={{ fontSize: 26, color: 'primary.main' }} />
         <Box sx={{ minWidth: 0 }}>
           {tenantName ? (
-            <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap>
+            <Typography variant="subtitle1" noWrap sx={PUBLIC_TENANT_NAME_SX}>
               {tenantName}
             </Typography>
           ) : null}
-          <Typography variant="caption" color="text.secondary" display="block">
+          <Typography variant="caption" display="block" sx={PUBLIC_TENANT_SUBTITLE_SX}>
             Tampilkan ke pelanggan untuk scan
           </Typography>
         </Box>
@@ -162,9 +163,8 @@ export default function BookingQrPage() {
             {tenantName ? (
               <Typography
                 variant="subtitle1"
-                fontWeight={700}
                 textAlign="center"
-                sx={{ mb: 2, px: 0.5, lineHeight: 1.35, color: 'text.primary' }}
+                sx={{ mb: 2, px: 0.5, ...PUBLIC_TENANT_NAME_SX }}
               >
                 {tenantName}
               </Typography>
@@ -174,9 +174,9 @@ export default function BookingQrPage() {
             </Box>
           </Box>
 
-          <Typography variant="body2" color="text.secondary" mb={3} textAlign="center">
+          <Typography variant="body2" mb={3} textAlign="center" sx={PUBLIC_TENANT_SUBTITLE_SX}>
             {tenantName ? (
-              <>Scan untuk booking di <strong>{tenantName}</strong></>
+              <>Scan untuk booking di <Box component="span" sx={PUBLIC_TENANT_NAME_SX}>{tenantName}</Box></>
             ) : (
               'Scan untuk booking sekarang'
             )}

@@ -32,6 +32,11 @@ interface Plan {
   tenantTypes?: string[] | null;
 }
 
+interface BillingLineItem {
+  label: string;
+  amount: number;
+}
+
 interface Billing {
   _id: string;
   month: string;
@@ -39,6 +44,7 @@ interface Billing {
   planDisplayName: string;
   transactionCount: number;
   amount: number;
+  lineItems?: BillingLineItem[];
   status: 'free' | 'pending' | 'paid' | 'overdue';
   paymentRef?: string | null;
   paidAt?: string | null;
@@ -92,6 +98,38 @@ function formatMonth(m: string) {
 
 function formatRp(n: number) {
   return n === 0 ? 'Gratis' : 'Rp ' + n.toLocaleString('id-ID');
+}
+
+function hasBillingAddons(items?: BillingLineItem[]): boolean {
+  return (items?.length ?? 0) > 1;
+}
+
+function BillingLineItemsBreakdown({ items, total }: { items: BillingLineItem[]; total: number }) {
+  if (!hasBillingAddons(items)) return null;
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="body2" fontWeight={600} color="text.secondary" mb={1}>
+        Rincian tagihan
+      </Typography>
+      {items.map((item, i) => (
+        <Box key={i} className="flex justify-between items-start gap-2 py-0.5">
+          <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 0 }}>
+            {item.label}
+          </Typography>
+          <Typography variant="body2" fontWeight={500} sx={{ flexShrink: 0 }}>
+            {formatRp(item.amount)}
+          </Typography>
+        </Box>
+      ))}
+      <Divider sx={{ my: 1 }} />
+      <Box className="flex justify-between items-center">
+        <Typography fontWeight={600}>Total</Typography>
+        <Typography fontWeight={600} color="primary.main">
+          {formatRp(total)}
+        </Typography>
+      </Box>
+    </Box>
+  );
 }
 
 const PAGE_SIZE = 10;
@@ -404,13 +442,17 @@ export default function SubscriptionPage() {
 
                   <Divider sx={{ mb: 2 }} />
 
-                  <Box className="flex justify-between items-center">
-                    <Typography fontWeight={600}>Tagihan</Typography>
-                    <Typography variant="h6" fontWeight={600}
-                      color={billing.amount === 0 ? 'success.main' : 'primary.main'}>
-                      {formatRp(billing.amount)}
-                    </Typography>
-                  </Box>
+                  {billing.lineItems && hasBillingAddons(billing.lineItems) ? (
+                    <BillingLineItemsBreakdown items={billing.lineItems} total={billing.amount} />
+                  ) : (
+                    <Box className="flex justify-between items-center">
+                      <Typography fontWeight={600}>Tagihan</Typography>
+                      <Typography variant="h6" fontWeight={600}
+                        color={billing.amount === 0 ? 'success.main' : 'primary.main'}>
+                        {formatRp(billing.amount)}
+                      </Typography>
+                    </Box>
+                  )}
 
                   {billing.status === 'paid' && billing.paidAt && (
                     <Box className="flex items-center gap-1 mt-2">
@@ -514,6 +556,15 @@ export default function SubscriptionPage() {
                               Ref: {h.paymentRef}
                             </Typography>
                           )}
+                          {h.lineItems && hasBillingAddons(h.lineItems) && (
+                            <Box sx={{ mt: 1 }}>
+                              {h.lineItems.map((item, i) => (
+                                <Typography key={i} variant="caption" color="text.secondary" display="block">
+                                  {item.label}: {formatRp(item.amount)}
+                                </Typography>
+                              ))}
+                            </Box>
+                          )}
                         </Box>
                         <Box className="text-right">
                           <Chip label={statusChip[h.status]?.label} color={statusChip[h.status]?.color} size="small" />
@@ -546,12 +597,32 @@ export default function SubscriptionPage() {
             Admin akan mengkonfirmasi dalam 1×24 jam.
           </Typography>
           {billing && (
-            <Box className="bg-gray-50 rounded-lg p-3 mb-3 text-center">
-              <Typography variant="caption" color="text.secondary">Jumlah yang harus dibayar</Typography>
-              <Typography variant="h5" fontWeight={600} color="primary">
-                {formatRp(billing.amount)}
-              </Typography>
-            </Box>
+            <>
+              {billing.lineItems && hasBillingAddons(billing.lineItems) && (
+                <Box className="bg-gray-50 rounded-lg p-3 mb-3">
+                  <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                    Rincian tagihan
+                  </Typography>
+                  {billing.lineItems.map((item, i) => (
+                    <Box key={i} className="flex justify-between gap-2 py-0.5">
+                      <Typography variant="body2" color="text.secondary">
+                        {item.label}
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {formatRp(item.amount)}
+                      </Typography>
+                    </Box>
+                  ))}
+                  <Divider sx={{ my: 1 }} />
+                </Box>
+              )}
+              <Box className="bg-gray-50 rounded-lg p-3 mb-3 text-center">
+                <Typography variant="caption" color="text.secondary">Jumlah yang harus dibayar</Typography>
+                <Typography variant="h5" fontWeight={600} color="primary">
+                  {formatRp(billing.amount)}
+                </Typography>
+              </Box>
+            </>
           )}
           <TextField
             fullWidth label="Nomor Referensi / Kode Transfer"

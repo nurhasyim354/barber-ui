@@ -3,16 +3,27 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import axios from 'axios';
-import { Box, Button, CircularProgress, Container, Typography, Alert } from '@mui/material';
+import {
+  Box, Button, CircularProgress, Container, Typography, Alert, ThemeProvider, createTheme,
+} from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import {
   buildThermalReceiptBodyInnerHtml,
   buildThermalReceiptPrintHtmlDocument,
-  getBrowserThermalPrintPageCss,
   type ThermalReceipt,
 } from '@/lib/thermalReceiptPrint';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://bookita.nh-apps.com/api';
+
+/** Theme netral — invoice publik tidak mengikuti theme tenant. */
+const invoiceTheme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: { main: '#2563eb' },
+    text: { primary: '#111827', secondary: '#4b5563' },
+    background: { default: '#f3f4f6', paper: '#ffffff' },
+  },
+});
 
 export default function PublicInvoicePage() {
   const params = useParams();
@@ -46,9 +57,11 @@ export default function PublicInvoicePage() {
     };
   }, [token]);
 
+  const receiptPrintOpts = { assigneeLabel: 'Staff' as const };
+
   const handlePrint = () => {
     if (!receipt) return;
-    const html = buildThermalReceiptPrintHtmlDocument(receipt, { assigneeLabel: 'Staff' });
+    const html = buildThermalReceiptPrintHtmlDocument(receipt, receiptPrintOpts);
     const w = window.open('', '_blank', 'noopener,noreferrer');
     if (!w) return;
     w.document.write(html);
@@ -58,45 +71,57 @@ export default function PublicInvoicePage() {
   };
 
   return (
-    <Box sx={{ minHeight: '100svh', bgcolor: 'grey.100', py: 4 }}>
-      <Container maxWidth="sm">
-        <Typography variant="h5" fontWeight={600} textAlign="center" gutterBottom>
-          Invoice
-        </Typography>
-        {loading && (
-          <Box display="flex" justifyContent="center" py={6}>
-            <CircularProgress />
-          </Box>
-        )}
-        {!loading && error && (
-          <Alert severity="error">{error}</Alert>
-        )}
-        {!loading && receipt && (
-          <>
-            <Box
-              sx={{
-                bgcolor: 'white',
-                borderRadius: 2,
-                boxShadow: 1,
-                p: 2,
-                mx: 'auto',
-                maxWidth: 320,
-                fontFamily: '"Courier New", monospace',
-                fontSize: 11,
-                lineHeight: 1.35,
-                '& .center': { textAlign: 'center' },
-                '& .bold': { fontWeight: 'bold' },
-                '& .large': { fontSize: 14 },
-                '& .divider': { borderTop: '1px dashed #000', my: 0.5 },
-                '& .row': { display: 'flex', justifyContent: 'space-between', gap: 1, fontSize: 10 },
-              }}
-              dangerouslySetInnerHTML={{
-                __html: buildThermalReceiptBodyInnerHtml(receipt, { assigneeLabel: 'Staff' }),
-              }}
-            />
-          </>
-        )}
-      </Container>
-    </Box>
+    <ThemeProvider theme={invoiceTheme}>
+      <Box sx={{ minHeight: '100svh', bgcolor: 'background.default', py: 4 }}>
+        <Container maxWidth="sm">
+          <Typography variant="h5" fontWeight={600} textAlign="center" gutterBottom sx={{ color: '#111827' }}>
+            Invoice
+          </Typography>
+          {loading && (
+            <Box display="flex" justifyContent="center" py={6}>
+              <CircularProgress />
+            </Box>
+          )}
+          {!loading && error && (
+            <Alert severity="error">{error}</Alert>
+          )}
+          {!loading && receipt && (
+            <>
+              <Box
+                sx={{
+                  bgcolor: '#ffffff',
+                  borderRadius: 2,
+                  boxShadow: 1,
+                  p: 2,
+                  mx: 'auto',
+                  maxWidth: 320,
+                  fontFamily: '"Courier New", monospace',
+                  fontSize: 11,
+                  lineHeight: 1.35,
+                  color: '#111827',
+                  '& .center': { textAlign: 'center' },
+                  '& .bold': { fontWeight: 'bold', color: '#111827' },
+                  '& .large': { fontSize: 14, color: '#111827' },
+                  '& .divider': { borderTop: '1px dashed #000', my: 0.5 },
+                  '& .row': { display: 'flex', justifyContent: 'space-between', gap: 1, fontSize: 10, color: '#111827' },
+                }}
+                dangerouslySetInnerHTML={{
+                  __html: buildThermalReceiptBodyInnerHtml(receipt, receiptPrintOpts),
+                }}
+              />
+              <Button
+                fullWidth
+                variant="contained"
+                startIcon={<PrintIcon />}
+                onClick={handlePrint}
+                sx={{ mt: 2 }}
+              >
+                Cetak
+              </Button>
+            </>
+          )}
+        </Container>
+      </Box>
+    </ThemeProvider>
   );
 }

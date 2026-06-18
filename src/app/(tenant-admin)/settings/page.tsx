@@ -72,6 +72,8 @@ interface TenantSettings {
   allowStaffCreateBooking?: boolean | null;
   /** true = halaman booking pelanggan (QR) wajib OTP; false/tidak ada = boleh tamu (nama wajib, HP opsional). */
   requireLoginOnCreateBooking?: boolean | null;
+  /** true = pelanggan wajib mengisi catatan saat booking */
+  requireNotes?: boolean | null;
   /** Stok minimum pemicu peringatan di dashboard; 0/null = nonaktif */
   outOfStockQtyReminder?: number | null;
   /** Nomor antrian pertama tiap hari; null/undefined = default 1 */
@@ -129,6 +131,7 @@ export default function SettingsPage() {
   const [showBookingQty, setShowBookingQty] = useState(false);
   const [allowStaffCreateBooking, setAllowStaffCreateBooking] = useState(false);
   const [requireLoginOnCreateBooking, setRequireLoginOnCreateBooking] = useState(false);
+  const [requireNotes, setRequireNotes] = useState(false);
   /** Booking untuk tanggal mendatang (kalender kuota) */
   const [allowBookOnFutureDates, setAllowBookOnFutureDates] = useState(false);
   /** 0 = peringatan stok nonaktif */
@@ -189,6 +192,7 @@ export default function SettingsPage() {
       setShowBookingQty(t.showBookingQty === true);
       setAllowStaffCreateBooking(t.allowStaffCreateBooking === true);
       setRequireLoginOnCreateBooking(t.requireLoginOnCreateBooking === true);
+      setRequireNotes(t.requireNotes === true);
       setAllowBookOnFutureDates(t.allowBookOnFutureDates === true);
       const osr = t.outOfStockQtyReminder;
       setOutOfStockQtyReminder(osr == null || Number.isNaN(Number(osr)) ? 0 : Math.max(0, Math.floor(Number(osr))));
@@ -267,6 +271,7 @@ export default function SettingsPage() {
         showBookingQty,
         allowStaffCreateBooking,
         requireLoginOnCreateBooking,
+        requireNotes,
         allowBookOnFutureDates,
         outOfStockQtyReminder,
         startQueueAtNumber,
@@ -648,6 +653,23 @@ export default function SettingsPage() {
                     <Typography variant="caption" color="text.secondary" component="span" display="block">
                       Jika dimatikan, pengunjung QR bisa booking sebagai tamu dengan nama (HP opsional). Jika diaktifkan,
                       alur lama dengan OTP tetap dipakai.
+                    </Typography>
+                  </Box>
+                )}
+              />
+              <FormControlLabel
+                sx={{ mt: 2, display: 'flex', alignItems: 'flex-start' }}
+                control={(
+                  <Switch
+                    checked={requireNotes}
+                    onChange={(_, v) => setRequireNotes(v)}
+                  />
+                )}
+                label={(
+                  <Box>
+                    <Typography variant="body2">Wajib catatan saat booking</Typography>
+                    <Typography variant="caption" color="text.secondary" component="span" display="block">
+                      Jika diaktifkan, pelanggan (dan staff/admin saat buat order) harus mengisi catatan sebelum submit.
                     </Typography>
                   </Box>
                 )}
