@@ -32,6 +32,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { TenantAdminBottomNav } from '@/components/layout/BottomNav';
 import { getTenantUiLabels } from '@/lib/tenantLabels';
 import { formatDuration } from '@/lib/formatDuration';
+import { buildBookingPageUrl } from '@/lib/bookingUrl';
 
 interface Service {
   _id: string;
@@ -63,6 +64,7 @@ export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBookingQty, setShowBookingQty] = useState(false);
+  const [tenantLinkSlug, setTenantLinkSlug] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,7 +114,10 @@ export default function ServicesPage() {
         user?.tenantId ? api.get(`/tenants/${user.tenantId}/settings`) : Promise.resolve(null),
       ]);
       setServices(svcRes.data);
-      if (settingsRes) setShowBookingQty(settingsRes.data?.showBookingQty === true);
+      if (settingsRes) {
+        setShowBookingQty(settingsRes.data?.showBookingQty === true);
+        setTenantLinkSlug(settingsRes.data?.tenantLinkSlug?.trim() || null);
+      }
     } catch {
       toast.error('Gagal memuat layanan');
     } finally {
@@ -230,7 +235,7 @@ export default function ServicesPage() {
   const stickerBookingUrl = (svcId: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const tenantId = user?.tenantId ?? '';
-    return `${origin}/booking?tenantId=${tenantId}&type=booking&addService=${svcId}`;
+    return buildBookingPageUrl(origin, tenantId, tenantLinkSlug, { addService: svcId });
   };
 
   const printSticker = async (svc: Service) => {

@@ -117,6 +117,8 @@ export default function SubscriptionPage() {
   const [paymentGateway, setPaymentGateway] = useState<PaymentGatewayView | null>(null);
   const [snapReady, setSnapReady] = useState(false);
   const [snapPayBusy, setSnapPayBusy] = useState(false);
+  const [useMyOwnWhatsApp, setUseMyOwnWhatsApp] = useState(false);
+  const [ownWaMonthlyFee, setOwnWaMonthlyFee] = useState(50_000);
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
   useEffect(() => {
@@ -135,6 +137,8 @@ export default function SubscriptionPage() {
       setPlans(res.data.plans);
       setPaymentInstructions(res.data.paymentInstructions ?? null);
       setPaymentGateway(res.data.paymentGateway ?? null);
+      setUseMyOwnWhatsApp(res.data.useMyOwnWhatsApp === true);
+      setOwnWaMonthlyFee(Number(res.data.ownWaMonthlyFee) || 50_000);
     } catch {
       toast.error('Gagal memuat info langganan');
     } finally {
@@ -248,6 +252,12 @@ export default function SubscriptionPage() {
                 <> (<code>{user.tenantType}</code>)</>
               ) : null}
               . Transaksi dihitung dari pembayaran lunas per bulan.
+              {useMyOwnWhatsApp && (
+                <>
+                  {' '}
+                  Add-on <strong>WhatsApp milik outlet</strong> aktif (+{formatRp(ownWaMonthlyFee)}/bulan).
+                </>
+              )}
             </Alert>
 
             {paymentInstructions?.supportWhatsAppHref && paymentInstructions.supportWhatsAppDisplay && (

@@ -20,6 +20,7 @@ import { useAuthStore } from '@/store/authStore';
 import AppPageShell from '@/components/layout/AppPageShell';
 import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
+import { buildBookingPageUrl } from '@/lib/bookingUrl';
 
 export default function BookingQrPage() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function BookingQrPage() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [origin, setOrigin] = useState('');
   const [tenantName, setTenantName] = useState('');
+  const [tenantLinkSlug, setTenantLinkSlug] = useState<string | null>(null);
   const qrContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,9 +47,15 @@ export default function BookingQrPage() {
     (async () => {
       try {
         const res = await api.get(`/tenants/${tenantId}`);
-        if (!cancelled) setTenantName(res.data?.name?.trim() || '');
+        if (!cancelled) {
+          setTenantName(res.data?.name?.trim() || '');
+          setTenantLinkSlug(res.data?.tenantLinkSlug?.trim() || null);
+        }
       } catch {
-        if (!cancelled) setTenantName('');
+        if (!cancelled) {
+          setTenantName('');
+          setTenantLinkSlug(null);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -88,9 +96,10 @@ export default function BookingQrPage() {
   }
 
   // Build QR URL
-  const params = new URLSearchParams({ tenantId, type: 'booking' });
-  if (customerPhone.trim()) params.set('customerPhone', customerPhone.trim());
-  const qrUrl = `${origin}/booking?${params.toString()}`;
+  const extra: Record<string, string> = {};
+  if (customerPhone.trim()) extra.customerPhone = customerPhone.trim();
+  const qrUrl = buildBookingPageUrl(origin, tenantId, tenantLinkSlug, extra);
+  const qrFileLabel = tenantLinkSlug || tenantId;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(qrUrl)
@@ -108,7 +117,7 @@ export default function BookingQrPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `qr-booking-${tenantId}.svg`;
+    a.download = `qr-booking-${qrFileLabel}.svg`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('QR berhasil diunduh');

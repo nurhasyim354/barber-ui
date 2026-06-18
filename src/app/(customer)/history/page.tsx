@@ -2,12 +2,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Box, Card, CardContent, Typography, Chip, CircularProgress, Avatar, Pagination, Alert,
+  Box, Card, CardContent, Typography, Chip, CircularProgress, Avatar, Pagination, Alert, Button,
 } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/EditCalendar';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -28,6 +30,7 @@ interface LastDoneVisit {
   services?: { serviceName: string; unitPrice: number; quantity: number; lineSubtotal?: number }[];
   totalSubtotal?: number;
   paidAmount?: number;
+  publicInvoiceToken?: string;
   paymentTaxSnapshot?: UiBooking['paymentTaxSnapshot'];
   queueNumber: number;
   staffName: string | null;
@@ -151,6 +154,19 @@ export default function HistoryPage() {
   const showOriginalVsPaid = (expectedListed: number, paidAmount?: number) =>
     paidAmount != null && paidAmount !== expectedListed;
 
+  const invoiceLink = (token: string) => (
+    <Button
+      component={Link}
+      href={`/invoice/${token}`}
+      target="_blank"
+      size="small"
+      startIcon={<ReceiptLongIcon />}
+      sx={{ mt: 1, px: 0, minWidth: 0 }}
+    >
+      Lihat invoice
+    </Button>
+  );
+
   return (
     <AppPageShell variant="withBottomNav">
       <PageHeader title={`${historyTitle}${total > 0 ? ` (${total})` : ''}`} />
@@ -249,6 +265,7 @@ export default function HistoryPage() {
                         {fmtRp(lastDone.paidAmount ?? listedSubtotal(lastDone))}
                       </Typography>
                     )}
+                    {lastDone.publicInvoiceToken && invoiceLink(lastDone.publicInvoiceToken)}
                   </Box>
                 )}
                 {lastPhotos && lastPhotos.photos.length > 0 && (
@@ -355,6 +372,7 @@ export default function HistoryPage() {
                               &quot;{b.notes}&quot;
                             </Typography>
                           )}
+                          {b.status === 'done' && b.publicInvoiceToken && invoiceLink(b.publicInvoiceToken)}
                         </Box>
                         {b.status === 'done' && showOriginalVsPaid(expectedPaidForHistoryRow(b), b.paidAmount) ? (
                           <Box className="text-right" sx={{ minWidth: 0, maxWidth: 160, ml: 1 }}>

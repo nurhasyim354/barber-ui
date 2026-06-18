@@ -145,6 +145,7 @@ export default function StaffQueuePage() {
   // Foto hasil 
   const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [receiptBookingId, setReceiptBookingId] = useState<string | null>(null);
   const [lastServicePhotoDialog, setLastServicePhotoDialog] = useState<{ open: boolean; booking: Booking | null; data: ServicePhotoDoc | null; loading: boolean }>({
     open: false, booking: null, data: null, loading: false,
   });
@@ -496,6 +497,8 @@ export default function StaffQueuePage() {
       toast.success('Pembayaran berhasil!');
       setPayDialog({ open: false, booking: null });
       setPayCashTenderedInput('');
+      setReceiptBookingId(booking._id);
+      setUploadPhotos([]);
       setReceiptDialog(true);
       setQrisErrorBanner(null);
       loadBookings();
@@ -543,18 +546,37 @@ export default function StaffQueuePage() {
     e.target.value = '';
   };
 
-  const handleUploadPhotos = async (bookingId: string) => {
-    if (uploadPhotos.length === 0) return;
+  const handleUploadPhotos = async (bookingId: string): Promise<boolean> => {
+    if (uploadPhotos.length === 0) return true;
     setUploadingPhotos(true);
     try {
       await api.post(`/bookings/${bookingId}/service-photos`, { photos: uploadPhotos });
       toast.success('Foto berhasil disimpan!');
       setUploadPhotos([]);
-    } catch {
-      toast.error('Gagal menyimpan foto');
+      return true;
+    } catch (err: unknown) {
+      const serverMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(serverMsg || 'Gagal menyimpan foto');
+      return false;
     } finally {
       setUploadingPhotos(false);
     }
+  };
+
+  const closeReceiptDialog = () => {
+    setReceiptDialog(false);
+    setReceiptBookingId(null);
+    setThermalReceipt(null);
+    setReceiptBookingDateIso(null);
+    setUploadPhotos([]);
+  };
+
+  const handleFinishReceipt = async () => {
+    if (uploadPhotos.length > 0 && receiptBookingId) {
+      const ok = await handleUploadPhotos(receiptBookingId);
+      if (!ok) return;
+    }
+    closeReceiptDialog();
   };
 
   const handleOpenLastServicePhoto = async (b: Booking) => {
@@ -1335,7 +1357,12 @@ export default function StaffQueuePage() {
       </Dialog>
 
       {/* Receipt Dialog */}
-      <Dialog open={receiptDialog} onClose={() => setReceiptDialog(false)} fullWidth maxWidth="xs">
+      <Dialog
+        open={receiptDialog}
+        onClose={closeReceiptDialog}
+        fullWidth
+        maxWidth="xs"
+      >
         <DialogTitle fontWeight={500} className="text-center">
           <CheckCircleIcon color="success" sx={{ fontSize: 48 }} />
           <br />Pembayaran Berhasil!
@@ -1413,14 +1440,9 @@ export default function StaffQueuePage() {
                 )}
               </Box>
               {uploadPhotos.length > 0 && (
-                <Button
-                  fullWidth variant="contained" color="success" size="small"
-                  startIcon={uploadingPhotos ? <CircularProgress size={14} color="inherit" /> : <CameraAltIcon />}
-                  onClick={() => lastBookingRef.current && handleUploadPhotos(lastBookingRef.current._id)}
-                  disabled={uploadingPhotos}
-                >
-                  {uploadingPhotos ? 'Menyimpan...' : `Simpan ${uploadPhotos.length} Foto`}
-                </Button>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  Foto akan disimpan otomatis saat Anda menekan Selesai.
+                </Typography>
               )}
             </Box>
           )}
@@ -1429,14 +1451,11 @@ export default function StaffQueuePage() {
           <Button
             fullWidth
             variant="contained"
-            onClick={() => {
-              setReceiptDialog(false);
-              setThermalReceipt(null);
-              setReceiptBookingDateIso(null);
-              setUploadPhotos([]);
-            }}
+            onClick={() => void handleFinishReceipt()}
+            disabled={uploadingPhotos}
+            startIcon={uploadingPhotos ? <CircularProgress size={18} color="inherit" /> : undefined}
           >
-            Selesai
+            {uploadingPhotos ? 'Menyimpan foto...' : 'Selesai'}
           </Button>
         </DialogActions>
       </Dialog>
