@@ -178,10 +178,15 @@ export default function StaffManagementPage() {
             const schedPayload = buildAvailabilityPayload(weeklySchedule);
             const specialityTrim = form.speciality.trim();
             const specialityPayload = { speciality: specialityTrim === '' ? null : specialityTrim.slice(0, 2000) };
+            const photoTrim = form.photoUrl.trim();
+            const photoPayload =
+                photoTrim.startsWith('data:image/')
+                    ? { photoUrl: photoTrim }
+                    : { photoUrl: null as string | null };
             if (editId) {
                 await api.patch(`/staff/${editId}`, {
                     name: form.name,
-                    photoUrl: form.photoUrl,
+                    ...photoPayload,
                     phone: form.phone,
                     isActive: true,
                     ...quotaPayload,
@@ -192,7 +197,7 @@ export default function StaffManagementPage() {
             } else {
                 await api.post('/staff', {
                     name: form.name,
-                    photoUrl: form.photoUrl,
+                    ...(photoTrim.startsWith('data:image/') ? { photoUrl: photoTrim } : {}),
                     phone: form.phone,
                     ...quotaPayload,
                     ...(schedPayload ? { availabilityDaysHours: schedPayload } : {}),
@@ -714,7 +719,7 @@ export default function StaffManagementPage() {
                 </DialogContent>
                 <DialogActions className="p-4 gap-2">
                     <Button onClick={() => setDialogOpen(false)} variant="outlined" fullWidth>Batal</Button>
-                    <Button onClick={handleSave} variant="contained" fullWidth disabled={saving}>
+                    <Button onClick={handleSave} variant="contained" fullWidth disabled={saving || photoUploading}>
                         {saving ? <CircularProgress size={20} color="inherit" /> : 'Simpan'}
                     </Button>
                 </DialogActions>
